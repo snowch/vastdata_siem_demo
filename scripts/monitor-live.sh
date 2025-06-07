@@ -11,7 +11,7 @@ echo "🔍 Starting Zeek live traffic monitoring (simplified)..."
 ZEEK_CONFIG="/config/kafka-live.zeek"
 INTERFACE="${MONITOR_INTERFACE:-eth0}"
 KAFKA_BROKER="${KAFKA_BROKER:-172.200.204.1:9092}"
-KAFKA_TOPIC="${KAFKA_TOPIC:-zeek-live-logs}"
+KAFKA_ZEEK_TOPIC="${KAFKA_ZEEK_TOPIC:-zeek-live-logs}"
 
 # Wait for network interface to be ready
 echo "⏳ Waiting for network interface: $INTERFACE"
@@ -56,7 +56,7 @@ fi
 echo "🚀 Starting Zeek live monitoring on interface: $INTERFACE"
 echo "📊 Configuration: $ZEEK_CONFIG"
 echo "🔗 Kafka Broker: $KAFKA_BROKER"
-echo "📤 Kafka Topic: $KAFKA_TOPIC"
+echo "📤 Kafka Topic: $KAFKA_ZEEK_TOPIC"
 echo ""
 echo "💡 This simplified setup monitors traffic on the container's default network interface"
 echo "💡 All containers in the zeek-network will have their traffic monitored"

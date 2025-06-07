@@ -1,3 +1,8 @@
+x-environment: &default-env
+  KAFKA_BROKER: 172.200.204.1:9092
+  KAFKA_ZEEK_TOPIC: zeek-live-logs
+  MONITOR_INTERFACE: eth0
+
 services:
   # Simplified Zeek monitoring using container's default network interface
   zeek-live:
@@ -9,9 +14,7 @@ services:
       - ./zeek-logs:/logs
       - ./scripts:/scripts
     environment:
-      - KAFKA_BROKER=172.200.204.1:9092
-      - KAFKA_TOPIC=zeek-live-logs
-      - MONITOR_INTERFACE=eth0  # Use container's default interface
+      <<: *default-env
     command: /scripts/monitor-live.sh
     # Use default bridge network instead of host networking
     networks:
@@ -35,16 +38,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./traffic-scripts:/traffic-scripts
+    environment:
+      <<: *default-env
     ports:
       - "8080:8080"
-    networks:
-      - zeek-network
     cap_add:
       - NET_ADMIN
       - NET_RAW
     command: python3 /traffic-scripts/traffic_server.py
-
-
 
 networks:
   zeek-network:

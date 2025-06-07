@@ -48,14 +48,14 @@ To get the application up and running, follow these steps:
 
 ### 4.1. `zeek-live` Service
 
-The service is defined in `docker-compose.yml`.  You only need to configure the `KAFKA_BROKER` and `KAFKA_TOPIC` environment variables.
+The service is defined in `docker-compose.yml`.  You only need to configure the `KAFKA_BROKER` and `KAFKA_ZEEK_TOPIC` environment variables.
 
 -   **Purpose**: Monitors network traffic within the `zeek-network`.
 -   **Dockerfile**: `Dockerfile` - Builds the Zeek image, installs the Zeek-Kafka plugin, and copies the monitoring script.
 -   **Configuration**:
     -   **Environment Variables**:
         -   `KAFKA_BROKER`: Kafka broker address. Used by the Zeek-Kafka plugin. This variable must be set for Zeek to connect to Kafka.
-        -   `KAFKA_TOPIC`: Kafka topic name for logs (default: `zeek-live-logs`).
+        -   `KAFKA_ZEEK_TOPIC`: Kafka topic name for logs (default: `zeek-live-logs`).
         -   `MONITOR_INTERFACE`: Network interface for Zeek to monitor (default: `eth0`). In this simplified setup, `eth0` is the container's interface on the Docker bridge network.
     -   **Volumes**:
         -   `./zeek-config:/config`: Mounts the local `zeek-config` directory containing Zeek scripts (like `kafka-live.zeek`) into the container's `/config` directory.

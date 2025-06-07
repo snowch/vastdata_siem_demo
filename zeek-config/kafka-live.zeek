@@ -41,12 +41,12 @@ redef SSH::password_guesses_limit = 3;
 @error "KAFKA_BROKER environment variable not set!"
 @endif
 
-@if ( getenv("KAFKA_TOPIC") == "" )  
-@error "KAFKA_TOPIC environment variable not set!"
+@if ( getenv("KAFKA_ZEEK_TOPIC") == "" )  
+    @error "KAFKA_ZEEK_TOPIC environment variable not set!"
 @endif
 
 # Configure Kafka with environment variables
-redef Kafka::topic_name = getenv("KAFKA_TOPIC");
+redef Kafka::topic_name = getenv("KAFKA_ZEEK_TOPIC");
 redef Kafka::kafka_conf = table(
     ["metadata.broker.list"] = getenv("KAFKA_BROKER"),
     ["client.id"] = "zeek-live-monitor",
@@ -81,7 +81,7 @@ redef ignore_checksums = T;
 event zeek_init() {
     print "🚀 Zeek initialized with enhanced detection capabilities";
     print fmt("📊 Kafka broker: %s", getenv("KAFKA_BROKER"));
-    print fmt("📤 Kafka topic: %s", getenv("KAFKA_TOPIC"));
+    print fmt("📤 Kafka topic: %s", getenv("KAFKA_ZEEK_TOPIC"));
     print "🔧 Kafka plugin loaded and configured";
     print "🛡️ Security detection policies loaded";
 }
