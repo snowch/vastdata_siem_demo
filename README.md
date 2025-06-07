@@ -33,12 +33,13 @@ graph TD
 To get the application up and running, follow these steps:
 
 1.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-2.  **Build and start the services**: Navigate to the project directory in your terminal and run:
+2.  Configure `KAFKA_BROKER` and `KAFKA_TOPIC` environment variables in `docker-compose.yml`.  See [here](#41-zeek-live-service).
+3.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
     docker compose up --build -d
     ```
     The `-d` flag runs the services in detached mode.
-3.  **Verify services are running**:
+4.  **Verify services are running**:
     ```bash
     docker compose ps
     ```
