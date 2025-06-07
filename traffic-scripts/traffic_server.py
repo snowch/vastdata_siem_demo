@@ -37,7 +37,9 @@ continuous_simulation_thread = None
 continuous_simulation = None
 
 class KafkaMessageConsumer:
-    def __init__(self, broker='172.200.204.1:9092', topic='zeek-live-logs'):
+    def __init__(self, broker=None, topic=None):
+        if not broker or not topic:
+            raise ValueError("Kafka broker and topic must be provided")
         self.broker = broker
         self.topic = topic
         self.running = False
@@ -1226,31 +1228,41 @@ def get_status():
 @app.route('/api/kafka/start', methods=['POST'])
 def start_kafka_consumer():
     global kafka_consumer_thread, kafka_running
-    
+
     if not KAFKA_AVAILABLE:
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': 'Kafka consumer not available - kafka-python package not installed'
         })
-    
+
     if kafka_running:
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': 'Kafka consumer already running'
         })
-    
+
     try:
-        consumer = KafkaMessageConsumer()
+        # Retrieve broker and topic from environment variables
+        kafka_broker = os.environ.get('KAFKA_BROKER')
+        kafka_topic = os.environ.get('KAFKA_ZEEK_TOPIC')
+
+        if not kafka_broker or not kafka_topic:
+            return jsonify({
+                'success': False,
+                'error': 'KAFKA_BROKER and KAFKA_ZEEK_TOPIC environment variables must be set'
+            })
+
+        consumer = KafkaMessageConsumer(broker=kafka_broker, topic=kafka_topic)
         kafka_consumer_thread = threading.Thread(target=consumer.start_consuming)
         kafka_consumer_thread.daemon = True
         kafka_consumer_thread.start()
         kafka_running = True
-        
+
         return jsonify({
             'success': True,
             'message': 'Kafka consumer started'
         })
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

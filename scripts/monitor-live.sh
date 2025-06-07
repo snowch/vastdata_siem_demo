@@ -10,8 +10,20 @@ echo "🔍 Starting Zeek live traffic monitoring (simplified)..."
 # Configuration
 ZEEK_CONFIG="/config/kafka-live.zeek"
 INTERFACE="${MONITOR_INTERFACE:-eth0}"
-KAFKA_BROKER="${KAFKA_BROKER:-172.200.204.1:9092}"
-KAFKA_ZEEK_TOPIC="${KAFKA_ZEEK_TOPIC:-zeek-live-logs}"
+KAFKA_BROKER="${KAFKA_BROKER}"
+KAFKA_ZEEK_TOPIC="${KAFKA_ZEEK_TOPIC}"
+
+# Check if KAFKA_BROKER is defined
+if [ -z "$KAFKA_BROKER" ]; then
+  echo "❌ KAFKA_BROKER environment variable not set!"
+  exit 1
+fi
+
+# Check if KAFKA_ZEEK_TOPIC is defined
+if [ -z "$KAFKA_ZEEK_TOPIC" ]; then
+  echo "❌ KAFKA_ZEEK_TOPIC environment variable not set!"
+  exit 1
+fi
 
 # Wait for network interface to be ready
 echo "⏳ Waiting for network interface: $INTERFACE"
