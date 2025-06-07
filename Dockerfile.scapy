@@ -33,4 +33,4 @@ WORKDIR /traffic-scripts
 EXPOSE 8080
 
 # Default command
-CMD ["python3", "traffic_server.py"]
+CMD ["python3", "simulator_server.py"]

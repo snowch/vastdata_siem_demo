@@ -77,7 +77,7 @@ The service is defined in `docker-compose.yml`.  You only need to configure the 
     -   **Ports**: `8080:8080` - Maps host port 8080 to container port 8080, exposing the web interface for the traffic generator.
     -   **Networks**: Connected to the `zeek-network` bridge network.
     -   **Capabilities**: `NET_ADMIN`, `NET_RAW` - Required for crafting and sending raw packets using Scapy.
-    -   **Command**: `python3 /traffic-scripts/traffic_server.py` - Starts the web server for the traffic generator.
+    -   **Command**: `python3 /traffic-scripts/simulator_server.py` - Starts the web server for the events generator.
 
 ### 4.3. `zeek-network`
 
@@ -120,7 +120,7 @@ Traffic within the `zeek-network` is automatically monitored by the `zeek-live` 
     -   This interface provides buttons to start various predefined scenarios (Web Browsing, File Transfer, Video Stream, Office Network, Security Test, Enhanced Attacks, Port Scan, SQL Injection) and a form for custom traffic generation (HTTP, DNS, Mixed).
     -   It also includes controls for a continuous simulation mode that runs random scenarios with configurable intervals and concurrency.
     -   A Kafka Consumer section allows viewing logs received from Zeek via Kafka directly in the browser.
-    -   The web interface uses the `traffic-scripts/traffic_server.py` Flask application.
+    -   The web interface uses the `traffic-scripts/simulator_server.py` Flask application.
 
 2.  **Traffic Simulator Scripts**:
     -   The `traffic-scripts/network_traffic_generator.py` and `traffic-scripts/enhanced_traffic_generator.py` Python scripts contain the logic for generating various types of traffic using Scapy and real socket connections.

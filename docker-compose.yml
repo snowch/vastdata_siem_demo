@@ -45,7 +45,7 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
-    command: python3 /traffic-scripts/traffic_server.py
+    command: python3 /traffic-scripts/simulator_server.py
 
 networks:
   zeek-network:
