@@ -1,6 +1,7 @@
 x-environment: &default-env
   KAFKA_BROKER: 172.200.204.1:9092
   KAFKA_ZEEK_TOPIC: zeek-live-logs
+  KAFKA_EVENT_LOG_TOPIC: fluentd-events
   MONITOR_INTERFACE: eth0
 
 services:
@@ -48,6 +49,15 @@ services:
       - NET_ADMIN
       - NET_RAW
     command: python3 /traffic-scripts/simulator_server.py
+
+  fluentd:
+    image: fluent/fluentd:v1.16-1
+    volumes:
+      - ./logs:/logs                 # Access simulator logs
+      - ./fluentd/conf:/fluentd/etc  # Mount Fluentd config
+    environment:
+      <<: *default-env
+    restart: unless-stopped
 
 networks:
   zeek-network:
