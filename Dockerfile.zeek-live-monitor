@@ -39,11 +39,11 @@ RUN zeek -N Seiso::Kafka
 RUN mkdir -p /logs /scripts
 
 # Copy monitoring scripts
-COPY scripts/monitor-live.sh /scripts/
+COPY scripts/zeek-live-monitor.sh /scripts/
 RUN chmod +x /scripts/*.sh
 
 # Set working directory
 WORKDIR /
 
 # Default command - can be overridden by docker-compose
-CMD ["/scripts/monitor-live.sh"]
+CMD ["/scripts/zeek-live-monitor.sh"]

@@ -43,7 +43,7 @@ To get the application up and running, follow these steps:
     ```bash
     docker compose ps
     ```
-    You should see `zeek-live-monitor` and `scapy-traffic-sim` listed with `State` as `Up`.
+    You should see `zeek-live-monitor` and `siem-simulator` listed with `State` as `Up`.
 
 ## 4. Components
 
@@ -52,7 +52,7 @@ To get the application up and running, follow these steps:
 The service is defined in `docker-compose.yml`.  You only need to configure the `KAFKA_BROKER` and `KAFKA_ZEEK_TOPIC` environment variables.
 
 -   **Purpose**: Monitors network traffic within the `zeek-network`.
--   **Dockerfile**: `Dockerfile` - Builds the Zeek image, installs the Zeek-Kafka plugin, and copies the monitoring script.
+-   **Dockerfile**: `Dockerfile.zeek-live-monitor` - Builds the Zeek image, installs the Zeek-Kafka plugin, and copies the monitoring script.
 -   **Configuration**:
     -   **Environment Variables**:
         -   `KAFKA_BROKER`: Kafka broker address. Used by the Zeek-Kafka plugin. This variable must be set for Zeek to connect to Kafka.
@@ -61,17 +61,17 @@ The service is defined in `docker-compose.yml`.  You only need to configure the 
     -   **Volumes**:
         -   `./zeek-config:/config`: Mounts the local `zeek-config` directory containing Zeek scripts (like `kafka-live.zeek`) into the container's `/config` directory.
         -   `./zeek-logs:/logs`: Mounts the local `zeek-logs` directory to store Zeek's output logs persistently.
-        -   `./scripts:/scripts`: Mounts the local `scripts` directory containing the `monitor-live.sh` script.
+        -   `./scripts:/scripts`: Mounts the local `scripts` directory containing the `zeek-live-monitor.sh` script.
     -   **Networks**: Connected to the `zeek-network` bridge network.
     -   **Capabilities**: `NET_ADMIN`, `NET_RAW` - Required for packet capture.
     -   **Privileged**: `true` - Enables promiscuous mode for the network interface, necessary for capturing all traffic.
     -   **Ports**: `8082:80` - Proxies host port 8082 to container port 80. This port is not actively used by the current services but is kept for potential future use or compatibility.
-    -   **Command**: `/scripts/monitor-live.sh` - Executes the monitoring script on container startup.
+    -   **Command**: `/scripts/zeek-live-monitor.sh` - Executes the monitoring script on container startup.
 
 ### 4.2. `traffic-simulator` Service
 
 -   **Purpose**: Generates various types of network traffic for testing Zeek's monitoring capabilities.
--   **Dockerfile**: `Dockerfile.scapy` - Builds a Python environment with Scapy and other network tools.
+-   **Dockerfile**: `Dockerfile.simulator` - Builds a Python environment with Scapy and other network tools.
 -   **Configuration**:
     -   **Volumes**: `./traffic-scripts:/traffic-scripts`: Mounts the local `traffic-scripts` directory containing the Python traffic generation scripts.
     -   **Ports**: `8080:8080` - Maps host port 8080 to container port 8080, exposing the web interface for the traffic generator.
@@ -111,7 +111,7 @@ This Zeek script configures Zeek for live monitoring and sending logs to Kafka, 
 -   **Detection Thresholds**: `SSH::password_guesses_limit = 3` makes the SSH brute force detection more sensitive for demonstration purposes.
 -   **Event Handlers**: Includes custom `zeek_init`, `connection_established`, `new_connection`, `dns_request`, `http_request`, `http_reply`, `notice`, `SSH::password_guesses_exceeded`, `new_packet`, `connection_state_remove`, and `weird` event handlers with `print` statements for basic console output within the Zeek container logs. The `dns_request` and `http_request` handlers include simple pattern matching for suspicious activity that triggers Zeek notices.
 
-## 6. Traffic Generation
+## 6. SIEM Data Generation
 
 Traffic within the `zeek-network` is automatically monitored by the `zeek-live` container. You can generate test traffic in several ways:
 
@@ -122,7 +122,7 @@ Traffic within the `zeek-network` is automatically monitored by the `zeek-live` 
     -   A Kafka Consumer section allows viewing logs received from Zeek via Kafka directly in the browser.
     -   The web interface uses the `traffic-scripts/simulator_server.py` Flask application.
 
-2.  **Traffic Simulator Scripts**:
+2.  **SIEM Simulator Scripts**:
     -   The `traffic-scripts/network_traffic_generator.py` and `traffic-scripts/enhanced_traffic_generator.py` Python scripts contain the logic for generating various types of traffic using Scapy and real socket connections.
     -   `network_traffic_generator.py` focuses on generating packets at the network layer (using `sendp` or `send`), simulating various scenarios like web browsing, file transfer, etc.
     -   `enhanced_traffic_generator.py` focuses on creating *real* network connections using Python's `socket` and `requests` libraries (if available). This is crucial for generating traffic that Zeek can fully analyze, such as complete HTTP requests or TCP handshakes. It includes functions for generating real HTTP, malicious HTTP, DNS, port scan, SSH brute force, and data exfiltration traffic, as well as a comprehensive attack simulation.
@@ -149,7 +149,7 @@ Logs are available in two primary locations:
     -   Example: `cat zeek-logs/conn.log`
 
 3.  **Container Logs**:
-    -   Basic event messages printed by the `monitor-live.sh` script and the custom Zeek event handlers in `kafka-live.zeek` are sent to the container's standard output.
+    -   Basic event messages printed by the `zeek-live-monitor.sh` script and the custom Zeek event handlers in `kafka-live.zeek` are sent to the container's standard output.
     -   You can view these using `docker compose logs -f zeek-live`.
 
 ## 8. Troubleshooting
