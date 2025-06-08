@@ -25,7 +25,6 @@ graph TD
     K[Kafka Broker]
 
     S -- Port 8080 --> H
-    Z -- Port 8082 --> H
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
@@ -69,7 +68,6 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Networks**: Connected to the `zeek-network` bridge network.
     -   **Capabilities**: `NET_ADMIN`, `NET_RAW` - Required for packet capture.
     -   **Privileged**: `true` - Enables promiscuous mode for the network interface, necessary for capturing all traffic.
-    -   **Ports**: `8082:80` - Proxies host port 8082 to container port 80. This port is not actively used by the current services but is kept for potential future use or compatibility.
     -   **Command**: `/scripts/zeek-live-monitor.sh` - Executes the monitoring script on container startup.
 
 ### 4.2. `traffic-simulator` Service

@@ -21,9 +21,6 @@ services:
       - NET_RAW
     # Enable promiscuous mode for packet capture
     privileged: true
-    # Route traffic through Zeek container to enable monitoring
-    ports:
-      - "8082:80"  # Proxy port for monitoring web traffic
 
   # Simplified traffic simulator using default networking
   siem-simulator:
@@ -47,6 +44,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fluentd
+    container_name: fluentd
+    restart: unless-stopped
     image: fluentd:custom
     ports:
       - "24224:24224"
