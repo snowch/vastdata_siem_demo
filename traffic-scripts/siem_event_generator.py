@@ -1,8 +1,12 @@
 import datetime
 from network_traffic_generator import NetworkTrafficGenerator
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
 
 class SIEMEvent:
     def __init__(self, event_type, user=None, src_ip=None, dst_ip=None, timestamp=None):
+        logging.info(f"Creating SIEMEvent: {event_type}, user={user}, src_ip={src_ip}, dst_ip={dst_ip}, timestamp={timestamp}")
         self.event_type = event_type
         self.user = user
         self.src_ip = src_ip
@@ -14,7 +18,7 @@ class SIEMEvent:
         log_entry = f"{self.timestamp} event={self.event_type} user={self.user} src_ip={self.src_ip} dst_ip={self.dst_ip}"
         with open("/logs/events.log", "a") as f:
             f.write(log_entry + "\n")
-        print(f"[LOG] {log_entry}")
+        logging.info(log_entry)
 
     def emit_network(self, interface="eth0", traffic_type="tcp_syn"):
         # Use your existing traffic generator
@@ -28,12 +32,11 @@ class SIEMEvent:
                 traffic_type=traffic_type,
                 target_ip=self.dst_ip,
                 duration=1,
-                packets_per_second=1,
-                packet=packet  # Send the created packet
+                packets_per_second=1
             )
-            print(f"[NETWORK] Simulated {traffic_type} network traffic from {self.src_ip} to {self.dst_ip} port 22 on interface {interface}")
+            logging.info(f"Simulated {traffic_type} network traffic from {self.src_ip} to {self.dst_ip} port 22 on interface {interface}")
         except Exception as e:
-            print(f"[ERROR] Failed to generate network traffic: {e}")
+            logging.error(f"Failed to generate network traffic: {e}")
 
     def trigger(self):
         self.emit_log()

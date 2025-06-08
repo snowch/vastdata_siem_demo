@@ -11,6 +11,9 @@ import os
 import subprocess
 from datetime import datetime
 import random
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class NetworkTrafficGenerator:
     def __init__(self):
@@ -58,10 +61,10 @@ class NetworkTrafficGenerator:
                     network_info['subnet'] = f"{network_base}.0/24"
                     network_info['gateway'] = f"{network_base}.1"
                     
-            print(f"Discovered network config: {network_info}")
+            logging.info(f"Discovered network config: {network_info}")
             
         except Exception as e:
-            print(f"Network discovery failed, using defaults: {e}")
+            logging.warning(f"Network discovery failed, using defaults: {e}")
             
         return network_info
     
@@ -81,7 +84,7 @@ class NetworkTrafficGenerator:
         end_time = time.time() + duration
         packets_sent = 0
         
-        print(f"Starting {scenario} simulation on interface: {interface}")
+        logging.info(f"Starting {scenario} simulation on interface: {interface}")
         
         while self.running and time.time() < end_time:
             try:
@@ -111,20 +114,20 @@ class NetworkTrafficGenerator:
                             send(ip_packet, verbose=0)
                             packets_sent += 1
                         else:
-                            print(f"Packet format error: {iface_error}")
+                            logging.error(f"Packet format error: {iface_error}")
                     except Exception as send_error:
-                        print(f"Send failed: {send_error}")
+                        logging.error(f"Send failed: {send_error}")
                 
                 # Variable delays for realistic timing
                 delay = random.uniform(0.5, 2.0) / packets_per_second
                 time.sleep(delay)
                 
             except Exception as e:
-                print(f"Error in simulation: {e}")
+                logging.error(f"Error in simulation: {e}")
                 break
         
         self.running = False
-        print(f"Simulation complete: {packets_sent} packets sent")
+        logging.info(f"Simulation complete: {packets_sent} packets sent")
         return packets_sent
     
     def create_web_browsing_traffic(self):
@@ -267,7 +270,7 @@ class NetworkTrafficGenerator:
         packets_sent = 0
         
         print(f"Starting traffic generation on interface: {interface}")
-        print(f"Target: {target_ip}, Type: {traffic_type}, Duration: {duration}s, Rate: {packets_per_second} pps")
+        logging.info(f"Target: {target_ip}, Type: {traffic_type}, Duration: {duration}s, Rate: {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -280,11 +283,11 @@ class NetworkTrafficGenerator:
                 time.sleep(1.0 / packets_per_second)
                 
             except Exception as e:
-                print(f"Error sending packet: {e}")
+                logging.error(f"Error sending packet: {e}")
                 break
         
         self.running = False
-        print(f"Traffic generation complete. Sent {packets_sent} packets.")
+        logging.info(f"Traffic generation complete. Sent {packets_sent} packets.")
         return packets_sent
     
     def generate_namespace_traffic(self, interface, traffic_type, duration=60, packets_per_second=2):
@@ -327,10 +330,10 @@ class NetworkTrafficGenerator:
                 time.sleep(1.0 / packets_per_second)
                 
         except Exception as e:
-            print(f"Namespace traffic error: {e}")
+            logging.error(f"Namespace traffic error: {e}")
         
         self.running = False
-        print(f"Namespace traffic complete: {packets_sent} operations")
+        logging.info(f"Namespace traffic complete: {packets_sent} operations")
         return packets_sent
     
     def create_packet(self, traffic_type, target_ip):
@@ -376,7 +379,7 @@ class NetworkTrafficGenerator:
     
     def capture_interface_traffic(self, interface, filename, duration=60, filter_expr=""):
         """Capture real traffic from an interface"""
-        print(f"Starting capture on {interface} for {duration} seconds")
+        logging.info(f"Starting capture on {interface} for {duration} seconds")
         
         # Use tcpdump for reliable capture
         cmd = ['tcpdump', '-i', interface, '-s', '0', '-w', f'/output/{filename}']
@@ -399,7 +402,7 @@ class NetworkTrafficGenerator:
             return True
             
         except Exception as e:
-            print(f"Capture failed: {e}")
+            logging.error(f"Capture failed: {e}")
             return False
     
     def list_interfaces_with_stats(self):

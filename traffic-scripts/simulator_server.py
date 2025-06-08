@@ -3,6 +3,10 @@
 Scapy Traffic Generator Web Interface with Virtual Network Support and SIEM Events
 Provides REST API and web interface to generate network traffic on isolated virtual interfaces
 """
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(filename)s - %(levelname)s - %(funcName)s - %(message)s')
+logging.getLogger('kafka').setLevel(logging.ERROR)
 
 from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
@@ -27,8 +31,8 @@ class SIEMEventScenario:
     def generate_mixed_siem_events(self, duration=60, events_per_minute=4):
         """Generate mixed SIEM events for general monitoring"""
         self.running = True
-        print(f"Starting mixed SIEM events scenario for {duration}s")
-        
+        logging.info(f"Starting mixed SIEM events scenario for {duration}s")
+
         start_time = time.time()
         end_time = start_time + duration
         event_interval = 60.0 / events_per_minute
@@ -72,6 +76,7 @@ class SIEMEventScenario:
                 next_event_time += event_interval
             
             time.sleep(0.1)
+            break
         
         self.running = False
 
@@ -80,7 +85,7 @@ try:
     KAFKA_AVAILABLE = True
 except ImportError:
     KAFKA_AVAILABLE = False
-    print("Warning: kafka-python not available. Kafka consumer will be disabled.")
+    logging.warning("kafka-python not available. Kafka consumer will be disabled.")
 
 app = Flask(__name__)
 CORS(app)
@@ -107,9 +112,9 @@ class KafkaMessageConsumer:
     def start_consuming(self):
         """Start consuming Kafka messages from multiple topics in a separate thread"""
         if not KAFKA_AVAILABLE:
-            print("Kafka consumer not available - kafka-python package not installed")
+            logging.warning("Kafka consumer not available - kafka-python package not installed")
             return False
-            
+
         try:
             self.consumer = KafkaConsumer(
                 *self.topics,  # Subscribe to multiple topics
@@ -120,9 +125,9 @@ class KafkaMessageConsumer:
                 value_deserializer=lambda x: x.decode('utf-8') if x else None
             )
             self.running = True
-            
-            print(f"Kafka consumer started for topics: {', '.join(self.topics)}")
-            
+
+            logging.info(f"Kafka consumer started for topics: {', '.join(self.topics)}")
+
             for message in self.consumer:
                 if not self.running:
                     break
@@ -158,10 +163,10 @@ class KafkaMessageConsumer:
                     })
                     
         except Exception as e:
-            print(f"Kafka consumer error: {e}")
+            logging.error(f"Kafka consumer error: {e}")
             self.running = False
             return False
-            
+
         return True
         
     def stop_consuming(self):
@@ -170,40 +175,10 @@ class KafkaMessageConsumer:
         if self.consumer:
             self.consumer.close()
 
-def get_zeek_monitor_ip():
-    """Discover the IP address of the zeek-live-monitor container"""
-    try:
-        # Try to get the IP of the zeek-live-monitor container
-        result = subprocess.run(
-            ['docker', 'inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'zeek-live-monitor'],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            ip = result.stdout.strip()
-            print(f"Found Zeek monitor IP: {ip}")
-            return ip
-    except Exception as e:
-        print(f"Error getting Zeek monitor IP: {e}")
-    
-    # Fallback: try to find any container in the zeek-network
-    try:
-        result = subprocess.run(
-            ['docker', 'network', 'inspect', 'zeek-network', '-f', '{{range .Containers}}{{.IPv4Address}}{{end}}'],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            # Parse the first IP from the network (remove /24 suffix)
-            ips = result.stdout.strip().split()
-            for ip_with_mask in ips:
-                ip = ip_with_mask.split('/')[0]
-                if ip and ip != '192.168.100.1':  # Skip gateway
-                    print(f"Found container IP in zeek-network: {ip}")
-                    return ip
-    except Exception as e:
-        print(f"Error inspecting zeek-network: {e}")
-    
-    # Final fallback
-    print("Using fallback IP: 192.168.100.2")
+def get_default_target_ip():
+    """Retrieve the default target IP address"""
+  
+    logging.info("Using default target IP: 192.168.100.2")
     return "192.168.100.2"
 
 class ContinuousSimulation:
@@ -261,8 +236,8 @@ class ContinuousSimulation:
         # Stop all active scenario threads
         for session_id, (generator, thread) in list(self.active_scenario_threads.items()):
             generator.running = False
-            print(f"Stopping scenario thread: {session_id}")
-        
+            logging.info(f"Stopping scenario thread: {session_id}")
+
         # Wait for main thread to stop
         if self.thread:
             self.thread.join(timeout=5)
@@ -274,8 +249,8 @@ class ContinuousSimulation:
     
     def _simulation_loop(self, min_interval, max_interval):
         """Main simulation loop that runs scenarios continuously with concurrency support"""
-        print(f"Starting continuous simulation loop (interval: {min_interval}-{max_interval}s, max concurrent: {self.max_concurrent_scenarios})")
-        
+        logging.info(f"Starting continuous simulation loop (interval: {min_interval}-{max_interval}s, max concurrent: {self.max_concurrent_scenarios})")
+
         while self.running:
             try:
                 # Clean up finished scenario threads
@@ -297,8 +272,8 @@ class ContinuousSimulation:
                         duration = random.randint(60, 180)  # Longer normal scenarios
                         pps = random.randint(1, 8)
                     
-                    print(f"Continuous simulation: Starting {scenario} for {duration}s at {pps} pps (concurrent: {len(self.active_scenario_threads)+1}/{self.max_concurrent_scenarios})")
-                    
+                    logging.info(f"Continuous simulation: Starting {scenario} for {duration}s at {pps} pps (concurrent: {len(self.active_scenario_threads)+1}/{self.max_concurrent_scenarios})")
+
                     # Create new generator for this scenario
                     generator = TrafficGenerator()
                     session_id = f"continuous_{scenario}_{int(time.time())}"
@@ -328,9 +303,9 @@ class ContinuousSimulation:
                         wait_time = random.randint(min_interval // 2, min_interval)
                     else:
                         wait_time = random.randint(min_interval, max_interval)
-                    
-                    print(f"Continuous simulation: Waiting {wait_time}s before next scenario check (active: {len(self.active_scenario_threads)})")
-                    
+
+                    logging.info(f"Continuous simulation: Waiting {wait_time}s before next scenario check (active: {len(self.active_scenario_threads)})")
+
                     # Sleep in small chunks to allow for quick stopping
                     for _ in range(wait_time):
                         if not self.running:
@@ -338,10 +313,10 @@ class ContinuousSimulation:
                         time.sleep(1)
                 
             except Exception as e:
-                print(f"Error in continuous simulation loop: {e}")
+                logging.error(f"Error in continuous simulation loop: {e}")
                 time.sleep(10)  # Wait before retrying
         
-        print("Continuous simulation loop stopped")
+        logging.info("Continuous simulation loop stopped")
     
     def _cleanup_finished_scenarios(self):
         """Clean up finished scenario threads"""
@@ -350,9 +325,9 @@ class ContinuousSimulation:
         for session_id, (generator, thread) in list(self.active_scenario_threads.items()):
             if not generator.running or not thread.is_alive():
                 finished_sessions.append(session_id)
-        
+
         for session_id in finished_sessions:
-            print(f"Cleaning up finished scenario: {session_id}")
+            logging.info(f"Cleaning up finished scenario: {session_id}")
             del self.active_scenario_threads[session_id]
             # Also clean up from global tracking
             if session_id in traffic_threads:
@@ -362,6 +337,8 @@ class ContinuousSimulation:
     
     def _start_scenario_thread(self, generator, scenario, duration, pps):
         """Create and return a thread for the specified scenario"""
+        logging.info(f"Starting scenario thread for {scenario} with duration {duration}s at {pps} pps")
+
         if scenario == "web_browsing":
             return threading.Thread(
                 target=generator.generate_web_browsing_scenario,
@@ -421,7 +398,7 @@ class ContinuousSimulation:
 class TrafficGenerator(NetworkTrafficGenerator):
     def __init__(self):
         super().__init__()
-        self.zeek_monitor_ip = get_zeek_monitor_ip()
+        self.default_target_ip = get_default_target_ip()
         self.enhanced_generator = EnhancedTrafficGenerator()
         self.siem_scenario = SIEMEventScenario()  # Add SIEM scenario manager
         
@@ -429,9 +406,9 @@ class TrafficGenerator(NetworkTrafficGenerator):
         """Generate simulated HTTP traffic with precise timing"""
         # Use discovered Zeek monitor IP if no target specified
         if target_ip is None:
-            target_ip = self.zeek_monitor_ip
+            target_ip = self.default_target_ip
         
-        print(f"Generating HTTP traffic to {target_ip} for {duration}s at {packets_per_second} pps")
+        logging.info(f"Generating HTTP traffic to {target_ip} for {duration}s at {packets_per_second} pps")
         
         self.running = True
         start_time = time.time()
@@ -454,7 +431,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 # Small sleep to prevent busy waiting
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error generating HTTP traffic: {e}")
+                logging.error(f"Error generating HTTP traffic: {e}")
                 break
                 
         self.running = False
@@ -463,9 +440,9 @@ class TrafficGenerator(NetworkTrafficGenerator):
         """Generate simulated DNS traffic with precise timing"""
         # Use discovered Zeek monitor IP if no target specified
         if target_ip is None:
-            target_ip = self.zeek_monitor_ip
+            target_ip = self.default_target_ip
         
-        print(f"Generating DNS traffic to {target_ip} for {duration}s at {packets_per_second} pps")
+        logging.info(f"Generating DNS traffic to {target_ip} for {duration}s at {packets_per_second} pps")
         
         self.running = True
         start_time = time.time()
@@ -488,7 +465,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 # Small sleep to prevent busy waiting
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error generating DNS traffic: {e}")
+                logging.error(f"Error generating DNS traffic: {e}")
                 break
                 
         self.running = False
@@ -525,7 +502,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 # Small sleep to prevent busy waiting
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error generating mixed traffic: {e}")
+                logging.error(f"Error generating mixed traffic: {e}")
                 break
                 
         self.running = False
@@ -538,7 +515,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         packet_interval = 1.0 / packets_per_second
         next_packet_time = start_time
         
-        print(f"Starting web browsing scenario for {duration}s at {packets_per_second} pps")
+        logging.info(f"Starting web browsing scenario for {duration}s at {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -567,7 +544,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error in web browsing scenario: {e}")
+                logging.error(f"Error in web browsing scenario: {e}")
                 break
                 
         self.running = False
@@ -580,7 +557,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         packet_interval = 1.0 / packets_per_second
         next_packet_time = start_time
         
-        print(f"Starting file transfer scenario for {duration}s at {packets_per_second} pps")
+        logging.info(f"Starting file transfer scenario for {duration}s at {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -605,7 +582,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error in file transfer scenario: {e}")
+                logging.error(f"Error in file transfer scenario: {e}")
                 break
                 
         self.running = False
@@ -618,7 +595,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         packet_interval = 1.0 / packets_per_second
         next_packet_time = start_time
         
-        print(f"Starting video streaming scenario for {duration}s at {packets_per_second} pps")
+        logging.info(f"Starting video streaming scenario for {duration}s at {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -637,7 +614,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error in video streaming scenario: {e}")
+                logging.error(f"Error in video streaming scenario: {e}")
                 break
                 
         self.running = False
@@ -650,7 +627,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         packet_interval = 1.0 / packets_per_second
         next_packet_time = start_time
         
-        print(f"Starting office network scenario for {duration}s at {packets_per_second} pps")
+        logging.info(f"Starting office network scenario for {duration}s at {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -680,7 +657,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error in office network scenario: {e}")
+                logging.error(f"Error in office network scenario: {e}")
                 break
                 
         self.running = False
@@ -693,7 +670,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         packet_interval = 1.0 / packets_per_second
         next_packet_time = start_time
         
-        print(f"Starting malicious activity scenario for {duration}s at {packets_per_second} pps")
+        logging.info(f"Starting malicious activity scenario for {duration}s at {packets_per_second} pps")
         
         while self.running and time.time() < end_time:
             try:
@@ -724,7 +701,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
                 time.sleep(0.001)
             except Exception as e:
-                print(f"Error in malicious activity scenario: {e}")
+                logging.error(f"Error in malicious activity scenario: {e}")
                 break
                 
         self.running = False
@@ -1508,4 +1485,7 @@ if __name__ == '__main__':
     print("Web interface available at: http://localhost:8080")
     print("Virtual network topology: 192.168.200.0/24")
     print("SIEM Event support enabled")
+    # Disable Flask's default logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
     app.run(host='0.0.0.0', port=8080, debug=False)
