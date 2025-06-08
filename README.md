@@ -14,16 +14,17 @@ The application consists of two main Docker services connected via a standard Do
 graph TD
     subgraph "Docker Network"
         Z[Zeek Monitor - eth0]
-        T[Traffic Simulator]
+        S[SIEM Simulator]
         F[Fluentd]
-        T -- Logs --> F
-        F -- Logs to --> K
-        Z -- Monitors Traffic --> T
+        S -- Generates Log Files --> F
+        F -- Publishes --> K
+        Z -- Publishes --> K
+        S -- Generates Network Traffic --> Z
     end
     H[Host System]
     K[Kafka Broker]
 
-    T -- Port 8080 --> H
+    S -- Port 8080 --> H
     Z -- Port 8082 --> H
 ```
 
