@@ -15,14 +15,16 @@ graph TD
     subgraph "Docker Network"
         Z[Zeek Monitor - eth0]
         T[Traffic Simulator]
-        T -- Simulated Traffic --> Z
+        F[Fluentd]
+        T -- Logs --> F
+        F -- Logs to --> K
+        Z -- Monitors Traffic --> T
     end
     H[Host System]
     K[Kafka Broker]
 
     T -- Port 8080 --> H
     Z -- Port 8082 --> H
-    Z -- Logs to --> K
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
@@ -86,6 +88,16 @@ The service is defined in `docker-compose.yml`. The environment variables are co
 -   **Configuration**:
     -   **Driver**: `bridge` - Standard Docker bridge network.
     -   **IPAM**: Configured with a static subnet `192.168.100.0/24`.
+
+### 4.4. `fluentd` Service
+
+-   **Purpose**: Collects logs from the traffic simulator and forwards them to Kafka.
+-   **Dockerfile**: `Dockerfile.fluentd` - Installs the fluent-plugin-kafka plugin.
+-   **Configuration**:
+    -   Reads log events from `/logs/events.log`.
+    -   Parses the logs using a regular expression to extract fields like `time`, `event`, `user`, `src_ip`, and `dst_ip`.
+    -   Sends the parsed logs to a Kafka broker specified by the `KAFKA_BROKER` environment variable, using the topic specified by the `KAFKA_EVENT_LOG_TOPIC` environment variable.
+    -   The output format is JSON.
 
 ## 5. Zeek Configuration (`zeek-config/kafka-live.zeek`)
 
