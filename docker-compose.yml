@@ -34,6 +34,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./traffic-scripts:/traffic-scripts
+      - ./logs:/logs
     env_file: .env
     ports:
       - "8080:8080"
@@ -42,7 +43,7 @@ services:
       - NET_RAW
     command: python3 /traffic-scripts/simulator_server.py
 
-  fluentd-1:
+  fluentd:
     build:
       context: .
       dockerfile: Dockerfile.fluentd
@@ -52,6 +53,7 @@ services:
       - "24224:24224/udp"
     volumes:
       - ./fluentd/conf:/fluentd/etc
+      - ./logs:/logs
     environment:
       - FLUENTD_CONF=fluentd.conf
     env_file: .env

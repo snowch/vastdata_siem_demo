@@ -12,7 +12,7 @@ class SIEMEvent:
     def emit_log(self):
         # You can adapt this log format to your actual use
         log_entry = f"{self.timestamp} event={self.event_type} user={self.user} src_ip={self.src_ip} dst_ip={self.dst_ip}"
-        with open("events.log", "a") as f:
+        with open("/logs/events.log", "a") as f:
             f.write(log_entry + "\n")
         print(f"[LOG] {log_entry}")
 
