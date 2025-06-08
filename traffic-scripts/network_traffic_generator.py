@@ -31,7 +31,7 @@ class NetworkTrafficGenerator:
             # Return simulation interfaces first, then others
             return sim_interfaces + other_interfaces if sim_interfaces else other_interfaces
         except:
-            return ['br-zeek-sim']  # fallback to our simulation bridge
+            return ['eth0']  # fallback to our simulation bridge
     
     def discover_network_config(self):
         """Discover the container's network configuration"""
@@ -74,7 +74,7 @@ class NetworkTrafficGenerator:
         """Get the network gateway IP"""
         return self.network_info['gateway']
     
-    def generate_simulation_traffic(self, interface="br-zeek-sim", scenario="web_browsing", 
+    def generate_simulation_traffic(self, interface="eth0", scenario="web_browsing", 
                                   duration=60, packets_per_second=5):
         """Generate realistic simulation scenarios on virtual interfaces"""
         self.running = True
@@ -258,7 +258,7 @@ class NetworkTrafficGenerator:
         else:
             return self.create_office_network_traffic()
     
-    def generate_traffic_to_interface(self, interface="br-zeek-sim", traffic_type="mixed", 
+    def generate_traffic_to_interface(self, interface="eth0", traffic_type="mixed", 
                                     target_ip="192.168.200.20", duration=60, 
                                     packets_per_second=2, save_pcap=False):
         """Generate traffic and send to specific network interface"""

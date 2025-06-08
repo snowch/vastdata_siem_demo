@@ -1198,7 +1198,7 @@ def start_scenario():
         traffic_threads[session_id] = generator
         active_sessions[session_id] = {
             'type': f"scenario_{scenario}",
-            'interface': 'br-zeek-sim',
+            'interface': 'eth0',
             'started': datetime.now().isoformat(),
             'duration': duration,
             'scenario': scenario,

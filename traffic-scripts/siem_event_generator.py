@@ -16,20 +16,24 @@ class SIEMEvent:
             f.write(log_entry + "\n")
         print(f"[LOG] {log_entry}")
 
-    def emit_network(self):
+    def emit_network(self, interface="eth0", traffic_type="tcp_syn"):
         # Use your existing traffic generator
         traffic_gen = NetworkTrafficGenerator()
         # For SSH login, simulate a TCP SYN or full handshake to port 22
-        packet = traffic_gen.create_packet("tcp_syn", self.dst_ip)
+        packet = traffic_gen.create_packet(traffic_type, self.dst_ip)
         # Send the packet using the preferred interface
-        traffic_gen.generate_traffic_to_interface(
-            interface="br-zeek-sim",
-            traffic_type="tcp_syn",
-            target_ip=self.dst_ip,
-            duration=1,
-            packets_per_second=1
-        )
-        print(f"[NETWORK] Simulated SSH network traffic from {self.src_ip} to {self.dst_ip} port 22")
+        try:
+            traffic_gen.generate_traffic_to_interface(
+                interface=interface,
+                traffic_type=traffic_type,
+                target_ip=self.dst_ip,
+                duration=1,
+                packets_per_second=1,
+                packet=packet  # Send the created packet
+            )
+            print(f"[NETWORK] Simulated {traffic_type} network traffic from {self.src_ip} to {self.dst_ip} port 22 on interface {interface}")
+        except Exception as e:
+            print(f"[ERROR] Failed to generate network traffic: {e}")
 
     def trigger(self):
         self.emit_log()
