@@ -804,7 +804,7 @@ WEB_INTERFACE = """
                 <button class="scenario-btn" onclick="startScenario('enhanced_attacks')">⚡<br>Enhanced Attacks</button>
                 <button class="scenario-btn" onclick="startScenario('port_scan')">🔍<br>Port Scan</button>
                 <button class="scenario-btn" onclick="startScenario('sql_injection')">💉<br>SQL Injection</button>
-                <button class="scenario-btn" onclick="startScenario('siem_events')">🚨<br>SIEM Events</button>
+                <button class="scenario-btn" onclick="startScenario('siem_events')">🚨<br>(Single) SIEM Event</button>
             </div>
             <div class="tip">💡 Standard scenarios run for 2 minutes. Enhanced attacks create real network connections for better detection. SIEM Events simulate realistic security events with network traffic.</div>
         </div>
