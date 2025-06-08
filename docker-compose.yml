@@ -38,6 +38,8 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    networks:
+      - zeek-network
     command: python3 /traffic-scripts/simulator_server.py
 
   fluentd:
