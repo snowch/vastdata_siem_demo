@@ -16,10 +16,10 @@ graph TD
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
         F[Fluentd]
-        S -- Generates Log Files --> F
+        S -- Simulate Log Files --> F
         F -- Publishes --> K
         Z -- Publishes --> K
-        S -- Generates Network Traffic --> Z
+        S -- Simulated Network Traffic --> Z
     end
     W[Web UI]
     K[Kafka Broker]
