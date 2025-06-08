@@ -33,12 +33,13 @@ graph TD
 To get the application up and running, follow these steps:
 
 1.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-2.  Configure `KAFKA_BROKER` and `KAFKA_TOPIC` environment variables in `docker-compose.yml`.  See [here](#41-zeek-live-service).
+2.  Create a `.env` file in the project root directory and configure the environment variables.
 3.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
     docker compose up --build -d
     ```
     The `-d` flag runs the services in detached mode.
+    Docker Compose will automatically load the environment variables from the `.env` file.
 4.  **Verify services are running**:
     ```bash
     docker compose ps
@@ -49,15 +50,15 @@ To get the application up and running, follow these steps:
 
 ### 4.1. `zeek-live` Service
 
-The service is defined in `docker-compose.yml`.  You only need to configure the `KAFKA_BROKER` and `KAFKA_ZEEK_TOPIC` environment variables.
+The service is defined in `docker-compose.yml`. The environment variables are configured in the `.env` file located in the project root directory.
 
 -   **Purpose**: Monitors network traffic within the `zeek-network`.
 -   **Dockerfile**: `Dockerfile.zeek-live-monitor` - Builds the Zeek image, installs the Zeek-Kafka plugin, and copies the monitoring script.
 -   **Configuration**:
     -   **Environment Variables**:
-        -   `KAFKA_BROKER`: Kafka broker address. Used by the Zeek-Kafka plugin. This variable must be set for Zeek to connect to Kafka.
-        -   `KAFKA_ZEEK_TOPIC`: Kafka topic name for logs (default: `zeek-live-logs`).
-        -   `MONITOR_INTERFACE`: Network interface for Zeek to monitor (default: `eth0`). In this simplified setup, `eth0` is the container's interface on the Docker bridge network.
+        -   `KAFKA_BROKER`: Kafka broker address. Used by the Zeek-Kafka plugin. This variable must be set for Zeek to connect to Kafka and is configured in the `.env` file.
+        -   `KAFKA_ZEEK_TOPIC`: Kafka topic name for logs (default: `zeek-live-logs`). This variable is configured in the `.env` file.
+        -   `MONITOR_INTERFACE`: Network interface for Zeek to monitor (default: `eth0`). This variable is configured in the `.env` file.
     -   **Volumes**:
         -   `./zeek-config:/config`: Mounts the local `zeek-config` directory containing Zeek scripts (like `kafka-live.zeek`) into the container's `/config` directory.
         -   `./zeek-logs:/logs`: Mounts the local `zeek-logs` directory to store Zeek's output logs persistently.

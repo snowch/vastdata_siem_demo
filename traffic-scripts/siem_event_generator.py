@@ -1,5 +1,5 @@
 import datetime
-from traffic-scripts.network_traffic_generator import NetworkTrafficGenerator
+from network_traffic_generator import NetworkTrafficGenerator
 
 class SIEMEvent:
     def __init__(self, event_type, user=None, src_ip=None, dst_ip=None, timestamp=None):

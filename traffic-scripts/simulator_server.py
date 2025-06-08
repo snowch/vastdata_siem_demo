@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Scapy Traffic Generator Web Interface with Virtual Network Support
+Scapy Traffic Generator Web Interface with Virtual Network Support and SIEM Events
 Provides REST API and web interface to generate network traffic on isolated virtual interfaces
 """
 
@@ -16,6 +16,224 @@ from scapy.all import *
 import random
 from network_traffic_generator import NetworkTrafficGenerator
 from enhanced_traffic_generator import EnhancedTrafficGenerator
+
+# Import the new SIEM Event classes
+class SIEMEvent:
+    """SIEM Event simulator that generates realistic security events"""
+    
+    def __init__(self, event_type, user=None, src_ip=None, dst_ip=None, **kwargs):
+        self.event_type = event_type
+        self.user = user
+        self.src_ip = src_ip or f"192.168.100.{random.randint(10, 19)}"
+        self.dst_ip = dst_ip or f"192.168.100.{random.randint(20, 29)}"
+        self.timestamp = datetime.now().isoformat()
+        self.additional_data = kwargs
+        
+        # Event type definitions with realistic payloads
+        self.event_definitions = {
+            "ssh_login_success": {
+                "severity": "INFO",
+                "category": "Authentication",
+                "description": "Successful SSH login",
+                "port": 22,
+                "protocol": "TCP"
+            },
+            "ssh_login_failure": {
+                "severity": "WARNING", 
+                "category": "Authentication",
+                "description": "Failed SSH login attempt",
+                "port": 22,
+                "protocol": "TCP"
+            },
+            "web_login_success": {
+                "severity": "INFO",
+                "category": "Authentication", 
+                "description": "Successful web application login",
+                "port": 443,
+                "protocol": "HTTPS"
+            },
+            "web_login_failure": {
+                "severity": "WARNING",
+                "category": "Authentication",
+                "description": "Failed web application login",
+                "port": 443, 
+                "protocol": "HTTPS"
+            },
+            "file_access": {
+                "severity": "INFO",
+                "category": "File Access",
+                "description": "File system access",
+                "port": 445,
+                "protocol": "SMB"
+            },
+            "privilege_escalation": {
+                "severity": "HIGH",
+                "category": "Security",
+                "description": "Potential privilege escalation detected",
+                "port": 22,
+                "protocol": "TCP"
+            },
+            "malware_detection": {
+                "severity": "CRITICAL",
+                "category": "Security",
+                "description": "Malware signature detected",
+                "port": 80,
+                "protocol": "HTTP"
+            },
+            "data_exfiltration": {
+                "severity": "HIGH",
+                "category": "Security", 
+                "description": "Suspicious data transfer detected",
+                "port": 443,
+                "protocol": "HTTPS"
+            },
+            "brute_force_attack": {
+                "severity": "HIGH",
+                "category": "Security",
+                "description": "Brute force attack detected",
+                "port": 22,
+                "protocol": "TCP"
+            },
+            "sql_injection_attempt": {
+                "severity": "HIGH",
+                "category": "Security",
+                "description": "SQL injection attempt detected", 
+                "port": 80,
+                "protocol": "HTTP"
+            }
+        }
+    
+    def trigger(self):
+        """Trigger the SIEM event by generating network traffic and logging"""
+        event_def = self.event_definitions.get(self.event_type, {})
+        
+        # Generate corresponding network traffic
+        self._generate_network_traffic(event_def)
+        
+        # Create event log entry
+        event_data = {
+            "timestamp": self.timestamp,
+            "event_type": self.event_type,
+            "severity": event_def.get("severity", "INFO"),
+            "category": event_def.get("category", "General"),
+            "description": event_def.get("description", "Unknown event"),
+            "user": self.user,
+            "src_ip": self.src_ip,
+            "dst_ip": self.dst_ip,
+            "port": event_def.get("port"),
+            "protocol": event_def.get("protocol"),
+            "additional_data": self.additional_data
+        }
+        
+        print(f"[SIEM EVENT] {json.dumps(event_data, indent=2)}")
+        return event_data
+    
+    def _generate_network_traffic(self, event_def):
+        """Generate network traffic corresponding to the SIEM event"""
+        try:
+            port = event_def.get("port", 80)
+            protocol = event_def.get("protocol", "TCP")
+            
+            if self.event_type == "ssh_login_success":
+                # Simulate successful SSH connection
+                packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=22, flags="PA")/Raw(load="SSH-2.0-OpenSSH_8.0")
+                send(packet, verbose=0)
+                
+            elif self.event_type == "ssh_login_failure":
+                # Simulate failed SSH attempt
+                packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=22, flags="R")
+                send(packet, verbose=0)
+                
+            elif self.event_type == "web_login_success":
+                # Simulate HTTPS login POST
+                payload = "POST /login HTTP/1.1\r\nHost: webapp.local\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\nusername=" + (self.user or "user") + "&password=***"
+                packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=443)/Raw(load=payload)
+                send(packet, verbose=0)
+                
+            elif self.event_type == "brute_force_attack":
+                # Generate multiple rapid connection attempts
+                for i in range(5):
+                    packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=22, flags="S")
+                    send(packet, verbose=0)
+                    time.sleep(0.1)
+                    
+            elif self.event_type == "sql_injection_attempt":
+                # Simulate malicious HTTP request
+                malicious_payload = "GET /login.php?id=1' OR '1'='1-- HTTP/1.1\r\nHost: webapp.local\r\n\r\n"
+                packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=80)/Raw(load=malicious_payload)
+                send(packet, verbose=0)
+                
+            elif self.event_type == "data_exfiltration":
+                # Simulate large data transfer
+                large_payload = "EXFIL_DATA:" + "A" * 1200  # Large payload
+                packet = IP(src=self.dst_ip, dst=self.src_ip)/TCP(sport=443, dport=random.randint(1024, 65535))/Raw(load=large_payload)
+                send(packet, verbose=0)
+                
+            else:
+                # Generic traffic for other event types
+                packet = IP(src=self.src_ip, dst=self.dst_ip)/TCP(sport=random.randint(1024, 65535), dport=port)
+                send(packet, verbose=0)
+                
+        except Exception as e:
+            print(f"Error generating network traffic for SIEM event: {e}")
+
+class SIEMEventScenario:
+    """Manager for SIEM event scenarios"""
+    
+    def __init__(self):
+        self.running = False
+    
+    def generate_mixed_siem_events(self, duration=60, events_per_minute=4):
+        """Generate mixed SIEM events for general monitoring"""
+        self.running = True
+        print(f"Starting mixed SIEM events scenario for {duration}s")
+        
+        start_time = time.time()
+        end_time = start_time + duration
+        event_interval = 60.0 / events_per_minute
+        next_event_time = start_time
+        
+        # Weighted event types (normal operations vs security events)
+        event_weights = {
+            "ssh_login_success": 30,
+            "web_login_success": 25,
+            "file_access": 20,
+            "ssh_login_failure": 10,
+            "web_login_failure": 8,
+            "sql_injection_attempt": 3,
+            "brute_force_attack": 2,
+            "malware_detection": 1,
+            "data_exfiltration": 1
+        }
+        
+        # Create weighted list for random selection
+        weighted_events = []
+        for event_type, weight in event_weights.items():
+            weighted_events.extend([event_type] * weight)
+        
+        users = ["alice", "bob", "charlie", "admin", "service_account", "guest"]
+        
+        while self.running and time.time() < end_time:
+            current_time = time.time()
+            
+            if current_time >= next_event_time:
+                event_type = random.choice(weighted_events)
+                user = random.choice(users)
+                
+                event = SIEMEvent(
+                    event_type,
+                    user=user,
+                    src_ip=f"192.168.100.{random.randint(10, 19)}",
+                    dst_ip=f"192.168.100.{random.randint(20, 29)}"
+                )
+                
+                event.trigger()
+                next_event_time += event_interval
+            
+            time.sleep(0.1)
+        
+        self.running = False
+
 try:
     from kafka import KafkaConsumer
     KAFKA_AVAILABLE = True
@@ -37,23 +255,23 @@ continuous_simulation_thread = None
 continuous_simulation = None
 
 class KafkaMessageConsumer:
-    def __init__(self, broker=None, topic=None):
-        if not broker or not topic:
-            raise ValueError("Kafka broker and topic must be provided")
+    def __init__(self, broker=None, topics=None):
+        if not broker or not topics:
+            raise ValueError("Kafka broker and topics must be provided")
         self.broker = broker
-        self.topic = topic
+        self.topics = topics if isinstance(topics, list) else [topics]
         self.running = False
         self.consumer = None
         
     def start_consuming(self):
-        """Start consuming Kafka messages in a separate thread"""
+        """Start consuming Kafka messages from multiple topics in a separate thread"""
         if not KAFKA_AVAILABLE:
             print("Kafka consumer not available - kafka-python package not installed")
             return False
             
         try:
             self.consumer = KafkaConsumer(
-                self.topic,
+                *self.topics,  # Subscribe to multiple topics
                 bootstrap_servers=[self.broker],
                 auto_offset_reset='latest',
                 enable_auto_commit=True,
@@ -61,6 +279,8 @@ class KafkaMessageConsumer:
                 value_deserializer=lambda x: x.decode('utf-8') if x else None
             )
             self.running = True
+            
+            print(f"Kafka consumer started for topics: {', '.join(self.topics)}")
             
             for message in self.consumer:
                 if not self.running:
@@ -75,6 +295,9 @@ class KafkaMessageConsumer:
                     global kafka_messages
                     kafka_messages.append({
                         'timestamp': timestamp,
+                        'topic': message.topic,  # Include topic information
+                        'partition': message.partition,
+                        'offset': message.offset,
                         'data': msg_data
                     })
                     
@@ -87,6 +310,9 @@ class KafkaMessageConsumer:
                     timestamp = datetime.now().strftime('%H:%M:%S')
                     kafka_messages.append({
                         'timestamp': timestamp,
+                        'topic': message.topic,
+                        'partition': message.partition,
+                        'offset': message.offset,
                         'data': {'raw_message': message.value}
                     })
                     
@@ -157,6 +383,7 @@ class ContinuousSimulation:
             'video_streaming': 10,   # Moderate - streaming content
             'dns_queries': 8,        # Background - DNS lookups
             'mixed_traffic': 7,      # Background - general traffic
+            'siem_events': 5,        # New - SIEM event simulation
             'malicious_activity': 3, # Low - security incidents
             'port_scan': 1,          # Very low - attack activity
             'sql_injection': 1       # Very low - attack activity
@@ -222,6 +449,9 @@ class ContinuousSimulation:
                     if scenario in ['malicious_activity', 'port_scan', 'sql_injection']:
                         duration = random.randint(30, 90)  # Shorter attack scenarios
                         pps = random.randint(2, 5)
+                    elif scenario == 'siem_events':
+                        duration = random.randint(60, 120)  # Medium duration for SIEM events
+                        pps = random.randint(2, 6)  # Events per minute converted to rough pps equivalent
                     else:
                         duration = random.randint(60, 180)  # Longer normal scenarios
                         pps = random.randint(1, 8)
@@ -316,6 +546,11 @@ class ContinuousSimulation:
                 target=generator.generate_malicious_activity_scenario,
                 args=(duration, pps)
             )
+        elif scenario == "siem_events":
+            return threading.Thread(
+                target=generator.siem_scenario.generate_mixed_siem_events,
+                args=(duration, pps)  # pps here represents events per minute for SIEM
+            )
         elif scenario == "port_scan":
             return threading.Thread(
                 target=generator.enhanced_generator.generate_port_scan_traffic,
@@ -347,6 +582,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
         super().__init__()
         self.zeek_monitor_ip = get_zeek_monitor_ip()
         self.enhanced_generator = EnhancedTrafficGenerator()
+        self.siem_scenario = SIEMEventScenario()  # Add SIEM scenario manager
         
     def generate_http_traffic(self, target_ip=None, duration=60, packets_per_second=1):
         """Generate simulated HTTP traffic with precise timing"""
@@ -750,8 +986,9 @@ WEB_INTERFACE = """
                 <button class="scenario-btn" onclick="startScenario('enhanced_attacks')">⚡<br>Enhanced Attacks</button>
                 <button class="scenario-btn" onclick="startScenario('port_scan')">🔍<br>Port Scan</button>
                 <button class="scenario-btn" onclick="startScenario('sql_injection')">💉<br>SQL Injection</button>
+                <button class="scenario-btn" onclick="startScenario('siem_events')">🚨<br>SIEM Events</button>
             </div>
-            <div class="tip">💡 Standard scenarios run for 2 minutes. Enhanced attacks create real network connections for better detection.</div>
+            <div class="tip">💡 Standard scenarios run for 2 minutes. Enhanced attacks create real network connections for better detection. SIEM Events simulate realistic security events with network traffic.</div>
         </div>
         
         <div class="control-panel">
@@ -961,11 +1198,12 @@ WEB_INTERFACE = """
             
             messages.forEach(msg => {
                 const timestamp = msg.timestamp;
+                const topic = msg.topic || 'unknown';
                 const data = msg.data;
-                content += `[${timestamp}] RAW: ${JSON.stringify(data)}\n`;
+                content += `[${timestamp}] TOPIC: ${topic} | DATA: ${JSON.stringify(data)}\n`;
             });
             
-            kafkaLogDiv.textContent = content; // This preserves whitespace and formatting
+            kafkaLogDiv.textContent = content;
             kafkaLogDiv.scrollTop = kafkaLogDiv.scrollHeight;
         }
         
@@ -1086,6 +1324,12 @@ def start_scenario():
                 target=generator.generate_malicious_activity_scenario,
                 args=(duration, packets_per_second)
             )
+        elif scenario == "siem_events":
+            # For SIEM events, packets_per_second represents events per minute
+            thread = threading.Thread(
+                target=generator.siem_scenario.generate_mixed_siem_events,
+                args=(duration, packets_per_second)
+            )
         elif scenario == "enhanced_attacks":
             thread = threading.Thread(
                 target=generator.enhanced_generator.run_comprehensive_attack_simulation,
@@ -1182,6 +1426,35 @@ def start_traffic():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# Add new SIEM event endpoint
+@app.route('/api/trigger_siem_event', methods=['POST'])
+def trigger_siem_event():
+    try:
+        data = request.get_json()
+        event_type = data.get('event_type', 'ssh_login_success')
+        user = data.get('user', 'alice')
+        src_ip = data.get('src_ip', f"192.168.100.{random.randint(10, 19)}")
+        dst_ip = data.get('dst_ip', f"192.168.100.{random.randint(20, 29)}")
+        
+        # Create and trigger SIEM event
+        event = SIEMEvent(
+            event_type=event_type,
+            user=user,
+            src_ip=src_ip,
+            dst_ip=dst_ip
+        )
+        
+        event_data = event.trigger()
+        
+        return jsonify({
+            'success': True,
+            'event_data': event_data,
+            'message': f'SIEM event {event_type} triggered successfully'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/stop_all', methods=['POST'])
 def stop_all_traffic():
     try:
@@ -1242,17 +1515,25 @@ def start_kafka_consumer():
         })
 
     try:
-        # Retrieve broker and topic from environment variables
+        # Retrieve broker and topics from environment variables
         kafka_broker = os.environ.get('KAFKA_BROKER')
-        kafka_topic = os.environ.get('KAFKA_ZEEK_TOPIC')
+        kafka_zeek_topic = os.environ.get('KAFKA_ZEEK_TOPIC')
+        kafka_event_log_topic = os.environ.get('KAFKA_EVENT_LOG_TOPIC')
 
-        if not kafka_broker or not kafka_topic:
+        # Build list of topics to subscribe to
+        topics = []
+        if kafka_zeek_topic:
+            topics.append(kafka_zeek_topic)
+        if kafka_event_log_topic:
+            topics.append(kafka_event_log_topic)
+
+        if not kafka_broker or not topics:
             return jsonify({
                 'success': False,
-                'error': 'KAFKA_BROKER and KAFKA_ZEEK_TOPIC environment variables must be set'
+                'error': 'KAFKA_BROKER and at least one of KAFKA_ZEEK_TOPIC or KAFKA_EVENT_LOG_TOPIC environment variables must be set'
             })
 
-        consumer = KafkaMessageConsumer(broker=kafka_broker, topic=kafka_topic)
+        consumer = KafkaMessageConsumer(broker=kafka_broker, topics=topics)
         kafka_consumer_thread = threading.Thread(target=consumer.start_consuming)
         kafka_consumer_thread.daemon = True
         kafka_consumer_thread.start()
@@ -1260,7 +1541,7 @@ def start_kafka_consumer():
 
         return jsonify({
             'success': True,
-            'message': 'Kafka consumer started'
+            'message': f'Kafka consumer started for topics: {", ".join(topics)}'
         })
 
     except Exception as e:
@@ -1385,4 +1666,5 @@ if __name__ == '__main__':
     print("Starting Virtual Network Traffic Generator Server...")
     print("Web interface available at: http://localhost:8080")
     print("Virtual network topology: 192.168.200.0/24")
+    print("SIEM Event support enabled")
     app.run(host='0.0.0.0', port=8080, debug=False)

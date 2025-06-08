@@ -1,9 +1,3 @@
-x-environment: &default-env
-  KAFKA_BROKER: 172.200.204.1:9092
-  KAFKA_ZEEK_TOPIC: zeek-live-logs
-  KAFKA_EVENT_LOG_TOPIC: fluentd-events
-  MONITOR_INTERFACE: eth0
-
 services:
   # Simplified Zeek monitoring using container's default network interface
   zeek-live:
@@ -16,8 +10,7 @@ services:
       - ./zeek-config:/config
       - ./zeek-logs:/logs
       - ./scripts:/scripts
-    environment:
-      <<: *default-env
+    env_file: .env
     command: /scripts/zeek-live-monitor.sh
     # Use default bridge network instead of host networking
     networks:
@@ -41,8 +34,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./traffic-scripts:/traffic-scripts
-    environment:
-      <<: *default-env
+    env_file: .env
     ports:
       - "8080:8080"
     cap_add:
@@ -50,14 +42,19 @@ services:
       - NET_RAW
     command: python3 /traffic-scripts/simulator_server.py
 
-  fluentd:
-    image: fluent/fluentd:v1.16-1
+  fluentd-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.fluentd
+    image: fluentd:custom
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
     volumes:
-      - ./logs:/logs                 # Access simulator logs
-      - ./fluentd/conf:/fluentd/etc  # Mount Fluentd config
+      - ./fluentd/conf:/fluentd/etc
     environment:
-      <<: *default-env
-    restart: unless-stopped
+      - FLUENTD_CONF=fluentd.conf
+    env_file: .env
 
 networks:
   zeek-network:
