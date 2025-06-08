@@ -2,14 +2,14 @@ services:
   # Simplified Zeek monitoring using container's default network interface
   zeek-live:
     build:
-      context: .
-      dockerfile: Dockerfile.zeek-live-monitor
+      context: ./services/zeek-monitor
+      dockerfile: Dockerfile
     container_name: zeek-live-monitor
     restart: unless-stopped
     volumes:
-      - ./zeek-config:/config
-      - ./zeek-logs:/logs
-      - ./scripts:/scripts
+      - ./services/zeek-monitor/config:/config
+      - ./services/zeek-monitor/logs:/logs
+      - ./services/zeek-monitor/scripts:/scripts
     env_file: .env
     command: /scripts/zeek-live-monitor.sh
     # Use default bridge network instead of host networking
@@ -25,13 +25,13 @@ services:
   # Simplified traffic simulator using default networking
   siem-simulator:
     build:
-      context: .
-      dockerfile: Dockerfile.simulator
+      context: ./services/simulator
+      dockerfile: Dockerfile
     container_name: siem-simulator
     restart: unless-stopped
     volumes:
-      - ./src/simulator:/src/simulator
-      - ./logs:/logs
+      - ./services/simulator/src:/src/simulator
+      - ./services/fluentd/logs:/logs
     env_file: .env
     ports:
       - "8080:8080"
@@ -44,8 +44,8 @@ services:
 
   fluentd:
     build:
-      context: .
-      dockerfile: Dockerfile.fluentd
+      context: ./services/fluentd
+      dockerfile: Dockerfile
     container_name: fluentd
     restart: unless-stopped
     image: fluentd:custom
@@ -53,8 +53,8 @@ services:
       - "24224:24224"
       - "24224:24224/udp"
     volumes:
-      - ./fluentd/conf:/fluentd/etc
-      - ./logs:/logs
+      - ./services/fluentd/conf:/fluentd/etc
+      - ./services/fluentd/logs:/logs
     environment:
       - FLUENTD_CONF=fluentd.conf
     env_file: .env

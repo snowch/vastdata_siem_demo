@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /src/simulator
 
 # Copy traffic generation scripts
-COPY src/simulator/ /src/simulator/
+COPY src/ /src/simulator/
 
 # Set working directory
 WORKDIR /src/simulator
