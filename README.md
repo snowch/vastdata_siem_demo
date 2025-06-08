@@ -1,4 +1,4 @@
-# Zeek Network Monitoring Service Documentation
+# SIEM Data Simulator Service Documentation
 
 This document provides detailed documentation for the simplified Docker-based Zeek network monitoring setup.
 
