@@ -21,10 +21,10 @@ graph TD
         Z -- Publishes --> K
         S -- Generates Network Traffic --> Z
     end
-    H[Host System]
+    W[Web UI]
     K[Kafka Broker]
 
-    S -- Port 8080 --> H
+    S -- Port 8080 --> W
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
