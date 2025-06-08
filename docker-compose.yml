@@ -30,7 +30,7 @@ services:
     container_name: siem-simulator
     restart: unless-stopped
     volumes:
-      - ./traffic-scripts:/traffic-scripts
+      - ./src/simulator:/src/simulator
       - ./logs:/logs
     env_file: .env
     ports:
@@ -40,7 +40,7 @@ services:
       - NET_RAW
     networks:
       - zeek-network
-    command: python3 /traffic-scripts/simulator_server.py
+    command: python3 /src/simulator/simulator_server.py
 
   fluentd:
     build:

@@ -21,13 +21,13 @@ RUN pip install --no-cache-dir \
     kafka-python
 
 # Create directories
-RUN mkdir -p /traffic-scripts
+RUN mkdir -p /src/simulator
 
 # Copy traffic generation scripts
-COPY traffic-scripts/ /traffic-scripts/
+COPY src/simulator/ /src/simulator/
 
 # Set working directory
-WORKDIR /traffic-scripts
+WORKDIR /src/simulator
 
 # Expose port for web interface
 EXPOSE 8080

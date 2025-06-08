@@ -75,11 +75,11 @@ The service is defined in `docker-compose.yml`. The environment variables are co
 -   **Purpose**: Generates various types of network traffic for testing Zeek's monitoring capabilities.
 -   **Dockerfile**: `Dockerfile.simulator` - Builds a Python environment with Scapy and other network tools.
 -   **Configuration**:
-    -   **Volumes**: `./traffic-scripts:/traffic-scripts`: Mounts the local `traffic-scripts` directory containing the Python traffic generation scripts.
+    -   **Volumes**: `./src/simulator:/src/simulator`: Mounts the local `src/simulator` directory containing the Python traffic generation scripts.
     -   **Ports**: `8080:8080` - Maps host port 8080 to container port 8080, exposing the web interface for the traffic generator.
     -   **Networks**: Connected to the `zeek-network` bridge network.
     -   **Capabilities**: `NET_ADMIN`, `NET_RAW` - Required for crafting and sending raw packets using Scapy.
-    -   **Command**: `python3 /traffic-scripts/simulator_server.py` - Starts the web server for the events generator.
+    -   **Command**: `python3 /src/simulator/simulator_server.py` - Starts the web server for the events generator.
 
 ### 4.3. `zeek-network`
 
@@ -132,10 +132,10 @@ Traffic within the `zeek-network` is automatically monitored by the `zeek-live` 
     -   This interface provides buttons to start various predefined scenarios (Web Browsing, File Transfer, Video Stream, Office Network, Security Test, Enhanced Attacks, Port Scan, SQL Injection) and a form for custom traffic generation (HTTP, DNS, Mixed).
     -   It also includes controls for a continuous simulation mode that runs random scenarios with configurable intervals and concurrency.
     -   A Kafka Consumer section allows viewing logs received from Zeek via Kafka directly in the browser.
-    -   The web interface uses the `traffic-scripts/simulator_server.py` Flask application.
+    -   The web interface uses the `src/simulator/simulator_server.py` Flask application.
 
 2.  **SIEM Simulator Scripts**:
-    -   The `traffic-scripts/network_traffic_generator.py` and `traffic-scripts/enhanced_traffic_generator.py` Python scripts contain the logic for generating various types of traffic using Scapy and real socket connections.
+    -   The `src/simulator/network_traffic_generator.py` and `src/simulator/enhanced_traffic_generator.py` Python scripts contain the logic for generating various types of traffic using Scapy and real socket connections.
     -   `network_traffic_generator.py` focuses on generating packets at the network layer (using `sendp` or `send`), simulating various scenarios like web browsing, file transfer, etc.
     -   `enhanced_traffic_generator.py` focuses on creating *real* network connections using Python's `socket` and `requests` libraries (if available). This is crucial for generating traffic that Zeek can fully analyze, such as complete HTTP requests or TCP handshakes. It includes functions for generating real HTTP, malicious HTTP, DNS, port scan, SSH brute force, and data exfiltration traffic, as well as a comprehensive attack simulation.
     -   These scripts are executed by the `traffic-simulator` container.
