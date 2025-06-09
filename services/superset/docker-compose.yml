@@ -37,7 +37,10 @@ services:
     restart: unless-stopped
     volumes:
       - redis:/data
-
+    profiles:
+      - dashboard
+      - all
+      
   db:
     env_file:
       - path: docker/.env # default
@@ -50,6 +53,9 @@ services:
     volumes:
       - db_home:/var/lib/postgresql/data
       - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    profiles:
+      - dashboard
+      - all
 
   superset:
     env_file:
@@ -61,6 +67,9 @@ services:
         required: false
     image: *superset-image
     container_name: superset_app
+    profiles:
+      - dashboard
+      - all
 
     ### START FIX to install Trino library
     # command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
@@ -88,6 +97,9 @@ services:
     volumes: *superset-volumes
     healthcheck:
       disable: true
+    profiles:
+      - dashboard
+      - all
 
   superset-worker:
     image: *superset-image
@@ -108,6 +120,9 @@ services:
           "CMD-SHELL",
           "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
         ]
+    profiles:
+      - dashboard
+      - all
 
   superset-worker-beat:
     image: *superset-image
@@ -124,6 +139,9 @@ services:
     volumes: *superset-volumes
     healthcheck:
       disable: true
+    profiles:
+      - dashboard
+      - all
 
 volumes:
   superset_home:
