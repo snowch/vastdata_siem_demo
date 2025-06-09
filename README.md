@@ -98,6 +98,32 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   Sends the parsed logs to a Kafka broker specified by the `KAFKA_BROKER` environment variable, using the topic specified by the `KAFKA_EVENT_LOG_TOPIC` environment variable.
     -   The output format is JSON.
 
+### 4.5. `jupyspark` Service
+
+-   **Purpose**: Provides a Jupyter Notebook environment with Apache Spark pre-installed for data analysis and processing.
+-   **Dockerfile**: `services/jupyspark/Dockerfile` - Builds a Docker image with Jupyter Notebook, Apache Spark, and necessary dependencies.
+-   **Configuration**:
+    -   **Environment Variables**:
+        -   `JUPYTER_PASSWORD`: Sets the password for accessing the Jupyter Notebook. It is highly recommended to set this variable to protect your notebook. You can set this variable in the `.env` file.
+    -   **Ports**: `8888:8888` - Maps host port 8888 to container port 8888, allowing access to the Jupyter Notebook from your web browser.
+    -   **Volumes**:
+        -   `./services/jupyspark/examples:/home/jovyan/work/examples`: Mounts the local `services/jupyspark/examples` directory to the `/home/jovyan/work/examples` directory in the container, making the example notebooks available in the Jupyter Notebook environment.
+
+## Accessing the Jupyter Notebook
+
+1.  Ensure the `jupyspark` service is running by executing `docker compose up --build -d`.
+2.  Open your web browser and navigate to `http://<your_server_ip>:8888`. Replace `<your_server_ip>` with the IP address of the server where the Docker container is running.
+3.  When prompted, enter the password you set in the `JUPYTER_PASSWORD` environment variable.
+
+## Running the Example Notebooks
+
+The `services/jupyspark/examples` directory contains example notebooks that demonstrate how to use Spark with Jupyter Notebook. To run these notebooks:
+
+1.  Access the Jupyter Notebook as described above.
+2.  Navigate to the `/home/jovyan/work/examples` directory in the Jupyter Notebook file browser.
+3.  Open the desired notebook (e.g., `streaming_consumer_zeek_topic.ipynb`).
+4.  Follow the instructions in the notebook to execute the code cells and explore the data.
+
 ## 5. Zeek Configuration (`zeek-config/kafka-live.zeek`)
 
 This Zeek script configures Zeek for live monitoring and sending logs to Kafka, along with loading various protocol analyzers and detection policies. The Kafka broker address *must* be specified using the `KAFKA_BROKER` environment variable. If this variable is not set, Zeek will exit with an error.
