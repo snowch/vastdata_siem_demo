@@ -11,7 +11,7 @@ This application provides a streamlined environment for monitoring network traff
 The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
 
 ```mermaid
-graph TD
+graph LR
     subgraph "Docker Services"
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
