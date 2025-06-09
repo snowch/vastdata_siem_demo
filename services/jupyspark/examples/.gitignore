@@ -1,0 +1,2 @@
+${sys:SPARK_LOGS_DIR}/
+.ipynb_checkpoints/
