@@ -3,10 +3,9 @@
 import os
 
 # Load environment variables for Kafka and VastDB connectivity
-DOCKER_HOST_OR_IP = os.getenv("DOCKER_HOST_OR_IP", "localhost")
-VASTDB_ENDPOINT = os.getenv("VASTDB_ENDPOINT")
-VASTDB_ACCESS_KEY = os.getenv("VASTDB_ACCESS_KEY")
-VASTDB_SECRET_KEY = os.getenv("VASTDB_SECRET_KEY")
+VASTDB_ENDPOINT = os.getenv("SPARK_NDB_ENDPOINT")
+VASTDB_ACCESS_KEY = os.getenv("SPARK_NDB_ACCESS_KEY_ID")
+VASTDB_SECRET_KEY = os.getenv("SPARK_NDB_SECRET_ACCESS_KEY")
 
 VASTDB_SIEM_BUCKET = os.getenv("VASTDB_SIEM_BUCKET", 'csnow-db')
 VASTDB_SIEM_SCHEMA = os.getenv("VASTDB_SIEM_SCHEMA", 'fluentd-ocsf-logs')
@@ -14,17 +13,15 @@ VASTDB_SIEM_TABLE_PREFIX = 'ocsf_'
 
 use_vastkafka = True
 if use_vastkafka:
-    VAST_KAFKA_BROKER = os.getenv("VAST_KAFKA_BROKER")
+    VAST_KAFKA_BROKER = os.getenv("KAFKA_BROKER")
 else:
-    VAST_KAFKA_BROKER = f"{DOCKER_HOST_OR_IP}:19092"
+    raise Exception("KAFKA_BROKER environment variable is not set. Please set it to the Kafka broker address.")
 
 kafka_brokers = VAST_KAFKA_BROKER
-topic = 'fluentd-events'
+topic = os.getenv("KAFKA_EVENT_LOG_TOPIC")
 
 # Print configurations
 print(f"""
----
-DOCKER_HOST_OR_IP={DOCKER_HOST_OR_IP}
 ---
 VASTDB_ENDPOINT={VASTDB_ENDPOINT}
 VASTDB_ACCESS_KEY==****{VASTDB_ACCESS_KEY[-4:]}
@@ -38,8 +35,6 @@ topic={topic}
 """)
 
 # Create Vast DB schema if it doesn't exist.
-get_ipython().run_cell_magic('capture', '--no-stderr', '%pip install --quiet -U vastdb\n')
-
 import vastdb
 
 session = vastdb.connect(endpoint=VASTDB_ENDPOINT, access=VASTDB_ACCESS_KEY, secret=VASTDB_SECRET_KEY)
@@ -60,28 +55,27 @@ import json
 # Spark Configuration
 conf = SparkConf()
 conf.setAll([
-    ("spark.driver.host", socket.gethostbyname(socket.gethostname())),
+    # ("spark.driver.host", socket.gethostbyname(socket.gethostname())),
     ("spark.sql.execution.arrow.pyspark.enabled", "false"),
     # VASTDB
-    ("spark.sql.catalog.ndb", 'spark.sql.catalog.ndb.VastCatalog'),
-    ("spark.ndb.endpoint", VASTDB_ENDPOINT),
-    ("spark.ndb.data_endpoints", VASTDB_ENDPOINT),
-    ("spark.ndb.access_key_id", VASTDB_ACCESS_KEY),
-    ("spark.ndb.secret_access_key", VASTDB_SECRET_KEY),
-    ("spark.driver.extraClassPath", '/usr/local/spark/jars/spark3-vast-3.4.1-f93839bfa38a/*'),
-    ("spark.executor.extraClassPath", '/usr/local/spark/jars/spark3-vast-3.4.1-f93839bfa38a/*'),
-    ("spark.sql.extensions", 'ndb.NDBSparkSessionExtension'),
+    # ("spark.sql.catalog.ndb", 'spark.sql.catalog.ndb.VastCatalog'),
+    # ("spark.ndb.endpoint", VASTDB_ENDPOINT),
+    # ("spark.ndb.data_endpoints", VASTDB_ENDPOINT),
+    # ("spark.ndb.access_key_id", VASTDB_ACCESS_KEY),
+    # ("spark.ndb.secret_access_key", VASTDB_SECRET_KEY),
+    # ("spark.driver.extraClassPath", '/usr/local/spark/jars/spark3-vast-3.4.1-f93839bfa38a/*'),
+    # ("spark.executor.extraClassPath", '/usr/local/spark/jars/spark3-vast-3.4.1-f93839bfa38a/*'),
+    # ("spark.sql.extensions", 'ndb.NDBSparkSessionExtension'),
     # Kafka
-    ("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.4.3," 
-                            "org.apache.logging.log4j:log4j-slf4j2-impl:2.19.0," 
-                            "org.apache.logging.log4j:log4j-api:2.19.0," 
-                            "org.apache.logging.log4j:log4j-core:2.19.0"),
-    ("spark.jars.excludes", "org.slf4j:slf4j-api,org.slf4j:slf4j-log4j12"),
-    ("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem"),
+    # ("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.4.3," 
+    #                         "org.apache.logging.log4j:log4j-slf4j2-impl:2.19.0," 
+    #                         "org.apache.logging.log4j:log4j-api:2.19.0," 
+    #                         "org.apache.logging.log4j:log4j-core:2.19.0"),
+    # ("spark.jars.excludes", "org.slf4j:slf4j-api,org.slf4j:slf4j-log4j12"),
+    # ("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem"),
 ])
 
 spark = SparkSession.builder \
-    .master("local") \
     .appName("FluentDOCSFStreamingToVastDB") \
     .config(conf=conf) \
     .enableHiveSupport() \
