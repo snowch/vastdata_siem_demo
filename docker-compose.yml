@@ -59,76 +59,27 @@ services:
       - FLUENTD_CONF=fluentd.conf
     env_file: .env
 
-  # PySpark Master
-  spark-master:
-    image: vastdataorg/spark-vast:latest
-    container_name: spark-master
+  jupyspark:
+    build:
+      context: ./services/jupyspark/
+      dockerfile: Dockerfile
+      args:
+        spark_version: "3.4.4"
+        scala_version: "2.13"
+    container_name: jupyspark
     restart: unless-stopped
-    ports:
-      - "8090:8080"  # Spark Master Web UI
-      - "7077:7077"  # Spark Master port
-    volumes:
-      - ./services/pyspark/conf/spark-defaults.conf:/tmp/spark-defaults.conf.template
-    networks:
-      - zeek-network
-    env_file: .env
-    command: >
-      bash -c '
-        cat /tmp/spark-defaults.conf.template | sed -e "s|@@SPARK_NDB_ENDPOINT@@|\\${SPARK_NDB_ENDPOINT}|g; \
-            s|@@SPARK_NDB_DATAENDPOINTS@@|\${SPARK_NDB_DATAENDPOINTS}|g; \
-            s|@@SPARK_NDB_ACCESS_KEY_ID@@|\${SPARK_NDB_ACCESS_KEY_ID}|g; \
-            s|@@SPARK_NDB_SECRET_ACCESS_KEY@@|\${SPARK_NDB_SECRET_ACCESS_KEY}|g" > /opt/spark/conf/spark-defaults.conf && /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master'
+    privileged: true
+    env_file:
+      - .env
     environment:
-      - SPARK_MODE=master
-      - SPARK_MASTER_HOST=spark-master
-
-  # PySpark Worker
-  spark-worker:
-    image: vastdataorg/spark-vast:latest
-    container_name: spark-worker
-    restart: unless-stopped
+      - JUPYTER_PASSWORD=${JUPYTER_PASSWORD}
     ports:
-      - "8081:8081"  # Spark Worker Web UI
+      - "8888:8888"  # (Jupyter Notebook)
+      - "4040:4040"  # (TensorBoard)
+      - "4041:4041"  # (Spark UI)
+      - "4042:4042"  # (Spark History Server)
     volumes:
-      - ./services/pyspark/conf/spark-defaults.conf:/tmp/spark-defaults.conf.template
-    networks:
-      - zeek-network
-    depends_on:
-      - spark-master
-    env_file: .env
-    command: >
-      bash -c '
-        cat /tmp/spark-defaults.conf.template | sed -e "s|@@SPARK_NDB_ENDPOINT@@|\\${SPARK_NDB_ENDPOINT}|g; \
-            s|@@SPARK_NDB_DATAENDPOINTS@@|\${SPARK_NDB_DATAENDPOINTS}|g; \
-            s|@@SPARK_NDB_ACCESS_KEY_ID@@|\${SPARK_NDB_ACCESS_KEY_ID}|g; \
-            s|@@SPARK_NDB_SECRET_ACCESS_KEY@@|\${SPARK_NDB_SECRET_ACCESS_KEY}|g" > /opt/spark/conf/spark-defaults.conf && /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077'
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-
-  # PySpark Client
-  spark-client:
-    image: vastdataorg/spark-vast:latest
-    container_name: spark-client
-    restart: unless-stopped
-    ports:
-      - "4040:4040"  # Spark Driver Web UI
-    volumes:
-      - ./services/pyspark/conf/spark-defaults.conf:/tmp/spark-defaults.conf.template
-    networks:
-      - zeek-network
-    depends_on:
-      - spark-master
-    env_file: .env
-    command: >
-      bash -c '
-        cat /tmp/spark-defaults.conf.template | sed -e "s|@@SPARK_NDB_ENDPOINT@@|\\${SPARK_NDB_ENDPOINT}|g; \
-            s|@@SPARK_NDB_DATAENDPOINTS@@|\${SPARK_NDB_DATAENDPOINTS}|g; \
-            s|@@SPARK_NDB_ACCESS_KEY_ID@@|\${SPARK_NDB_ACCESS_KEY_ID}|g; \
-            s|@@SPARK_NDB_SECRET_ACCESS_KEY@@|\${SPARK_NDB_SECRET_ACCESS_KEY}|g" > /opt/spark/conf/spark-defaults.conf && /bin/sleep infinity'
-    environment:
-      - SPARK_MODE=client
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      - ./services/jupyspark/examples:/home/jovyan/examples:rw
 
 networks:
   zeek-network:

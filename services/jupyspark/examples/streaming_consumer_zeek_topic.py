@@ -3,7 +3,7 @@
 import os
 
 # Load environment variables for Kafka and VastDB connectivity
-DOCKER_HOST_OR_IP = os.getenv("DOCKER_HOST_OR_IP", "localhost")
+
 VASTDB_ENDPOINT = os.getenv("VASTDB_ENDPOINT")
 VASTDB_ACCESS_KEY = os.getenv("VASTDB_ACCESS_KEY")
 VASTDB_SECRET_KEY = os.getenv("VASTDB_SECRET_KEY")
@@ -24,8 +24,6 @@ topic = 'zeek-live-logs'
 # Print configurations
 print(f"""
 ---
-DOCKER_HOST_OR_IP={DOCKER_HOST_OR_IP}
----
 VASTDB_ENDPOINT={VASTDB_ENDPOINT}
 VASTDB_ACCESS_KEY==****{VASTDB_ACCESS_KEY[-4:]}
 VASTDB_SECRET_KEY=****{VASTDB_SECRET_KEY[-4:]}
@@ -36,18 +34,6 @@ VASTDB_SIEM_TABLE_PREFIX={VASTDB_SIEM_TABLE_PREFIX}
 VAST_KAFKA_BROKER={VAST_KAFKA_BROKER}
 topic={topic}
 """)
-
-
-
-# Create Vast DB schema if it doesn't exist.
-
-# In[2]:
-
-
-get_ipython().run_cell_magic('capture', '--no-stderr', '%pip install --quiet -U vastdb\n')
-
-
-# In[3]:
 
 
 import vastdb
