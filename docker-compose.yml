@@ -1,3 +1,6 @@
+include:
+- path: ./services/superset/docker-compose.yml
+
 services:
   # Simplified Zeek monitoring using container's default network interface
   zeek-live:
