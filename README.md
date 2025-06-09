@@ -17,24 +17,35 @@ graph TD
         S[SIEM Simulator]
         F[Fluentd]
         J[Pyspark - Jupyter]
+        T[Trino - coming soon]
+        AS[Superset - coming soon]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
+        AS -- Queries --> T
     end
 
     subgraph "Docker Host"
         SW[Simulator Web UI - 8080]
         JW[Jupyter Web UI - 8888]
+        ASW[Superset Web UI - TBC]
     end
 
-    K[Kafka Broker]
+    subgraph "Vast Cluster"
+        K[Vast Kafka Broker]
+        VDB[Vast Database]
+    end
 
     S -- Port Forward --> SW
     J -- Port Forward --> JW
+    AS -- Port Forward --> ASW
+
     F -- Publishes --> K
     Z -- Publishes --> K
     J -- Consumes --> K
     S -- Consumes --> K
+    J -- Writes To --> VDB
+    T -- Queries --> VDB
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
