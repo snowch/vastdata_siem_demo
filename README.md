@@ -11,24 +11,45 @@ This application provides a streamlined environment for monitoring network traff
 The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
 
 ```mermaid
-graph TD
-    subgraph "Docker Network"
+graph LR
+    subgraph "Docker Services"
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
         F[Fluentd]
-        S -- Simulate Log Files --> F
-        F -- Publishes --> K
-        Z -- Publishes --> K
-        S -- Simulated Network Traffic --> Z
-    end
-    W[Web UI]
-    K[Kafka Broker]
+        J[Pyspark - Jupyter]
+        T[Trino - coming soon]
+        AS[Superset - coming soon]
 
-    S -- Port 8080 --> W
+        S -- Simulate Log Files --> F
+        S -- Simulated Network Traffic --> Z
+        AS -- Queries --> T
+    end
+
+    subgraph "Docker Host"
+        SW[Simulator Web UI - 8080]
+        JW[Jupyter Web UI - 8888]
+        ASW[Superset Web UI - TBC]
+    end
+
+    subgraph "Vast Cluster"
+        K[Vast Kafka Broker]
+        VDB[Vast Database]
+    end
+
+    S -- Port Forward --> SW
+    J -- Port Forward --> JW
+    AS -- Port Forward --> ASW
+
+    F -- Publishes --> K
+    Z -- Publishes --> K
+    J -- Consumes --> K
+    S -- Consumes --> K
+    J -- Writes To --> VDB
+    T -- Queries --> VDB
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
--   **traffic-simulator**: A Python-based container using Scapy to generate various types of network traffic. It includes a web interface for easy control.
+-   **SIEM-simulator**: A Python-based container using Scapy and other tools to generate various types of network traffic and SIEM events. It includes a web interface for easy control.
 
 ## 3. Setup
 
