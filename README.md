@@ -12,23 +12,33 @@ The application consists of two main Docker services connected via a standard Do
 
 ```mermaid
 graph TD
-    subgraph "Docker Network"
+    subgraph "Docker Services"
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
         F[Fluentd]
+        J[Pyspark - Jupyter]
+
         S -- Simulate Log Files --> F
-        F -- Publishes --> K
-        Z -- Publishes --> K
         S -- Simulated Network Traffic --> Z
     end
-    W[Web UI]
+
+    subgraph "Docker Host"
+        SW[Simulator Web UI - 8080]
+        JW[Jupyter Web UI - 8888]
+    end
+
     K[Kafka Broker]
 
-    S -- Port 8080 --> W
+    S -- Port Forward --> SW
+    J -- Port Forward --> JW
+    F -- Publishes --> K
+    Z -- Publishes --> K
+    J -- Consumes --> K
+    S -- Consumes --> K
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
--   **traffic-simulator**: A Python-based container using Scapy to generate various types of network traffic. It includes a web interface for easy control.
+-   **SIEM-simulator**: A Python-based container using Scapy and other tools to generate various types of network traffic and SIEM events. It includes a web interface for easy control.
 
 ## 3. Setup
 
