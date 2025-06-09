@@ -21,6 +21,9 @@ services:
       - NET_RAW
     # Enable promiscuous mode for packet capture
     privileged: true
+    profiles:
+      - simulator
+      - all
 
   # Simplified traffic simulator using default networking
   siem-simulator:
@@ -41,6 +44,9 @@ services:
     networks:
       - zeek-network
     command: python3 /src/simulator/simulator_server.py
+    profiles:
+      - simulator
+      - all
 
   fluentd:
     build:
@@ -58,6 +64,9 @@ services:
     environment:
       - FLUENTD_CONF=fluentd.conf
     env_file: .env
+    profiles:
+      - simulator
+      - all
 
   jupyspark:
     build:
@@ -80,6 +89,9 @@ services:
       - "4042:4042"  # (Spark History Server)
     volumes:
       - ./services/jupyspark/examples:/home/jovyan/examples:rw
+    profiles:
+      - etl
+      - all
 
 networks:
   zeek-network:
