@@ -17,8 +17,8 @@ graph LR
         S[SIEM Simulator]
         F[Fluentd]
         J[Pyspark - Jupyter]
-        T[Trino - coming soon]
-        AS[Superset - coming soon]
+        T[Trino]
+        AS[Superset]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
@@ -28,7 +28,7 @@ graph LR
     subgraph "Docker Host"
         SW[Simulator Web UI - 8080]
         JW[Jupyter Web UI - 8888]
-        ASW[Superset Web UI - TBC]
+        ASW[Superset Web UI - 8088]
     end
 
     subgraph "Vast Cluster"
