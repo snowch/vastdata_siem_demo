@@ -1,0 +1,29 @@
+# "endpoint" should be a load-balanced DNS entry or one of the VIPs prefixed by "http://"
+# it should not contain a trailing / or anything else.
+
+endpoint={{ env.Getenv "VASTDB_ENDPOINT" | required "Missing VASTDB_ENDPOINT environment variable!" }}
+
+# "data_endpoints" should be be a load-balanced DNS entry or one or more of the VIPs
+# prefixed by "http://" it should not contain a trailing / or anything else.
+# Multiple VIPs can be used with commas between them, eg: http://x.x.x.x,http://y.y.y.y
+
+data_endpoints={{ env.Getenv "VASTDB_DATA_ENDPOINTS" | required "Missing VASTDB_DATA_ENDPOINTS environment variable!" }}
+
+# Access and secret keys -- make sure the user was added to an identity policy
+# granting them access to the catalog.
+
+access_key_id={{ env.Getenv "VASTDB_ACCESS_KEY" | required "Missing VASTDB_ACCESS_KEY environment variable!" }}
+secret_access_key={{ env.Getenv "VASTDB_SECRET_KEY" | required "Missing VASTDB_SECRET_KEY environment variable!" }}
+
+## Don't change these fields ##
+connector.name=vast
+region=us-east-1
+
+num_of_splits=32
+num_of_subsplits=8
+
+vast.http-client.request-timeout=60m
+vast.http-client.idle-timeout=60m
+
+enable_custom_schema_separator=true
+custom_schema_separator=|

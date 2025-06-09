@@ -93,6 +93,47 @@ services:
       - etl
       - all
 
+
+  trino_setup_config:
+    container_name: trino_setup_config
+    image: hairyhenderson/gomplate:latest
+    working_dir: /workspace
+    env_file:
+      - .env
+    volumes:
+      - ./services/trino/templates:/workspace/templates
+      - ./services/trino/generated:/workspace/output
+    command: "-f /workspace/templates/vast.properties-template -o /workspace/output/vast.properties"
+
+  trino:
+    container_name: trino
+    image: vastdataorg/trino-vast:429
+    # VASTDB -> TRINO_VERSION
+    # 4.7    -> 375
+    # 5.0    -> 420
+    # 5.1    -> 429
+    restart: unless-stopped
+    depends_on:
+      trino_setup_config:
+        condition: service_completed_successfully
+    mem_limit: 8g
+    ports:
+      - 18080:8080
+    platform: linux/amd64
+    env_file:
+      - path: .env
+    volumes:
+      - ./services/trino/generated/vast.properties:/etc/trino/catalog/vast.properties:ro
+      - ./services/trino/config.properties:/etc/trino/config.properties:ro
+    healthcheck:
+      # test: ["CMD", "trino", "--execute", "SELECT 'success'"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 30s
+      retries: 10
+    profiles:
+      - dashboard
+      - all
+
 networks:
   zeek-network:
     driver: bridge
