@@ -77,6 +77,14 @@ To get the application up and running, follow these steps:
     ```
     You should see the docker services with `State` as `Up`.
 
+> [!TIP]
+> Docker profiles have been configured to allow you to selectively run services if required:
+>  - all: run everything
+>  - simulator: run the SIEM simulator, zeek-live-monitor and fluentd services
+>  - etl: run the jupyspark service (notebooks need to be manually started)
+>  - dashboard: run the trino and superset service
+
+
 ## 4. Components
 
 ### 4.1. `zeek-live` Service
