@@ -44,7 +44,12 @@ class SIEMEvent:
             "brute_force_attack": 22,
             "sql_injection_attempt": 80,
             "malware_detection": 443,
-            "data_exfiltration": 443
+            "data_exfiltration": 443,
+            "rdp_login_success": 3389,
+            "rdp_login_failure": 3389,
+            "rdp_brute_force": 3389,
+            "rdp_reconnaissance": 3389,
+            "rdp_session_hijack": 3389
         }
         
         port = port_map.get(self.event_type, 22)
@@ -115,7 +120,12 @@ class SIEMEvent:
             "file_access": f"SMB_OPEN file_{random.randint(1,100)}.txt",
             "malware_detection": f"MALWARE_BEACON_{random.randint(1000,9999)}",
             "data_exfiltration": "EXFIL_DATA_" + "SENSITIVE_" * 10,
-            "brute_force_attack": f"SSH-2.0-OpenSSH_8.0\nuser: {self.user}\nattempt_{random.randint(1,100)}"
+            "brute_force_attack": f"SSH-2.0-OpenSSH_8.0\nuser: {self.user}\nattempt_{random.randint(1,100)}",
+            "rdp_login_success": f"RDP_CONNECT\nProtocol: RDP\nUser: {self.user}\nDomain: WORKGROUP\nAuth: SUCCESS",
+            "rdp_login_failure": f"RDP_CONNECT\nProtocol: RDP\nUser: {self.user}\nDomain: WORKGROUP\nAuth: FAILED\nReason: INVALID_CREDENTIALS",
+            "rdp_brute_force": f"RDP_CONNECT\nProtocol: RDP\nUser: {self.user}\nAttempt: {random.randint(1,50)}\nPassword: {random.choice(['admin', 'password', '123456', 'administrator', 'root'])}",
+            "rdp_reconnaissance": f"RDP_SCAN\nProtocol: RDP\nScan_Type: PORT_KNOCK\nTarget: {self.dst_ip}\nFlags: SYN_SCAN",
+            "rdp_session_hijack": f"RDP_HIJACK\nProtocol: RDP\nOriginal_User: {self.user}\nHijacker_IP: {self.src_ip}\nSession_ID: {random.randint(1000,9999)}"
         }
         return payloads.get(self.event_type, "GENERIC_DATA")
 
@@ -130,7 +140,12 @@ class SIEMEvent:
             "file_access": "SMB_OPEN_RESPONSE STATUS_SUCCESS",
             "malware_detection": f"C2_RESPONSE_{random.randint(1000,9999)}",
             "data_exfiltration": f"UPLOAD_ACK_{random.randint(1,100)}_BYTES",
-            "brute_force_attack": "SSH-2.0-OpenSSH_8.0\nauthentication_failed"
+            "brute_force_attack": "SSH-2.0-OpenSSH_8.0\nauthentication_failed",
+            "rdp_login_success": f"RDP_RESPONSE\nStatus: SUCCESS\nSession_ID: {random.randint(1000,9999)}\nDesktop_Resolution: 1920x1080",
+            "rdp_login_failure": "RDP_RESPONSE\nStatus: FAILED\nError_Code: 0xC000006D\nReason: LOGON_FAILURE",
+            "rdp_brute_force": "RDP_RESPONSE\nStatus: FAILED\nError_Code: 0xC000006A\nReason: WRONG_PASSWORD\nLockout_Warning: TRUE",
+            "rdp_reconnaissance": f"RDP_RESPONSE\nStatus: PORT_OPEN\nService: Microsoft Terminal Services\nVersion: {random.choice(['10.0', '6.3', '6.1'])}",
+            "rdp_session_hijack": f"RDP_RESPONSE\nStatus: SESSION_TAKEN\nNew_Session_ID: {random.randint(5000,9999)}\nOriginal_Session_TERMINATED"
         }
         return responses.get(self.event_type, "SERVER_RESPONSE")
 
@@ -154,4 +169,3 @@ class SIEMEvent:
             "dst_ip": self.dst_ip,
             "timestamp": self.timestamp.isoformat()
         }
-    
