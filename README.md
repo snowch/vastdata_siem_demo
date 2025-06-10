@@ -169,6 +169,9 @@ The `services/jupyspark/examples` directory contains example notebooks that demo
 3.  Open the desired notebook (e.g., `streaming_consumer_zeek_topic.ipynb`).
 4.  Follow the instructions in the notebook to execute the code cells and explore the data.
 
+> [!IMPORTANT]  
+> FIXME: The current implementation of the scripts drop the table and recreate it if the schema changes.
+
 
 ### 4.6. `trino` Service
 
