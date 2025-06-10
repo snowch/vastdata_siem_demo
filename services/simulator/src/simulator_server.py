@@ -76,8 +76,7 @@ class SIEMEventScenario:
                 next_event_time += event_interval
             
             time.sleep(0.1)
-            break
-        
+
         self.running = False
 
 try:
@@ -367,7 +366,7 @@ class ContinuousSimulation:
         elif scenario == "siem_events":
             return threading.Thread(
                 target=generator.siem_scenario.generate_mixed_siem_events,
-                args=(duration, pps)  # pps here represents events per minute for SIEM
+                args=(duration, pps)
             )
         elif scenario == "port_scan":
             return threading.Thread(

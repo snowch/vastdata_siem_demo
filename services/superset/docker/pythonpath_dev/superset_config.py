@@ -100,7 +100,23 @@ class CeleryConfig:
 
 CELERY_CONFIG = CeleryConfig
 
-FEATURE_FLAGS = {"ALERT_REPORTS": True}
+FEATURE_FLAGS = {
+    "ALERT_REPORTS": True,
+    "ENABLE_TEMPLATE_PROCESSING": True
+}
+
+# Custom Jinja function to get environment variables
+def get_env_var(var_name, default_value=None):
+    """Get environment variable with optional default"""
+    return os.getenv(var_name, default_value)
+
+# Add custom functions to Jinja context
+JINJA_CONTEXT_ADDONS = {
+    'get_env': get_env_var,
+    'env_var': get_env_var,  # Alternative name
+}
+
+
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = True
 WEBDRIVER_BASEURL = "http://superset:8088/"  # When using docker compose baseurl should be http://superset_app:8088/
 # The base URL for the email report hyperlinks.

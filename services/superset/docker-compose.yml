@@ -65,6 +65,8 @@ services:
         required: false
       - path: ../.env-local # e.g. MAPBOX_API_KEY
         required: false
+      - path: ../../.env # parent compose env
+        required: true
     image: *superset-image
     container_name: superset_app
     profiles:
@@ -92,6 +94,8 @@ services:
         required: true
       - path: docker/.env-local # optional override
         required: false
+      - path: ../../.env # parent compose env
+        required: true
     depends_on: *superset-depends-on
     user: "root"
     volumes: *superset-volumes
@@ -110,6 +114,8 @@ services:
         required: true
       - path: docker/.env-local # optional override
         required: false
+      - path: ../../.env # parent compose env
+        required: true
     restart: unless-stopped
     depends_on: *superset-depends-on
     user: "root"
