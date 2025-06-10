@@ -154,6 +154,22 @@ The service is defined in `docker-compose.yml`. The environment variables are co
         -   `./services/jupyspark/examples:/home/jovyan/work/examples`: Mounts the local `services/jupyspark/examples` directory to the `/home/jovyan/work/examples` directory in the container, making the example notebooks available in the Jupyter Notebook environment.
     -   **Profiles**: `etl`, `all` - Service runs when these profiles are active.
 
+#### Accessing the Jupyter Notebook
+
+1.  Ensure the `jupyspark` service is running by executing `docker compose up --build -d`.
+2.  Open your web browser and navigate to `http://<your_server_ip>:8888`. Replace `<your_server_ip>` with the IP address of the server where the Docker container is running.
+3.  When prompted, enter the password you set in the `JUPYTER_PASSWORD` environment variable.
+
+#### Running the Example Notebooks
+
+The `services/jupyspark/examples` directory contains example notebooks that demonstrate how to use Spark with Jupyter Notebook. To run these notebooks:
+
+1.  Access the Jupyter Notebook as described above.
+2.  Navigate to the `/home/jovyan/work/examples` directory in the Jupyter Notebook file browser.
+3.  Open the desired notebook (e.g., `streaming_consumer_zeek_topic.ipynb`).
+4.  Follow the instructions in the notebook to execute the code cells and explore the data.
+
+
 ### 4.6. `trino` Service
 
 -   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
@@ -183,20 +199,12 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Volumes**: Shared volumes for Docker configuration and Superset home directory.
     -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
 
-## Accessing the Jupyter Notebook
+#### Uploading the dashboard
 
-1.  Ensure the `jupyspark` service is running by executing `docker compose up --build -d`.
-2.  Open your web browser and navigate to `http://<your_server_ip>:8888`. Replace `<your_server_ip>` with the IP address of the server where the Docker container is running.
-3.  When prompted, enter the password you set in the `JUPYTER_PASSWORD` environment variable.
-
-## Running the Example Notebooks
-
-The `services/jupyspark/examples` directory contains example notebooks that demonstrate how to use Spark with Jupyter Notebook. To run these notebooks:
-
-1.  Access the Jupyter Notebook as described above.
-2.  Navigate to the `/home/jovyan/work/examples` directory in the Jupyter Notebook file browser.
-3.  Open the desired notebook (e.g., `streaming_consumer_zeek_topic.ipynb`).
-4.  Follow the instructions in the notebook to execute the code cells and explore the data.
+- Upload the [siem_dashboard.zip](./services/superset/siem_dashboard.zip) Dashboard to Superset
+- Edit each Dataset
+  - Click the padlock to begin editing
+  - Change the Schema name field to match your schema.
 
 ## 5. Zeek Configuration (`zeek-config/kafka-live.zeek`)
 
