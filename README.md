@@ -1,10 +1,14 @@
 # SIEM Data Simulator Service Documentation
 
-This document provides detailed documentation for the simplified Docker-based Zeek network monitoring setup.
+This document provides detailed documentation for the simplified Docker-based SIEM Data Simulator.
 
 ## 1. Overview
 
-This application provides a streamlined environment for monitoring network traffic using Zeek, an open-source network analysis framework. It leverages Docker and standard bridge networking to simplify deployment and management compared to more complex virtual network setups. The system includes a Zeek monitoring container and a traffic simulation container to generate test traffic.
+This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management. The system includes a Zeek monitoring container and a SIEM simulation container to generate test traffic that get sent to Vast Kafka.
+
+Apache Spark and Jupyter has been included and two spark streaming applications provided that perform live consumption of Kafka events that get saved to Vast Database.
+
+Trino SQL query engine and Superset visualisation and exploration applications have also been included, along with an example Superset dashboard.
 
 ## 2. Architecture
 
@@ -29,6 +33,7 @@ graph LR
         SW[Simulator Web UI - 8080]
         JW[Jupyter Web UI - 8888]
         ASW[Superset Web UI - 8088]
+        TW[Trino Web UI - 18080]
     end
 
     subgraph "Vast Cluster"
@@ -39,6 +44,7 @@ graph LR
     S -- Port Forward --> SW
     J -- Port Forward --> JW
     AS -- Port Forward --> ASW
+    T -- Port Forward --> TW
 
     F -- Publishes --> K
     Z -- Publishes --> K
@@ -55,19 +61,21 @@ graph LR
 
 To get the application up and running, follow these steps:
 
-1.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-2.  Create a `.env` file in the project root directory and configure the environment variables.
-3.  **Build and start the services**: Navigate to the project directory in your terminal and run:
+1.  **Prerequisites**: Ensure you have Docker and Docker Compose (v2.2+) installed.
+
+2.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
+3.  Create a `.env` file in the project root directory and configure the environment variables.
+4.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
-    docker compose up --build -d
+    docker compose --profile all up --build -d
     ```
     The `-d` flag runs the services in detached mode.
     Docker Compose will automatically load the environment variables from the `.env` file.
-4.  **Verify services are running**:
+5.  **Verify services are running**:
     ```bash
-    docker compose ps
+    docker compose --profile all ps
     ```
-    You should see `zeek-live-monitor` and `siem-simulator` listed with `State` as `Up`.
+    You should see the docker services with `State` as `Up`.
 
 ## 4. Components
 
@@ -91,16 +99,19 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Privileged**: `true` - Enables promiscuous mode for the network interface, necessary for capturing all traffic.
     -   **Command**: `/scripts/zeek-live-monitor.sh` - Executes the monitoring script on container startup.
 
-### 4.2. `traffic-simulator` Service
+### 4.2. `siem-simulator` Service
 
 -   **Purpose**: Generates various types of network traffic for testing Zeek's monitoring capabilities.
--   **Dockerfile**: `Dockerfile.simulator` - Builds a Python environment with Scapy and other network tools.
+-   **Dockerfile**: `services/simulator/Dockerfile` - Builds a Python environment with Scapy and other network tools.
 -   **Configuration**:
-    -   **Volumes**: `./src/simulator:/src/simulator`: Mounts the local `src/simulator` directory containing the Python traffic generation scripts.
+    -   **Volumes**: 
+        -   `./services/simulator/src:/src/simulator`: Mounts the local simulator source directory containing the Python traffic generation scripts.
+        -   `./services/fluentd/logs:/logs`: Mounts the fluentd logs directory for log file generation.
     -   **Ports**: `8080:8080` - Maps host port 8080 to container port 8080, exposing the web interface for the traffic generator.
     -   **Networks**: Connected to the `zeek-network` bridge network.
     -   **Capabilities**: `NET_ADMIN`, `NET_RAW` - Required for crafting and sending raw packets using Scapy.
     -   **Command**: `python3 /src/simulator/simulator_server.py` - Starts the web server for the events generator.
+    -   **Profiles**: `simulator`, `all` - Service runs when these profiles are active.
 
 ### 4.3. `zeek-network`
 
@@ -129,6 +140,36 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Ports**: `8888:8888` - Maps host port 8888 to container port 8888, allowing access to the Jupyter Notebook from your web browser.
     -   **Volumes**:
         -   `./services/jupyspark/examples:/home/jovyan/work/examples`: Mounts the local `services/jupyspark/examples` directory to the `/home/jovyan/work/examples` directory in the container, making the example notebooks available in the Jupyter Notebook environment.
+    -   **Profiles**: `etl`, `all` - Service runs when these profiles are active.
+
+### 4.6. `trino` Service
+
+-   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
+-   **Image**: `vastdataorg/trino-vast:429` - Pre-built Trino image with Vast Database connector.
+-   **Configuration**:
+    -   **Dependencies**: Requires `trino_setup_config` service to complete successfully before starting.
+    -   **Ports**: `18080:8080` - Maps host port 18080 to container port 8080, providing access to the Trino web UI and query interface.
+    -   **Memory Limit**: `8g` - Allocated 8GB of memory for query processing.
+    -   **Platform**: `linux/amd64` - Specifies the platform architecture.
+    -   **Volumes**:
+        -   `./services/trino/generated/vast.properties:/etc/trino/catalog/vast.properties:ro`: Mounts the generated Vast Database connection configuration (read-only).
+        -   `./services/trino/config.properties:/etc/trino/config.properties:ro`: Mounts the Trino server configuration (read-only).
+    -   **Health Check**: Configured to check service health via HTTP endpoint every 30 seconds with 10 retries.
+    -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
+
+### 4.8. Superset Services
+
+#### 4.8.1. `superset` Service
+
+-   **Purpose**: Provides the main Apache Superset web application for data visualization and dashboard creation.
+-   **Image**: `apachesuperset.docker.scarf.sh/apache/superset:4.0.2` - Official Apache Superset image.
+-   **Configuration**:
+    -   **Ports**: `8088:8088` - Maps host port 8088 to container port 8088, providing access to the Superset web interface.
+    -   **Dependencies**: Requires `db` (PostgreSQL) and `redis` services to be running.
+    -   **Command**: Custom command that installs Trino SQLAlchemy driver and starts the Superset application server.
+    -   **User**: `root` - Runs with root privileges for installation of additional packages.
+    -   **Volumes**: Shared volumes for Docker configuration and Superset home directory.
+    -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
 
 ## Accessing the Jupyter Notebook
 
@@ -246,28 +287,10 @@ Logs are available in two primary locations:
     ```bash
     docker compose logs -f zeek-live
     ```
--   **View Traffic Simulator container logs**:
-    ```bash
-    docker compose logs -f traffic-simulator
-    ```
-
-## 9. Migration from Complex Setup
-
-This simplified setup offers several benefits over previous versions that might have used complex virtual networking scripts:
-
--   ✅ Easier to understand and maintain
--   ✅ Standard Docker networking
--   ✅ No complex virtual network scripts
--   ✅ Faster startup time
--   ✅ Better container isolation
--   ✅ Easier debugging and troubleshooting
--   ✅ More portable across different environments
-
-If migrating, remember to back up existing logs and update your `docker-compose.yml` to use this simplified version.
-
-## 10. Additional Resources
+## 9. Additional Resources
 
 -   [Zeek Documentation](https://docs.zeek.org/)
+-   [Fluentd Documentation](https://docs.fluentd.org/)
 -   [Zeek-Kafka Plugin](https://github.com/SeisoLLC/zeek-kafka)
 -   [Docker Networking](https://docs.docker.com/)
 -   [Scapy Documentation](https://scapy.net/)
