@@ -235,13 +235,13 @@ def create_ocsf_schema(class_uid, class_name=None):
         StructField("severity", StringType(), True),
         StructField("severity_id", StringType(), True),
         StructField("start_time", TimestampType(), True),
-        StructField("start_time_dt", TimestampType(), True),
+        StructField("start_time_dt", StringType(), True),
         StructField("status", StringType(), True),
         StructField("status_code", StringType(), True),
         StructField("status_detail", StringType(), True),
         StructField("status_id", StringType(), True),
         StructField("time", TimestampType(), True),
-        StructField("time_dt", TimestampType(), True),
+        StructField("time_dt", StringType(), True),
         StructField("timezone_offset", IntegerType(), True),
         StructField("type_name", StringType(), True),
         StructField("type_uid", StringType(), True),
@@ -406,6 +406,7 @@ def convert_timestamp_columns(df, event_class):
     for ts_col in timestamp_columns:
         if ts_col in df.columns:
             try:
+                print(f"DEBUG - Converting timestamp column {ts_col} for event class {event_class}", flush=True)
                 # Handle different timestamp formats
                 if ts_col == "time":
                     # Handle Unix timestamp (integer seconds)
@@ -418,11 +419,13 @@ def convert_timestamp_columns(df, event_class):
                     # Handle ISO timestamp strings (e.g., "2025-06-10T10:40:03.320Z")
                     # The time_dt field is already properly parsed from JSON as a string, just convert to timestamp
                     # Don't convert if it's already a timestamp - keep the original value
+                    print(f"DEBUG - Converting {ts_col} for event class {event_class}", flush=True)
                     df = df.withColumn(ts_col, 
-                        when(col(ts_col).isNotNull() & (col(ts_col) != "") & (col(ts_col) != "null"), 
+                        when(col(ts_col).isNotNull() & (col(ts_col) != "") & (col(ts_col) != "null"),
                              col(ts_col).cast(TimestampType())
-                        ).otherwise(None)
+                        ).otherwise(lit(None).cast(TimestampType()))
                     )
+                    print(df)
                 else:
                     # Handle other timestamp formats
                     df = df.withColumn(ts_col, 
@@ -573,10 +576,18 @@ def process_microbatch(raw_df, epoch_id):
                             
                             # Ensure table exists and get table name
                             table_name = ensure_table_exists(event_class, sample_json.json)
+
+                            # Create a new DataFrame with time_dt cast to TimestampType
+                            parsed_df_ts = parsed_df.withColumn(
+                                "time_dt",
+                                when(col("time_dt").isNotNull() & (col("time_dt") != "") & (col("time_dt") != "null"),
+                                     to_timestamp(col("time_dt"))
+                                ).otherwise(lit(None).cast(TimestampType()))
+                            )
                             
                             # Write to VastDB table specific to this event class with error handling
                             try:
-                                parsed_df.write.mode("append").saveAsTable(table_name)
+                                parsed_df_ts.write.mode("append").saveAsTable(table_name)
                             except Exception as write_error:
                                 if "Py4JNetworkError" in str(write_error) or "Answer from Java side is empty" in str(write_error):
                                     print(f"\nSpark connection error writing to {table_name}: {write_error}")
