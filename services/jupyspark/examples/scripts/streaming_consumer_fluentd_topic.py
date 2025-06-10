@@ -506,7 +506,7 @@ def process_microbatch(raw_df, epoch_id):
     if not should_shutdown:
         try:
             batch_size = raw_df.count()
-            print(f"\n=== PROCESSING BATCH {epoch_id} with {batch_size} records ===")
+            # print(f"\n=== PROCESSING BATCH {epoch_id} with {batch_size} records ===")
             if batch_size == 0:
                 print("Empty batch, skipping...")
                 return
@@ -517,7 +517,7 @@ def process_microbatch(raw_df, epoch_id):
             
             # Collect all JSON strings to determine event classes
             json_strings = [row.json for row in raw_df.collect()]
-            print(f"Collected {len(json_strings)} JSON strings from batch")
+            # print(f"Collected {len(json_strings)} JSON strings from batch")
             
             # Group messages by event class
             event_class_groups = {}
@@ -557,14 +557,14 @@ def process_microbatch(raw_df, epoch_id):
                             ).select("parsed.*")
                             
                             # Debug: Print column names and sample data
-                            print(f"\nDEBUG - Event class: {event_class}")
-                            print(f"DEBUG - DataFrame columns: {parsed_df.columns}")
+                            # print(f"\nDEBUG - Event class: {event_class}")
+                            # print(f"DEBUG - DataFrame columns: {parsed_df.columns}")
                             if 'time_dt' in parsed_df.columns:
                                 sample_time_dt = parsed_df.select('time_dt').first()
-                                print(f"DEBUG - Sample time_dt value BEFORE conversion: {sample_time_dt}")
+                                # print(f"DEBUG - Sample time_dt value BEFORE conversion: {sample_time_dt}")
                                 # Show the actual string value
                                 sample_time_dt_str = parsed_df.select('time_dt').collect()[0]['time_dt']
-                                print(f"DEBUG - Sample time_dt string value: '{sample_time_dt_str}'")
+                                # print(f"DEBUG - Sample time_dt string value: '{sample_time_dt_str}'")
                             
                             # Convert timestamp columns
                             parsed_df = convert_timestamp_columns(parsed_df, event_class)
@@ -572,7 +572,7 @@ def process_microbatch(raw_df, epoch_id):
                             # Debug: Check time_dt after conversion
                             if 'time_dt' in parsed_df.columns:
                                 sample_time_dt_after = parsed_df.select('time_dt').first()
-                                print(f"DEBUG - Sample time_dt value AFTER conversion: {sample_time_dt_after}")
+                                # print(f"DEBUG - Sample time_dt value AFTER conversion: {sample_time_dt_after}")
                             
                             # Ensure table exists and get table name
                             table_name = ensure_table_exists(event_class, sample_json.json)
