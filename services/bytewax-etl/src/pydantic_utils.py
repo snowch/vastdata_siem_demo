@@ -133,7 +133,7 @@ def pydantic_to_arrow_table(model_class: BaseModel, instance: BaseModel) -> pa.T
         # Remove any columns that have null data type
         table = remove_null_type_columns(table)
         
-        print(f"Created table with {len(table.column_names)} columns: {table.column_names}")
+        print(f"Created pa_table with {len(table.column_names)} columns: {table.column_names}")
         return table
     except Exception as e:
         print(f"Error creating Arrow table: {e}")

@@ -17,7 +17,6 @@ from py_ocsf_models.events.findings.detection_finding import DetectionFinding
 
 from .pydantic_utils import get_model_data, get_model_fields, pydantic_to_arrow_schema, pydantic_to_arrow_table
 from .vastdb_utils import connect_to_vastdb, write_to_vastdb, get_columns_to_add
-from .ocsf_mapping import OCSF_CLASS_MAPPING
 
 
 # Set up logging
@@ -116,7 +115,7 @@ def process_event(kafka_message):
                 event_class = "Detection Finding"
                 event_cls = DetectionFinding
             else:
-                return f"[ERROR] Unsupported class_uid: {class_uid}"
+                return f"[ERROR] Unsupported class_uid: {class_uid}" # {kafka_message.value}"
 
         except Exception as e:
             # If all validation fails, extract class info from raw data
