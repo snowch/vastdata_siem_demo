@@ -896,7 +896,7 @@ WEB_INTERFACE = """
 </head>
 <body>
     <div class="header">
-        <h1>🔍 Network Traffic Generator for Zeek Monitoring</h1>
+        <h1>🔍 Network Traffic and Log Event Generator</h1>
         <div class="status-badge">📊 Status: Active | 🔗 Network: zeek-network</div>
     </div>
     
