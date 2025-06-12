@@ -2,7 +2,7 @@
 
 This document provides detailed documentation for the simplified Docker-based SIEM Data Simulator.
 
-## 1. Overview
+## Overview
 
 This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management. The system includes a Zeek monitoring container and a SIEM simulation container to generate test traffic that get sent to Vast Kafka.
 
@@ -10,7 +10,7 @@ Apache Spark and Jupyter has been included and two spark streaming applications 
 
 Trino SQL query engine and Superset visualisation and exploration applications have also been included, along with an example Superset dashboard.
 
-## 2. Architecture
+## Architecture
 
 The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
 
@@ -20,7 +20,7 @@ graph LR
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
         F[Fluentd]
-        J[Pyspark - Jupyter]
+        J[Bytewax ELT]
         T[Trino]
         AS[Superset]
 
@@ -42,7 +42,6 @@ graph LR
     end
 
     S -- Port Forward --> SW
-    J -- Port Forward --> JW
     AS -- Port Forward --> ASW
     T -- Port Forward --> TW
 
@@ -61,7 +60,7 @@ graph LR
 -   **trino**: A distributed SQL query engine that provides the primary interface for analyzing data stored in the Vast Database. Includes a web UI for query execution and management.
 -   **superset**: An Apache Superset web application for data visualization and dashboard creation, with pre-configured connections to Trino for exploring SIEM analytics data.
 
-## 3. Setup
+## Setup
 
 To get the application up and running, follow these steps:
 
@@ -89,9 +88,9 @@ To get the application up and running, follow these steps:
 >  - `dashboard`: run the trino and superset service
 
 
-## 4. Components
+## Components
 
-### 4.1. `zeek-live` Service
+### `zeek-live` Service
 
 The service is defined in `docker-compose.yml`. The environment variables are configured in the `.env` file located in the project root directory.
 
@@ -111,7 +110,7 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Privileged**: `true` - Enables promiscuous mode for the network interface, necessary for capturing all traffic.
     -   **Command**: `/scripts/zeek-live-monitor.sh` - Executes the monitoring script on container startup.
 
-### 4.2. `siem-simulator` Service
+### `siem-simulator` Service
 
 -   **Purpose**: Generates various types of network traffic for testing Zeek's monitoring capabilities.
 -   **Dockerfile**: `services/simulator/Dockerfile` - Builds a Python environment with Scapy and other network tools.
@@ -125,14 +124,14 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Command**: `python3 /src/simulator/simulator_server.py` - Starts the web server for the events generator.
     -   **Profiles**: `simulator`, `all` - Service runs when these profiles are active.
 
-### 4.3. `zeek-network`
+### `zeek-network`
 
 -   **Purpose**: A Docker bridge network connecting the two services. This is the network segment that Zeek monitors.
 -   **Configuration**:
     -   **Driver**: `bridge` - Standard Docker bridge network.
     -   **IPAM**: Configured with a static subnet `192.168.100.0/24`.
 
-### 4.4. `fluentd` Service
+### `fluentd` Service
 
 -   **Purpose**: Collects logs from the traffic simulator and forwards them to Kafka.
 -   **Dockerfile**: `Dockerfile.fluentd` - Installs the fluent-plugin-kafka plugin.
@@ -142,7 +141,7 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   Sends the parsed logs to a Kafka broker specified by the `KAFKA_BROKER` environment variable, using the topic specified by the `KAFKA_EVENT_LOG_TOPIC` environment variable.
     -   The output format is JSON.
 
-### 4.5. `jupyspark` Service
+### `jupyspark` Service
 
 -   **Purpose**: Provides a Jupyter Notebook environment with Apache Spark pre-installed for data analysis and processing.
 -   **Dockerfile**: `services/jupyspark/Dockerfile` - Builds a Docker image with Jupyter Notebook, Apache Spark, and necessary dependencies.
@@ -160,20 +159,8 @@ The service is defined in `docker-compose.yml`. The environment variables are co
 2.  Open your web browser and navigate to `http://<your_server_ip>:8888`. Replace `<your_server_ip>` with the IP address of the server where the Docker container is running.
 3.  When prompted, enter the password you set in the `JUPYTER_PASSWORD` environment variable.
 
-#### Running the Example Notebooks
 
-The `services/jupyspark/examples` directory contains example notebooks that demonstrate how to use Spark with Jupyter Notebook. To run these notebooks:
-
-1.  Access the Jupyter Notebook as described above.
-2.  Navigate to the `/home/jovyan/work/examples` directory in the Jupyter Notebook file browser.
-3.  Open the desired notebook (e.g., `streaming_consumer_zeek_topic.ipynb`).
-4.  Follow the instructions in the notebook to execute the code cells and explore the data.
-
-> [!IMPORTANT]  
-> FIXME: The current implementation of the scripts drop the table and recreate it if the schema changes.
-
-
-### 4.6. `trino` Service
+### `trino` Service
 
 -   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
 -   **Image**: `vastdataorg/trino-vast:429` - Pre-built Trino image with Vast Database connector.
@@ -188,9 +175,42 @@ The `services/jupyspark/examples` directory contains example notebooks that demo
     -   **Health Check**: Configured to check service health via HTTP endpoint every 30 seconds with 10 retries.
     -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
 
-### 4.8. Superset Services
+###  `bytewax-fluentd-etl` Service
 
-#### 4.8.1. `superset` Service
+-   **Purpose**: Consumes Fluentd logs from Kafka, transforms them, and loads them into Vast.
+-   **Source Code**: `services/bytewax-etl/src/fluentd_to_vastdb.py`
+-   **Configuration**:
+    -   Subscribes to the Kafka topic where Fluentd logs are published.
+    -   Transforms the logs into a format suitable for Vast.
+    -   Loads the transformed data into Vast.
+
+### `bytewax-zeek-etl` Service
+
+-   **Purpose**: Consumes Zeek logs from Kafka, transforms them, and loads them into Vast.
+-   **Source Code**: `services/bytewax-etl/src/zeek_to_vastdb.py`
+-   **Configuration**:
+    -   Subscribes to the Kafka topic where Zeek logs are published.
+    -   Transforms the logs into a format suitable for Vast.
+    -   Loads the transformed data into Vast.
+
+### Superset Services
+
+-   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
+-   **Image**: `vastdataorg/trino-vast:429` - Pre-built Trino image with Vast Database connector.
+-   **Configuration**:
+    -   **Dependencies**: Requires `trino_setup_config` service to complete successfully before starting.
+    -   **Ports**: `18080:8080` - Maps host port 18080 to container port 8080, providing access to the Trino web UI and query interface.
+    -   **Memory Limit**: `8g` - Allocated 8GB of memory for query processing.
+    -   **Platform**: `linux/amd64` - Specifies the platform architecture.
+    -   **Volumes**:
+        -   `./services/trino/generated/vast.properties:/etc/trino/catalog/vast.properties:ro`: Mounts the generated Vast Database connection configuration (read-only).
+        -   `./services/trino/config.properties:/etc/trino/config.properties:ro`: Mounts the Trino server configuration (read-only).
+    -   **Health Check**: Configured to check service health via HTTP endpoint every 30 seconds with 10 retries.
+    -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
+
+### Superset Services
+
+#### `superset` Service
 
 -   **Purpose**: Provides the main Apache Superset web application for data visualization and dashboard creation.
 -   **Image**: `apachesuperset.docker.scarf.sh/apache/superset:4.0.2` - Official Apache Superset image.
@@ -209,7 +229,7 @@ The `services/jupyspark/examples` directory contains example notebooks that demo
   - Click the padlock to begin editing
   - Change the Schema name field to match your schema.
 
-## 5. Zeek Configuration (`zeek-config/kafka-live.zeek`)
+## Zeek Configuration (`zeek-config/kafka-live.zeek`)
 
 This Zeek script configures Zeek for live monitoring and sending logs to Kafka, along with loading various protocol analyzers and detection policies. The Kafka broker address *must* be specified using the `KAFKA_BROKER` environment variable. If this variable is not set, Zeek will exit with an error.
 
@@ -234,7 +254,7 @@ This Zeek script configures Zeek for live monitoring and sending logs to Kafka, 
 -   **Detection Thresholds**: `SSH::password_guesses_limit = 3` makes the SSH brute force detection more sensitive for demonstration purposes.
 -   **Event Handlers**: Includes custom `zeek_init`, `connection_established`, `new_connection`, `dns_request`, `http_request`, `http_reply`, `notice`, `SSH::password_guesses_exceeded`, `new_packet`, `connection_state_remove`, and `weird` event handlers with `print` statements for basic console output within the Zeek container logs. The `dns_request` and `http_request` handlers include simple pattern matching for suspicious activity that triggers Zeek notices.
 
-## 6. SIEM Data Generation
+## SIEM Data Generation
 
 Traffic within the `zeek-network` is automatically monitored by the `zeek-live` container. You can generate test traffic in several ways:
 
@@ -254,7 +274,7 @@ Traffic within the `zeek-network` is automatically monitored by the `zeek-live` 
 3.  **Container-to-Container Communication**:
     -   Any communication initiated directly between containers on the `zeek-network` (e.g., `docker exec traffic-simulator ping zeek-live-monitor`) will also be monitored by Zeek.
 
-## 7. Monitoring and Logging
+## Monitoring and Logging
 
 Zeek captures and analyzes traffic on its `eth0` interface within the `zeek-network`. Logs are generated and outputted to Kafka, and also saved to local files.
 
@@ -275,7 +295,7 @@ Logs are available in two primary locations:
     -   Basic event messages printed by the `zeek-live-monitor.sh` script and the custom Zeek event handlers in `kafka-live.zeek` are sent to the container's standard output.
     -   You can view these using `docker compose logs -f zeek-live`.
 
-## 8. Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -310,7 +330,7 @@ Logs are available in two primary locations:
     ```bash
     docker compose logs -f zeek-live
     ```
-## 9. Additional Resources
+## Additional Resources
 
 -   [Zeek Documentation](https://docs.zeek.org/)
 -   [Fluentd Documentation](https://docs.fluentd.org/)
