@@ -97,6 +97,16 @@ services:
       - etl
       - all
 
+  bytewax-etl:
+    build:
+      context: ./services/bytewax-etl
+      dockerfile: Dockerfile
+    container_name: bytewax-etl
+    restart: unless-stopped
+    env_file: .env
+    profiles:
+      - etl
+      - all
 
   trino_setup_config:
     container_name: trino_setup_config
