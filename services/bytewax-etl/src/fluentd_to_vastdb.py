@@ -1,156 +1,254 @@
 #!/usr/bin/env python3
-import os
+"""
+OCSF Event Processing Pipeline using Bytewax
+Processes OCSF events from Kafka and writes them to VastDB
+"""
+
 import json
 import logging
+import os
 from datetime import datetime
-from bytewax.dataflow import Dataflow
-from bytewax.connectors.kafka import operators as kop
-from bytewax import operators as op
+from typing import Optional, Union
+
 import pyarrow as pa
+from bytewax import operators as op
+from bytewax.connectors.kafka import operators as kop
 from bytewax.connectors.stdio import StdOutSink
-from pydantic_settings import BaseSettings
+from bytewax.dataflow import Dataflow
 from pydantic import BaseModel
-from py_ocsf_models.events.base_event import BaseEvent
-from py_ocsf_models.events.findings.finding import Finding
+from pydantic_settings import BaseSettings
 from py_ocsf_models.events.findings.compliance_finding import ComplianceFinding
 from py_ocsf_models.events.findings.detection_finding import DetectionFinding
 
-from .pydantic_utils import get_model_data, get_model_fields, pydantic_to_arrow_schema, pydantic_to_arrow_table
-from .vastdb_utils import connect_to_vastdb, write_to_vastdb, get_columns_to_add
+from .pydantic_utils import pydantic_to_arrow_table
+from .vastdb_utils import connect_to_vastdb, write_to_vastdb
 
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
-# Environment configuration with Pydantic
 class Settings(BaseSettings):
-    kafka_broker: str = os.environ.get("KAFKA_BROKER")
-    kafka_event_log_topic: str = os.environ.get("KAFKA_EVENT_LOG_TOPIC")
+    """Application configuration loaded from environment variables."""
+    
+    # Kafka settings
+    kafka_broker: str
+    kafka_event_log_topic: str
     kafka_group_id: str = "ocsf-console-logger"
-    vastdb_endpoint: str = os.environ.get("VASTDB_ENDPOINT")
-    vastdb_data_endpoints: str = os.environ.get("VASTDB_DATA_ENDPOINTS")
-    vastdb_access_key: str = os.environ.get("VASTDB_ACCESS_KEY")
-    vastdb_secret_key: str = os.environ.get("VASTDB_SECRET_KEY")
-    vastdb_fluentd_bucket: str = os.environ.get("VASTDB_FLUENTD_BUCKET")
-    vastdb_fluentd_schema: str = os.environ.get("VASTDB_FLUENTD_SCHEMA")
+    
+    # VastDB settings
+    vastdb_endpoint: str
+    vastdb_data_endpoints: str
+    vastdb_access_key: str
+    vastdb_secret_key: str
+    vastdb_fluentd_bucket: str
+    vastdb_fluentd_schema: str
+    
+    # Processing settings
+    batch_size: int = 100
+    auto_commit_interval_ms: int = 1000
 
-    def __str__(self):
-        """Custom string representation to print each setting on a new line."""
-        # Use model_dump() to get a dictionary of the settings
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
+
+    def validate_required_fields(self) -> None:
+        """Validate that all required environment variables are set."""
+        required_fields = [
+            'kafka_broker', 'kafka_event_log_topic', 
+            'vastdb_endpoint', 'vastdb_data_endpoints',
+            'vastdb_access_key', 'vastdb_secret_key',
+            'vastdb_fluentd_bucket', 'vastdb_fluentd_schema'
+        ]
+        
+        missing_fields = [
+            field for field in required_fields 
+            if not getattr(self, field, None)
+        ]
+        
+        if missing_fields:
+            raise ValueError(f"Missing required environment variables: {missing_fields}")
+
+    def __str__(self) -> str:
+        """String representation showing all settings."""
         settings_dict = self.model_dump()
+        # Mask sensitive values
+        masked_keys = ['vastdb_access_key', 'vastdb_secret_key']
+        for key in masked_keys:
+            if key in settings_dict and settings_dict[key]:
+                settings_dict[key] = "*" * 8
         
-        # Format each key-value pair and join them with a newline character ('\n')
-        return '\n'.join(
-            f"{key}='{value}'" for key, value in settings_dict.items()
-        )
-
-# Load settings
-try:
-    settings = Settings()
-    print("--- Settings Loaded ---")
-    print(settings) # ✨ Simply print the object
-    print("-----------------------")
-
-    if not all([
-        settings.kafka_broker,
-        settings.kafka_event_log_topic,
-        settings.vastdb_endpoint,
-        settings.vastdb_data_endpoints,
-        settings.vastdb_access_key,
-        settings.vastdb_secret_key,
-        settings.vastdb_fluentd_bucket,
-        settings.vastdb_fluentd_schema,
-    ]):
-        raise ValueError("All environment variables must be set")
-except Exception as e:
-    print(f"ERROR: Failed to load configuration: {e}")
-    print("Make sure all environment variables are set")
-    exit(1)
+        return '\n'.join(f"{key}={value}" for key, value in settings_dict.items())
 
 
-# Bytewax dataflow
-flow = Dataflow("ocsf_dataflow")
-
-# Kafka configuration for consumer group
-# Note: You may see warnings about producer properties - these can be ignored
-kafka_config = {
-    "group.id": settings.kafka_group_id,
-    "enable.auto.commit": "true",
-    "auto.commit.interval.ms": "1000"
-}
-
-# Input from Kafka
-kafka_input = kop.input(
-    "kafka_input",
-    flow,
-    brokers=[settings.kafka_broker],
-    topics=[settings.kafka_event_log_topic],
-    add_config=kafka_config
-)
-
-# Process OCSF events
-def process_event(kafka_message):
-    try:
-        # Parse OCSF JSON and validate against the Event model
-        ocsf_data = json.loads(kafka_message.value)
-        event_class = "Unknown"
+class OCSFEventProcessor:
+    """Processes OCSF events and writes them to VastDB."""
+    
+    # Supported OCSF event types
+    SUPPORTED_EVENT_TYPES = {
+        2003: (ComplianceFinding, "Compliance Finding"),
+        2004: (DetectionFinding, "Detection Finding"),
+    }
+    
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.session = None
+        self._connect_to_vastdb()
+    
+    def _connect_to_vastdb(self) -> None:
+        """Establish VastDB connection."""
+        try:
+            self.session = connect_to_vastdb(
+                self.settings.vastdb_endpoint,
+                self.settings.vastdb_access_key,
+                self.settings.vastdb_secret_key
+            )
+            logger.info("Successfully connected to VastDB")
+        except Exception as e:
+            logger.error(f"Failed to connect to VastDB: {e}")
+            raise
+    
+    def parse_ocsf_event(self, raw_data: dict) -> tuple[Optional[Union[ComplianceFinding, DetectionFinding]], str]:
+        """
+        Parse and validate OCSF event data.
         
-        # Try to determine the event type based on class_uid or class_name
-        class_uid = ocsf_data.get('class_uid')
-        class_name = ocsf_data.get('class_name', 'Unknown')
+        Returns:
+            Tuple of (validated_event, event_class_name)
+        """
+        class_uid = raw_data.get('class_uid')
+        class_name = raw_data.get('class_name', 'Unknown')
         
-        event = None
-        event_class = class_name
+        if class_uid not in self.SUPPORTED_EVENT_TYPES:
+            logger.warning(f"Unsupported class_uid: {class_uid}")
+            return None, class_name
+        
+        event_cls, event_class_name = self.SUPPORTED_EVENT_TYPES[class_uid]
         
         try:
-            # Try specific finding types first based on class_uid
-            if class_uid == 2003:  # Compliance Finding
-                event = ComplianceFinding(**ocsf_data)
-                event_class = "Compliance Finding"
-                event_cls = ComplianceFinding
-            elif class_uid == 2004:  # Detection Finding  
-                event = DetectionFinding(**ocsf_data)
-                event_class = "Detection Finding"
-                event_cls = DetectionFinding
-            else:
-                return f"[ERROR] Unsupported class_uid: {class_uid}" # {kafka_message.value}"
-
+            validated_event = event_cls(**raw_data)
+            return validated_event, event_class_name
         except Exception as e:
-            # If all validation fails, extract class info from raw data
-            event_class = class_name
-            logger.warning(f"Could not validate OCSF event: {e}")
-
-        # Write ComplianceFinding or DetectionFinding to VastDB
-        if isinstance(event, (ComplianceFinding, DetectionFinding)):
-
-            # FIXME: session should be created once and reused
-            session = connect_to_vastdb(settings.vastdb_endpoint, settings.vastdb_access_key, settings.vastdb_secret_key)
-
+            logger.error(f"Failed to validate {event_class_name}: {e}")
+            return None, event_class_name
+    
+    def write_event_to_vastdb(self, event: Union[ComplianceFinding, DetectionFinding], 
+                             event_class_name: str) -> bool:
+        """
+        Write validated event to VastDB.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Convert to Arrow table
+            event_cls = type(event)
+            pa_table = pydantic_to_arrow_table(event_cls, event)
+            
+            # Write to VastDB
+            table_name = event_class_name.lower().replace(" ", "_")
+            write_to_vastdb(
+                self.session,
+                self.settings.vastdb_fluentd_bucket,
+                self.settings.vastdb_fluentd_schema,
+                table_name,
+                pa_table
+            )
+            
+            logger.info(f"Successfully wrote {event_class_name} to VastDB")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to write {event_class_name} to VastDB: {e}")
+            return False
+    
+    def process_kafka_message(self, kafka_message) -> str:
+        """
+        Process a single Kafka message containing OCSF event data.
+        
+        Returns:
+            Processing result message
+        """
+        try:
+            # Parse JSON payload
             try:
-                pa_table = pydantic_to_arrow_table(event_cls, event)
-            except Exception as e:
-                import traceback
-                return f"[ERROR] Failed to convert Pydantic model to Arrow table: {event_cls} {event} {e} {traceback.format_exc()}"
+                ocsf_data = json.loads(kafka_message.value)
+            except json.JSONDecodeError as e:
+                return f"[ERROR] Invalid JSON: {e}"
+            
+            # Parse and validate OCSF event
+            event, event_class_name = self.parse_ocsf_event(ocsf_data)
+            
+            if event is None:
+                return f"[SKIPPED] Unsupported or invalid event type: {event_class_name}"
+            
+            # Write to VastDB
+            success = self.write_event_to_vastdb(event, event_class_name)
+            
+            if success:
+                return f"[SUCCESS] Processed {event_class_name}"
+            else:
+                return f"[ERROR] Failed to write {event_class_name} to VastDB"
+                
+        except Exception as e:
+            logger.error(f"Unexpected error processing message: {e}")
+            return f"[ERROR] Unexpected error: {e}"
 
-            try:
-                # FIXME: should write batches of events instead of one by one
-                write_to_vastdb(session, settings.vastdb_fluentd_bucket, settings.vastdb_fluentd_schema, event_class.lower().replace(" ", "_"), pa_table)
-                print(f"Successfully wrote {event_class} to VastDB")
-                logger.info(f"Successfully wrote {event_class} to VastDB")
-            except Exception as e:
-                print(f"Failed to write {event_class} to VastDB: {e} {pa_table}")
-                logger.error(f"Failed to write {event_class} to VastDB: {e}")
 
-    except json.JSONDecodeError as e:
-        return f"[ERROR] Failed to parse JSON: {e}"
-    except Exception as e:
-        import traceback
-        return f"[ERROR] Error processing event: {e} {traceback.format_exc()} \n\n{kafka_message.value}"
+def create_dataflow(settings: Settings) -> Dataflow:
+    """Create and configure the Bytewax dataflow."""
+    
+    # Initialize event processor
+    processor = OCSFEventProcessor(settings)
+    
+    # Create dataflow
+    flow = Dataflow("ocsf_dataflow")
+    
+    # Kafka consumer configuration
+    kafka_config = {
+        "group.id": settings.kafka_group_id,
+        "enable.auto.commit": "true",
+        "auto.commit.interval.ms": str(settings.auto_commit_interval_ms)
+    }
+    
+    # Kafka input stream
+    kafka_input = kop.input(
+        "kafka_input",
+        flow,
+        brokers=[settings.kafka_broker],
+        topics=[settings.kafka_event_log_topic],
+        add_config=kafka_config
+    )
+    
+    # Process events
+    processed_events = op.map(
+        "process_events", 
+        kafka_input.oks, 
+        processor.process_kafka_message
+    )
+    
+    # Inspect results for monitoring
+    op.inspect("inspect_results", processed_events)
+    
+    return flow
 
-# Apply processing to the successful messages stream
-processed_events = op.map("process_events", kafka_input.oks, process_event)
 
-# Inspect processed events
-op.inspect("inspect", processed_events)
+# Initialize application and create flow at module level for Bytewax
+try:
+    # Load and validate configuration
+    settings = Settings()
+    settings.validate_required_fields()
+    
+    logger.info("=== OCSF Dataflow Configuration ===")
+    logger.info(f"\n{settings}")
+    logger.info("=" * 35)
+    
+    # Create dataflow - this must be at module level for Bytewax to find it
+    flow = create_dataflow(settings)
+    logger.info("OCSF dataflow created successfully")
+    
+except Exception as e:
+    logger.error(f"Failed to initialize application: {e}")
+    raise
