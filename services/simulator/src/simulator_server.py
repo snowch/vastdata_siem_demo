@@ -93,11 +93,14 @@ CORS(app)
 traffic_threads = {}
 active_sessions = {}
 kafka_messages = []
+kafka_messages_by_topic = {}  # Store messages separately per topic
 kafka_consumer_thread = None
 kafka_running = False
 continuous_simulation_running = False
 continuous_simulation_thread = None
 continuous_simulation = None
+available_topics = set()  # Track available topics for filtering
+kafka_consumer_instance = None  # Store consumer instance globally
 
 class KafkaMessageConsumer:
     def __init__(self, broker=None, topics=None):
@@ -110,61 +113,181 @@ class KafkaMessageConsumer:
         
     def start_consuming(self):
         """Start consuming Kafka messages from multiple topics in a separate thread"""
+        global available_topics, kafka_messages, kafka_messages_by_topic, kafka_running
+        
         if not KAFKA_AVAILABLE:
             logging.warning("Kafka consumer not available - kafka-python package not installed")
             return False
 
         try:
+            logging.info(f"Attempting to connect to Kafka broker: {self.broker}")
+            logging.info(f"Subscribing to topics: {self.topics}")
+            
             self.consumer = KafkaConsumer(
                 *self.topics,  # Subscribe to multiple topics
                 bootstrap_servers=[self.broker],
                 auto_offset_reset='latest',
                 enable_auto_commit=True,
                 group_id='zeek-web-consumer',
-                value_deserializer=lambda x: x.decode('utf-8') if x else None
+                value_deserializer=lambda x: x.decode('utf-8') if x else None,
+                # Remove API version specification to auto-negotiate
+                session_timeout_ms=10000,  # Increased to 10 seconds for stability
+                request_timeout_ms=20000,  # Increased to 20 seconds
+                heartbeat_interval_ms=3000,  # Increased to 3 seconds
+                connections_max_idle_ms=120000,  # Increased to 2 minutes
+                retry_backoff_ms=1000,  # Increased retry backoff
+                max_poll_interval_ms=300000,  # 5 minute max poll interval
+                reconnect_backoff_ms=1000,  # Add reconnect backoff
+                reconnect_backoff_max_ms=10000,  # Max reconnect backoff
+                security_protocol='PLAINTEXT',  # Explicitly set security protocol
+                fetch_min_bytes=1,  # Minimum bytes to fetch
+                fetch_max_wait_ms=5000,  # Max wait time for fetch
+                check_crcs=False  # Disable CRC checks for compatibility
             )
             self.running = True
 
-            logging.info(f"Kafka consumer started for topics: {', '.join(self.topics)}")
+            logging.info(f"Kafka consumer initialized successfully for topics: {', '.join(self.topics)}")
+            
+            # Test connection by trying to get partition metadata
+            try:
+                partitions = self.consumer.partitions_for_topic(self.topics[0])
+                if partitions:
+                    logging.info(f"Successfully connected to Kafka. Found partitions for {self.topics[0]}: {partitions}")
+                else:
+                    logging.warning(f"Connected to Kafka but topic {self.topics[0]} has no partitions or doesn't exist")
+            except Exception as e:
+                logging.warning(f"Kafka partition check failed (but continuing): {e}")
 
-            for message in self.consumer:
-                if not self.running:
-                    break
-                    
+            message_count = 0
+            consecutive_errors = 0
+            max_consecutive_errors = 10
+            logging.info("Starting Kafka message consumption loop...")
+            
+            # Use poll() method for better control
+            while self.running and consecutive_errors < max_consecutive_errors:
                 try:
-                    # Parse the message
-                    msg_data = json.loads(message.value) if message.value else {}
-                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    # Poll for messages with 5 second timeout
+                    message_batch = self.consumer.poll(timeout_ms=5000)
                     
-                    # Add to global messages list (keep last 100 messages)
-                    global kafka_messages
-                    kafka_messages.append({
-                        'timestamp': timestamp,
-                        'topic': message.topic,  # Include topic information
-                        'partition': message.partition,
-                        'offset': message.offset,
-                        'data': msg_data
-                    })
-                    
-                    # Keep only last 100 messages
-                    if len(kafka_messages) > 100:
-                        kafka_messages = kafka_messages[-100:]
+                    if not message_batch:
+                        # No messages received, but continue waiting
+                        # Reset error counter on successful poll (even if no messages)
+                        consecutive_errors = 0
+                        continue
                         
-                except json.JSONDecodeError:
-                    # Handle non-JSON messages
-                    timestamp = datetime.now().strftime('%H:%M:%S')
-                    kafka_messages.append({
-                        'timestamp': timestamp,
-                        'topic': message.topic,
-                        'partition': message.partition,
-                        'offset': message.offset,
-                        'data': {'raw_message': message.value}
-                    })
+                    # Reset error counter on successful message retrieval
+                    consecutive_errors = 0
+                        
+                    # Process all messages in the batch
+                    for topic_partition, messages in message_batch.items():
+                        for message in messages:
+                            if not self.running:
+                                break
+                                
+                            try:
+                                message_count += 1
+                                # Add topic to available topics set (thread-safe)
+                                available_topics.add(message.topic)
+                                
+                                if message_count == 1:  # Log first message
+                                    logging.info(f"Received first message from topic: {message.topic}")
+                                elif message_count % 50 == 0:  # Log every 50th message
+                                    logging.info(f"Processed {message_count} messages. Current topic: {message.topic}")
+                                
+                                # Parse the message
+                                msg_data = json.loads(message.value) if message.value else {}
+                                timestamp = datetime.now().strftime('%H:%M:%S')
+                                
+                                message_obj = {
+                                    'timestamp': timestamp,
+                                    'topic': message.topic,
+                                    'partition': message.partition,
+                                    'offset': message.offset,
+                                    'data': msg_data
+                                }
+                                
+                                # Add to global messages list (keep last 200 messages total)
+                                kafka_messages.append(message_obj)
+                                if len(kafka_messages) > 200:
+                                    kafka_messages = kafka_messages[-200:]
+                                
+                                # Add to per-topic storage (keep last 50 messages per topic)
+                                if message.topic not in kafka_messages_by_topic:
+                                    kafka_messages_by_topic[message.topic] = []
+                                kafka_messages_by_topic[message.topic].append(message_obj)
+                                if len(kafka_messages_by_topic[message.topic]) > 50:
+                                    kafka_messages_by_topic[message.topic] = kafka_messages_by_topic[message.topic][-50:]
+                                    
+                            except json.JSONDecodeError:
+                                # Handle non-JSON messages
+                                timestamp = datetime.now().strftime('%H:%M:%S')
+                                available_topics.add(message.topic)
+                                
+                                message_obj = {
+                                    'timestamp': timestamp,
+                                    'topic': message.topic,
+                                    'partition': message.partition,
+                                    'offset': message.offset,
+                                    'data': {'raw_message': message.value}
+                                }
+                                
+                                # Add to global messages list
+                                kafka_messages.append(message_obj)
+                                if len(kafka_messages) > 200:
+                                    kafka_messages = kafka_messages[-200:]
+                                
+                                # Add to per-topic storage
+                                if message.topic not in kafka_messages_by_topic:
+                                    kafka_messages_by_topic[message.topic] = []
+                                kafka_messages_by_topic[message.topic].append(message_obj)
+                                if len(kafka_messages_by_topic[message.topic]) > 50:
+                                    kafka_messages_by_topic[message.topic] = kafka_messages_by_topic[message.topic][-50:]
+                            except Exception as e:
+                                logging.error(f"Error processing individual message: {e}")
+                                continue
+                                
+                except Exception as e:
+                    consecutive_errors += 1
+                    if self.running:  # Only log if we're supposed to be running
+                        if "Connection reset by peer" in str(e) or "KafkaConnectionError" in str(e):
+                            logging.warning(f"Kafka connection error (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
+                            # Wait before retrying on connection errors
+                            time.sleep(min(consecutive_errors * 2, 10))  # Exponential backoff, max 10 seconds
+                        else:
+                            logging.error(f"Error in Kafka polling loop (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        logging.error(f"Too many consecutive errors ({consecutive_errors}), stopping consumer")
+                        break
+                        
+            if consecutive_errors >= max_consecutive_errors:
+                logging.error("Kafka consumer stopped due to too many connection errors")
+            elif not self.running:
+                logging.info("Kafka consumer stopped by user request")
                     
         except Exception as e:
-            logging.error(f"Kafka consumer error: {e}")
+            logging.error(f"Kafka consumer connection failed: {e}")
+            logging.error(f"Broker: {self.broker}, Topics: {self.topics}")
             self.running = False
+            # Reset global flag when consumer fails
+            kafka_running = False
             return False
+        finally:
+            # Cleanup on exit
+            if self.running:
+                logging.info(f"Kafka consumer stopped normally. Processed {message_count if 'message_count' in locals() else 0} messages total")
+            else:
+                logging.info(f"Kafka consumer stopped due to error or stop request. Processed {message_count if 'message_count' in locals() else 0} messages total")
+            self.running = False
+            kafka_running = False
+            
+            # Close the consumer properly
+            if hasattr(self, 'consumer') and self.consumer:
+                try:
+                    self.consumer.close()
+                    logging.info("Kafka consumer connection closed")
+                except Exception as e:
+                    logging.warning(f"Error closing Kafka consumer: {e}")
 
         return True
         
@@ -705,7 +828,7 @@ class TrafficGenerator(NetworkTrafficGenerator):
                 
         self.running = False
 
-# Web interface HTML template
+# Web interface HTML template with FIXED JavaScript
 WEB_INTERFACE = """
 <!DOCTYPE html>
 <html>
@@ -744,19 +867,30 @@ WEB_INTERFACE = """
         .log-panel { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 0; }
         .log-header { padding: 15px 20px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; }
         .log-header h3 { margin: 0; font-size: 16px; color: #495057; }
-        .log-controls { display: flex; gap: 8px; }
+        .log-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .log-box { height: 300px; overflow-x: auto; overflow-y: auto; padding: 15px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 11px; line-height: 1.4; background: #f8f9fa; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; white-space: nowrap; }
         .kafka-log-box { height: 300px; width: 100%; min-width: 0; max-width: 100%; overflow-x: scroll; overflow-y: auto; padding: 15px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 11px; line-height: 1.4; background: #f8f9fa; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; white-space: pre; box-sizing: border-box; }
-        .kafka-status { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-        .kafka-connected { background: #d4edda; color: #155724; }
-        .kafka-disconnected { background: #f8d7da; color: #721c24; }
-        .btn-sm { padding: 6px 10px; font-size: 11px; }
+        .kafka-status { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; margin: 0 4px; }
+        .kafka-connected { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .kafka-disconnected { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .kafka-connecting { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .btn-sm { padding: 8px 12px; font-size: 11px; border-radius: 4px; font-weight: 500; }
         .section-title { font-size: 16px; font-weight: 600; color: #495057; margin: 0 0 15px 0; }
         .tip { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 4px; font-size: 12px; margin: 10px 0; }
+        .topic-filter-container { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 160px; }
+        .filter-label { font-size: 10px; color: #6c757d; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+        .topic-filter { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 11px; background: white; color: #495057; min-width: 140px; }
+        .topic-filter:focus { border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); outline: none; }
+        .kafka-controls-group { display: flex; align-items: center; gap: 6px; }
+        .vertical-separator { width: 1px; height: 24px; background-color: #dee2e6; margin: 0 12px; }
         @media (max-width: 768px) {
             .main-grid, .logs-grid { grid-template-columns: 1fr; }
             .scenarios { grid-template-columns: repeat(2, 1fr); }
             .custom-form { grid-template-columns: 1fr; }
+            .log-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+            .topic-filter-container { min-width: auto; width: 100%; }
+            .kafka-controls-group { flex-wrap: wrap; justify-content: center; }
+            .vertical-separator { display: none; }
         }
     </style>
 </head>
@@ -857,10 +991,20 @@ WEB_INTERFACE = """
             <div class="log-header">
                 <h3>📡 Kafka Consumer</h3>
                 <div class="log-controls">
-                    <span id="kafka-status" class="kafka-status kafka-disconnected">Disconnected</span>
-                    <button id="kafka-start-btn" class="btn btn-success btn-sm" onclick="startKafkaConsumer()">Start</button>
-                    <button id="kafka-stop-btn" class="btn btn-danger btn-sm" onclick="stopKafkaConsumer()" style="display: none;">Stop</button>
-                    <button class="btn btn-secondary btn-sm" onclick="clearKafkaMessages()">Clear</button>
+                    <div class="topic-filter-container">
+                        <div class="filter-label">Topic Filter</div>
+                        <select id="topic-filter" class="topic-filter" onchange="updateTopicFilter()">
+                            <option value="all">All Topics</option>
+                        </select>
+                    </div>
+                    <div class="vertical-separator"></div>
+                    <div class="kafka-controls-group">
+                        <span id="kafka-status" class="kafka-status kafka-disconnected">Disconnected</span>
+                        <button id="kafka-start-btn" class="btn btn-success btn-sm" onclick="startKafkaConsumer()">Start</button>
+                        <button id="kafka-stop-btn" class="btn btn-danger btn-sm" onclick="stopKafkaConsumer()" style="display: none;">Stop</button>
+                        <button class="btn btn-secondary btn-sm" onclick="clearKafkaMessages()">Clear</button>
+                        <button class="btn btn-secondary btn-sm" onclick="diagnoseKafkaConnection()">🔍 Diagnose</button>
+                    </div>
                 </div>
             </div>
             <div id="kafka-log" class="kafka-log-box"></div>
@@ -868,6 +1012,11 @@ WEB_INTERFACE = """
     </div>
 
     <script>
+        let currentTopicFilter = 'all';
+        let availableTopics = new Set();
+        let kafkaPollingInterval;
+        let isPolling = false;
+        
         function log(message) {
             const logDiv = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
@@ -947,17 +1096,31 @@ WEB_INTERFACE = """
         // Kafka consumer functions
         async function startKafkaConsumer() {
             log('Starting Kafka consumer...');
+            
+            // Show starting state
+            document.getElementById('kafka-status').className = 'kafka-status kafka-connecting';
+            document.getElementById('kafka-status').textContent = 'Connecting...';
+            document.getElementById('kafka-start-btn').disabled = true;
+            
             const result = await apiCall('kafka/start');
             if (result && result.success) {
-                document.getElementById('kafka-status').className = 'kafka-status kafka-connected';
-                document.getElementById('kafka-status').textContent = 'Connected';
-                document.getElementById('kafka-start-btn').style.display = 'none';
-                document.getElementById('kafka-stop-btn').style.display = 'inline-block';
-                log('Kafka consumer started successfully');
-                // Start polling for messages
-                startKafkaPolling();
+                log('Kafka consumer start request successful, verifying connection...');
+                
+                // Wait a bit longer for the consumer to actually connect
+                setTimeout(async () => {
+                    const statusResult = await checkKafkaStatusAndUpdate();
+                    if (statusResult) {
+                        log('Kafka consumer verified as running');
+                        startKafkaPolling();
+                    } else {
+                        log('Kafka consumer failed to establish connection - check broker settings and network');
+                    }
+                    document.getElementById('kafka-start-btn').disabled = false;
+                }, 3000);
             } else {
                 log(`Failed to start Kafka consumer: ${result ? result.error : 'Unknown error'}`);
+                updateKafkaUIState(false);
+                document.getElementById('kafka-start-btn').disabled = false;
             }
         }
         
@@ -965,11 +1128,86 @@ WEB_INTERFACE = """
             log('Stopping Kafka consumer...');
             const result = await apiCall('kafka/stop');
             if (result && result.success) {
-                document.getElementById('kafka-status').className = 'kafka-status kafka-disconnected';
-                document.getElementById('kafka-status').textContent = 'Disconnected';
-                document.getElementById('kafka-start-btn').style.display = 'inline-block';
-                document.getElementById('kafka-stop-btn').style.display = 'none';
+                updateKafkaUIState(false);
                 log('Kafka consumer stopped');
+                stopKafkaPolling();
+            } else {
+                log(`Error stopping Kafka consumer: ${result ? result.error : 'Unknown error'}`);
+                checkKafkaStatusAndUpdate();
+            }
+        }
+        
+        function updateKafkaUIState(isConnected) {
+            const statusElement = document.getElementById('kafka-status');
+            const startBtn = document.getElementById('kafka-start-btn');
+            const stopBtn = document.getElementById('kafka-stop-btn');
+            
+            if (isConnected) {
+                statusElement.className = 'kafka-status kafka-connected';
+                statusElement.textContent = 'Connected';
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+            } else {
+                statusElement.className = 'kafka-status kafka-disconnected';
+                statusElement.textContent = 'Disconnected';
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+            }
+            startBtn.disabled = false;
+        }
+        
+        async function checkKafkaStatusAndUpdate() {
+            try {
+                const response = await fetch('/api/kafka/status');
+                const result = await response.json();
+                if (result && result.success) {
+                    console.log('Kafka status check:', result);
+                    updateKafkaUIState(result.running);
+                    
+                    if (result.available_topics && result.available_topics.length > 0) {
+                        availableTopics = new Set(result.available_topics);
+                        updateTopicFilterOptions();
+                    }
+                    
+                    if (!result.running) {
+                        console.log('Kafka Debug Info:', result.debug_info);
+                        
+                        if (result.debug_info) {
+                            const debug = result.debug_info;
+                            if (debug.broker === 'Not set') {
+                                log('❌ KAFKA_BROKER environment variable not set');
+                            } else if (debug.zeek_topic === 'Not set' && debug.event_log_topic === 'Not set') {
+                                log('❌ No Kafka topics configured (KAFKA_ZEEK_TOPIC or KAFKA_EVENT_LOG_TOPIC)');
+                            } else if (!debug.thread_alive && debug.kafka_running_flag) {
+                                log('❌ Kafka consumer thread died - likely connection failure');
+                                log(`📡 Broker: ${debug.broker}, Topics: ${debug.zeek_topic}, ${debug.event_log_topic}`);
+                            }
+                        }
+                        
+                        if (result.total_messages === 0) {
+                            console.log('No messages received - likely connection or topic issue');
+                        }
+                    } else {
+                        if (result.total_messages > 0) {
+                            console.log(`Kafka consumer healthy - ${result.total_messages} messages received`);
+                        }
+                    }
+                    
+                    return result.running;
+                }
+            } catch (error) {
+                console.error('Error checking Kafka status:', error);
+                updateKafkaUIState(false);
+                return false;
+            }
+        }
+        
+        async function checkKafkaStatus() {
+            const isRunning = await checkKafkaStatusAndUpdate();
+            
+            if (isRunning && !kafkaPollingInterval) {
+                startKafkaPolling();
+            } else if (!isRunning && kafkaPollingInterval) {
                 stopKafkaPolling();
             }
         }
@@ -979,6 +1217,99 @@ WEB_INTERFACE = """
             if (result && result.success) {
                 document.getElementById('kafka-log').innerHTML = '';
                 log('Kafka messages cleared');
+                
+                if (kafkaPollingInterval) {
+                    setTimeout(fetchKafkaMessagesNow, 100);
+                }
+            }
+        }
+        
+        async function diagnoseKafkaConnection() {
+            log('🔍 Running Kafka connectivity diagnostics...');
+            const result = await apiCall('kafka/diagnose');
+            
+            if (result && result.success) {
+                log('✅ Kafka diagnostics successful:');
+                log(`📡 Broker: ${result.broker}`);
+                log(`🔗 Cluster accessible: ${result.cluster_accessible}`);
+                
+                if (result.cluster_info && result.cluster_info.broker_count) {
+                    log(`🏢 Cluster: ${result.cluster_info.broker_count} broker(s) available`);
+                    if (result.cluster_info.available_brokers) {
+                        log(`📋 Brokers: ${result.cluster_info.available_brokers.join(', ')}`);
+                    }
+                }
+                
+                if (result.topics) {
+                    for (const [topic, info] of Object.entries(result.topics)) {
+                        if (info.exists) {
+                            log(`📋 Topic "${topic}": ✅ Exists (${info.partition_count} partition${info.partition_count !== 1 ? 's' : ''})`);
+                            if (info.partitions && info.partitions.length > 0) {
+                                log(`   Partitions: [${info.partitions.join(', ')}]`);
+                            }
+                        } else {
+                            log(`📋 Topic "${topic}": ❌ Not found`);
+                            if (info.error) {
+                                log(`   Error: ${info.error}`);
+                            }
+                        }
+                    }
+                }
+                
+                log(`💬 ${result.message}`);
+                
+            } else {
+                log('❌ Kafka diagnostics failed:');
+                
+                if (result && result.specific_error) {
+                    log(`🔧 Issue: ${result.specific_error}`);
+                } else if (result && result.error) {
+                    log(`🔧 Error: ${result.error}`);
+                } else {
+                    log('🔧 Error: Unknown diagnostic failure');
+                }
+                
+                if (result && result.broker) {
+                    log(`📡 Broker tested: ${result.broker}`);
+                }
+                
+                if (result && result.configured_topics && result.configured_topics.length > 0) {
+                    log(`📋 Topics configured: ${result.configured_topics.join(', ')}`);
+                }
+                
+                if (result && result.error) {
+                    const error = result.error.toLowerCase();
+                    log('🛠️ Specific troubleshooting:');
+                    
+                    if (error.includes('connection refused')) {
+                        log('  • Kafka broker is not running or not accessible');
+                        log('  • Check if Kafka service is started');
+                        log('  • Verify the broker port (usually 9092)');
+                    } else if (error.includes('connection reset')) {
+                        log('  • Authentication or protocol mismatch');
+                        log('  • Check if broker requires authentication');
+                        log('  • Verify security protocol settings');
+                    } else if (error.includes('timeout')) {
+                        log('  • Network connectivity issues');
+                        log('  • Check firewall settings');
+                        log('  • Verify broker hostname/IP is correct');
+                    } else if (error.includes('dns') || error.includes('resolve')) {
+                        log('  • DNS resolution failed');
+                        log('  • Check if broker hostname is correct');
+                        log('  • Try using IP address instead of hostname');
+                    } else {
+                        log('  • Check if Kafka broker is running and accessible');
+                        log('  • Verify KAFKA_BROKER environment variable');
+                        log('  • Ensure topics exist in Kafka cluster');
+                        log('  • Check network connectivity and firewall settings');
+                    }
+                } else {
+                    log('🛠️ General troubleshooting:');
+                    log('  • Check if Kafka broker is running and accessible');
+                    log('  • Verify KAFKA_BROKER environment variable');
+                    log('  • Ensure topics exist in Kafka cluster');
+                    log('  • Check network connectivity and firewall settings');
+                }
             }
         }
         
@@ -986,20 +1317,121 @@ WEB_INTERFACE = """
             document.getElementById('log').innerHTML = '';
         }
         
-        let kafkaPollingInterval;
+        function updateTopicFilter() {
+            const newFilter = document.getElementById('topic-filter').value;
+            console.log(`Topic filter changing from '${currentTopicFilter}' to '${newFilter}'`);
+            currentTopicFilter = newFilter;
+            log(`Topic filter changed to: ${currentTopicFilter}`);
+            
+            if (kafkaPollingInterval) {
+                fetchKafkaMessagesNow();
+            }
+        }
+        
+        async function fetchKafkaMessagesNow() {
+            if (isPolling) {
+                console.log('Poll already in progress, skipping immediate fetch');
+                return;
+            }
+            
+            isPolling = true;
+            try {
+                const filterValue = currentTopicFilter;
+                const url = filterValue === 'all' 
+                    ? '/api/kafka/messages'
+                    : `/api/kafka/messages?topic=${encodeURIComponent(filterValue)}`;
+                
+                console.log(`Immediate fetch with filter: ${filterValue}`);
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result && result.success) {
+                    updateKafkaLog(result.messages, filterValue);
+                    
+                    // Log per-topic counts for debugging
+                    if (result.per_topic_counts) {
+                        console.log('Per-topic message counts (immediate):', result.per_topic_counts);
+                    }
+                }
+            } catch (error) {
+                console.error('Error in immediate fetch:', error);
+            } finally {
+                isPolling = false;
+            }
+        }
+        
+        function updateTopicFilterOptions() {
+            const filterSelect = document.getElementById('topic-filter');
+            const currentValue = filterSelect.value;
+            
+            console.log('Updating topic filter options:', Array.from(availableTopics));
+            
+            filterSelect.innerHTML = '<option value="all">All Topics</option>';
+            
+            Array.from(availableTopics).sort().forEach(topic => {
+                const option = document.createElement('option');
+                option.value = topic;
+                option.textContent = topic;
+                filterSelect.appendChild(option);
+                console.log('Added topic option:', topic);
+            });
+            
+            if (Array.from(filterSelect.options).some(opt => opt.value === currentValue)) {
+                filterSelect.value = currentValue;
+            }
+        }
         
         function startKafkaPolling() {
+            if (kafkaPollingInterval) {
+                clearInterval(kafkaPollingInterval);
+            }
+            
             kafkaPollingInterval = setInterval(async () => {
+                if (isPolling) {
+                    console.log('Skipping poll - previous poll still in progress');
+                    return;
+                }
+                
+                isPolling = true;
                 try {
-                    const response = await fetch('/api/kafka/messages');
+                    const filterValue = currentTopicFilter;
+                    
+                    const url = filterValue === 'all' 
+                        ? '/api/kafka/messages'
+                        : `/api/kafka/messages?topic=${encodeURIComponent(filterValue)}`;
+                    
+                    const response = await fetch(url);
                     const result = await response.json();
                     if (result && result.success) {
-                        updateKafkaLog(result.messages);
+                        if (filterValue === currentTopicFilter) {
+                            updateKafkaLog(result.messages, filterValue);
+                        } else {
+                            console.log(`Filter changed during API call (${filterValue} -> ${currentTopicFilter}), ignoring result`);
+                        }
+                        
+                        if (result.available_topics) {
+                            console.log('Received available topics from API:', result.available_topics);
+                            const newTopics = new Set(result.available_topics);
+                            console.log('Current availableTopics:', Array.from(availableTopics));
+                            console.log('New topics from API:', Array.from(newTopics));
+                            
+                            if (newTopics.size !== availableTopics.size || 
+                                !Array.from(newTopics).every(topic => availableTopics.has(topic))) {
+                                console.log('Topics changed, updating dropdown');
+                                availableTopics = newTopics;
+                                updateTopicFilterOptions();
+                            } else {
+                                console.log('No topic changes detected');
+                            }
+                        } else {
+                            console.log('No available_topics in API response');
+                        }
                     }
                 } catch (error) {
                     console.error('Error polling Kafka messages:', error);
+                } finally {
+                    isPolling = false;
                 }
-            }, 1000); // Poll every second
+            }, 1000);
         }
         
         function stopKafkaPolling() {
@@ -1007,21 +1439,27 @@ WEB_INTERFACE = """
                 clearInterval(kafkaPollingInterval);
                 kafkaPollingInterval = null;
             }
+            isPolling = false;
         }
         
-        function updateKafkaLog(messages) {
+        function updateKafkaLog(messages, expectedFilter) {
             const kafkaLogDiv = document.getElementById('kafka-log');
-            let content = '';
             
-            messages.forEach(msg => {
+            let filteredMessages = messages;
+            console.log(`Displaying ${filteredMessages.length} messages for filter '${expectedFilter}'`);
+            
+            let content = '';
+            filteredMessages.forEach(msg => {
                 const timestamp = msg.timestamp;
                 const topic = msg.topic || 'unknown';
                 const data = msg.data;
                 content += `[${timestamp}] TOPIC: ${topic} | DATA: ${JSON.stringify(data)}\n`;
             });
             
-            kafkaLogDiv.textContent = content;
-            kafkaLogDiv.scrollTop = kafkaLogDiv.scrollHeight;
+            if (kafkaLogDiv.textContent !== content) {
+                kafkaLogDiv.textContent = content;
+                kafkaLogDiv.scrollTop = kafkaLogDiv.scrollHeight;
+            }
         }
         
         // Continuous simulation functions
@@ -1067,7 +1505,6 @@ WEB_INTERFACE = """
                         document.getElementById('continuous-stop-btn').style.display = 'inline-block';
                         document.getElementById('concurrent-status').style.display = 'block';
                         
-                        // Update concurrent status display
                         const statusDiv = document.getElementById('concurrent-status');
                         const active = result.active_concurrent || 0;
                         const max = result.max_concurrent || 3;
@@ -1084,13 +1521,15 @@ WEB_INTERFACE = """
             }
         }
         
-        // Auto-refresh status every 30 seconds
+        // Auto-refresh intervals
         setInterval(getStatus, 30000);
         setInterval(getContinuousStatus, 10000);
+        setInterval(checkKafkaStatus, 30000);
         
-        // Initial status check
+        // Initial status checks
         getStatus();
         getContinuousStatus();
+        checkKafkaStatus();
         log('Virtual Network Traffic Generator initialized');
     </script>
 </body>
@@ -1317,7 +1756,7 @@ def get_status():
 
 @app.route('/api/kafka/start', methods=['POST'])
 def start_kafka_consumer():
-    global kafka_consumer_thread, kafka_running
+    global kafka_consumer_thread, kafka_running, kafka_consumer_instance, available_topics, kafka_messages_by_topic
 
     if not KAFKA_AVAILABLE:
         return jsonify({
@@ -1325,13 +1764,28 @@ def start_kafka_consumer():
             'error': 'Kafka consumer not available - kafka-python package not installed'
         })
 
-    if kafka_running:
+    # Check if consumer is actually running (not just the flag)
+    if kafka_running and kafka_consumer_instance and kafka_consumer_thread and kafka_consumer_thread.is_alive():
         return jsonify({
             'success': False,
             'error': 'Kafka consumer already running'
         })
 
+    # Clean up any stale state
+    if kafka_consumer_instance:
+        try:
+            kafka_consumer_instance.stop_consuming()
+        except:
+            pass
+        kafka_consumer_instance = None
+    
+    kafka_running = False  # Reset the flag
+
     try:
+        # Clear previous topics and messages when starting fresh
+        available_topics.clear()
+        kafka_messages_by_topic.clear()
+        
         # Retrieve broker and topics from environment variables
         kafka_broker = os.environ.get('KAFKA_BROKER')
         kafka_zeek_topic = os.environ.get('KAFKA_ZEEK_TOPIC')
@@ -1350,51 +1804,324 @@ def start_kafka_consumer():
                 'error': 'KAFKA_BROKER and at least one of KAFKA_ZEEK_TOPIC or KAFKA_EVENT_LOG_TOPIC environment variables must be set'
             })
 
-        consumer = KafkaMessageConsumer(broker=kafka_broker, topics=topics)
-        kafka_consumer_thread = threading.Thread(target=consumer.start_consuming)
+        # Store the consumer instance globally
+        kafka_consumer_instance = KafkaMessageConsumer(broker=kafka_broker, topics=topics)
+        kafka_consumer_thread = threading.Thread(target=kafka_consumer_instance.start_consuming)
         kafka_consumer_thread.daemon = True
         kafka_consumer_thread.start()
+        
+        # Wait a moment to see if the thread starts successfully
+        time.sleep(1.0)  # Increased wait time
+        if not kafka_consumer_thread.is_alive():
+            kafka_consumer_instance = None
+            kafka_running = False
+            return jsonify({
+                'success': False,
+                'error': 'Failed to start Kafka consumer thread'
+            })
+        
+        # Give the consumer a bit more time to establish connection
+        time.sleep(1.0)
+        
+        # Check if consumer is still running after connection attempt
+        if not kafka_consumer_instance.running:
+            kafka_consumer_instance = None
+            kafka_running = False
+            return jsonify({
+                'success': False,
+                'error': 'Kafka consumer failed to establish connection (check broker and network)'
+            })
+        
         kafka_running = True
 
+        logging.info(f"Kafka consumer started for topics: {', '.join(topics)}")
         return jsonify({
             'success': True,
             'message': f'Kafka consumer started for topics: {", ".join(topics)}'
         })
 
     except Exception as e:
+        logging.error(f"Error starting Kafka consumer: {e}")
+        # Clean up on error
+        if kafka_consumer_instance:
+            try:
+                kafka_consumer_instance.stop_consuming()
+            except:
+                pass
+            kafka_consumer_instance = None
+        kafka_running = False
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/kafka/stop', methods=['POST'])
 def stop_kafka_consumer():
-    global kafka_running
+    global kafka_running, kafka_consumer_instance, available_topics, kafka_messages_by_topic
     
-    kafka_running = False
+    try:
+        if kafka_consumer_instance:
+            kafka_consumer_instance.stop_consuming()
+            kafka_consumer_instance = None
+        
+        kafka_running = False
+        
+        # Clear message storage when stopping (optional)
+        # kafka_messages_by_topic.clear()
+        
+        logging.info("Kafka consumer stopped")
+        return jsonify({
+            'success': True,
+            'message': 'Kafka consumer stopped'
+        })
+    except Exception as e:
+        logging.error(f"Error stopping Kafka consumer: {e}")
+        # Force cleanup even if there's an error
+        kafka_running = False
+        kafka_consumer_instance = None
+        return jsonify({
+            'success': True,  # Still return success since we've cleaned up
+            'message': 'Kafka consumer stopped (with cleanup)'
+        })
+
+@app.route('/api/kafka/status', methods=['GET'])
+def get_kafka_status():
+    global kafka_running, kafka_consumer_instance, kafka_consumer_thread, available_topics
+    
+    # Check if consumer is actually running
+    thread_alive = kafka_consumer_thread and kafka_consumer_thread.is_alive() if kafka_consumer_thread else False
+    consumer_running = kafka_consumer_instance and kafka_consumer_instance.running if kafka_consumer_instance else False
+    
+    actual_running = kafka_running and consumer_running and thread_alive
+    
+    # If the flag says running but thread is dead, clean up
+    if kafka_running and not actual_running:
+        logging.warning(f"Kafka consumer state mismatch - Flag: {kafka_running}, Consumer: {consumer_running}, Thread: {thread_alive}")
+        kafka_running = False
+        if kafka_consumer_instance:
+            try:
+                kafka_consumer_instance.stop_consuming()
+            except:
+                pass
+            kafka_consumer_instance = None
+    
+    # Get environment info for debugging
+    kafka_broker = os.environ.get('KAFKA_BROKER', 'Not set')
+    kafka_zeek_topic = os.environ.get('KAFKA_ZEEK_TOPIC', 'Not set')
+    kafka_event_log_topic = os.environ.get('KAFKA_EVENT_LOG_TOPIC', 'Not set')
     
     return jsonify({
         'success': True,
-        'message': 'Kafka consumer stopped'
+        'running': actual_running,
+        'kafka_available': KAFKA_AVAILABLE,
+        'available_topics': sorted(list(available_topics)),
+        'total_messages': len(kafka_messages),
+        'debug_info': {
+            'kafka_running_flag': kafka_running,
+            'consumer_instance_exists': kafka_consumer_instance is not None,
+            'consumer_running': consumer_running,
+            'thread_alive': thread_alive,
+            'broker': kafka_broker,
+            'zeek_topic': kafka_zeek_topic,
+            'event_log_topic': kafka_event_log_topic
+        }
     })
 
 @app.route('/api/kafka/messages', methods=['GET'])
 def get_kafka_messages():
-    global kafka_messages
+    global kafka_messages, kafka_messages_by_topic, available_topics
+    
+    # Get topic filter from query parameters
+    topic_filter = request.args.get('topic', 'all')
+    
+    # Debug logging
+    logging.debug(f"Available topics: {list(available_topics)}")
+    logging.debug(f"Topic filter requested: {topic_filter}")
+    
+    # Use per-topic storage for better performance and consistency
+    if topic_filter == 'all':
+        # Return last 50 messages from all topics, sorted by timestamp
+        all_messages = []
+        for topic_messages in kafka_messages_by_topic.values():
+            all_messages.extend(topic_messages)
+        
+        # Sort by timestamp and take last 50
+        all_messages.sort(key=lambda x: x['timestamp'])
+        filtered_messages = all_messages[-50:]
+        total_count = len(kafka_messages)
+    else:
+        # Get messages for specific topic
+        topic_messages = kafka_messages_by_topic.get(topic_filter, [])
+        filtered_messages = topic_messages[-50:]  # Last 50 from this topic
+        total_count = len(topic_messages)
+    
+    logging.debug(f"Returning {len(filtered_messages)} messages for filter '{topic_filter}'")
     
     return jsonify({
         'success': True,
-        'messages': kafka_messages[-50:],  # Return last 50 messages
-        'total_count': len(kafka_messages)
+        'messages': filtered_messages,
+        'total_count': total_count,
+        'filtered_count': len(filtered_messages),
+        'topic_filter': topic_filter,
+        'available_topics': sorted(list(available_topics)),
+        'per_topic_counts': {topic: len(messages) for topic, messages in kafka_messages_by_topic.items()}
     })
 
 @app.route('/api/kafka/clear', methods=['POST'])
 def clear_kafka_messages():
-    global kafka_messages
+    global kafka_messages, kafka_messages_by_topic
     
     kafka_messages.clear()
+    kafka_messages_by_topic.clear()
     
     return jsonify({
         'success': True,
         'message': 'Kafka messages cleared'
     })
+
+@app.route('/api/kafka/diagnose', methods=['POST'])
+def diagnose_kafka_connection():
+    """Diagnostic endpoint to test Kafka connectivity"""
+    try:
+        # Get environment variables
+        kafka_broker = os.environ.get('KAFKA_BROKER')
+        kafka_zeek_topic = os.environ.get('KAFKA_ZEEK_TOPIC')
+        kafka_event_log_topic = os.environ.get('KAFKA_EVENT_LOG_TOPIC')
+        
+        if not kafka_broker:
+            return jsonify({
+                'success': False,
+                'error': 'KAFKA_BROKER environment variable not set'
+            })
+        
+        topics = []
+        if kafka_zeek_topic:
+            topics.append(kafka_zeek_topic)
+        if kafka_event_log_topic:
+            topics.append(kafka_event_log_topic)
+            
+        if not topics:
+            return jsonify({
+                'success': False,
+                'error': 'No Kafka topics configured'
+            })
+        
+        # Try to create a simple consumer to test connectivity
+        try:
+            from kafka import KafkaConsumer
+            
+            logging.info(f"Testing Kafka connection to {kafka_broker}")
+            
+            test_consumer = KafkaConsumer(
+                bootstrap_servers=[kafka_broker],
+                security_protocol='PLAINTEXT',
+                session_timeout_ms=10000,
+                request_timeout_ms=15000,
+                consumer_timeout_ms=5000,
+                auto_offset_reset='latest'
+            )
+            
+            # Test basic connectivity by checking if we can connect
+            connection_successful = False
+            cluster_info = {}
+            
+            try:
+                # Try to get cluster metadata - this tests if we can communicate with Kafka
+                cluster_metadata = test_consumer._client.cluster
+                if cluster_metadata:
+                    connection_successful = True
+                    cluster_info = {
+                        'broker_count': len(cluster_metadata.brokers()),
+                        'available_brokers': [str(broker) for broker in cluster_metadata.brokers()]
+                    }
+                    logging.info(f"Successfully connected to Kafka cluster with {len(cluster_metadata.brokers())} brokers")
+            except Exception as e:
+                logging.warning(f"Could not get cluster metadata: {e}")
+                # Try alternative method - just test if consumer was created successfully
+                connection_successful = test_consumer._client is not None
+            
+            # Try to get topic partitions and metadata
+            topic_info = {}
+            for topic in topics:
+                try:
+                    # Test if topic exists and get partition info
+                    partitions = test_consumer.partitions_for_topic(topic)
+                    
+                    if partitions is not None:
+                        topic_info[topic] = {
+                            'exists': True,
+                            'partitions': sorted(list(partitions)),
+                            'partition_count': len(partitions)
+                        }
+                        logging.info(f"Topic '{topic}' found with {len(partitions)} partitions")
+                    else:
+                        topic_info[topic] = {
+                            'exists': False,
+                            'error': 'Topic not found or no partitions'
+                        }
+                        logging.warning(f"Topic '{topic}' not found")
+                        
+                except Exception as e:
+                    topic_info[topic] = {
+                        'exists': False,
+                        'error': str(e)
+                    }
+                    logging.error(f"Error checking topic '{topic}': {e}")
+            
+            # Clean up
+            test_consumer.close()
+            
+            # Determine if diagnostics were successful
+            topics_exist = any(info.get('exists', False) for info in topic_info.values())
+            overall_success = connection_successful and topics_exist
+            
+            result = {
+                'success': overall_success,
+                'broker': kafka_broker,
+                'cluster_accessible': connection_successful,
+                'cluster_info': cluster_info,
+                'topics': topic_info,
+                'configured_topics': topics
+            }
+            
+            if overall_success:
+                result['message'] = 'Kafka connectivity test successful - cluster accessible and topics found'
+            elif connection_successful and not topics_exist:
+                result['message'] = 'Kafka cluster accessible but configured topics not found'
+            else:
+                result['message'] = 'Kafka connectivity test failed - cannot access cluster'
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            error_msg = str(e)
+            logging.error(f"Kafka diagnostic test failed: {error_msg}")
+            
+            # Provide more specific error analysis
+            if "Connection refused" in error_msg:
+                specific_error = "Connection refused - Kafka broker may not be running or accessible"
+            elif "Connection reset by peer" in error_msg:
+                specific_error = "Connection reset - possible authentication or protocol issues"
+            elif "timeout" in error_msg.lower():
+                specific_error = "Connection timeout - check network connectivity and firewall"
+            elif "DNS" in error_msg or "resolve" in error_msg.lower():
+                specific_error = "DNS resolution failed - check broker hostname/IP"
+            else:
+                specific_error = error_msg
+            
+            return jsonify({
+                'success': False,
+                'broker': kafka_broker,
+                'cluster_accessible': False,
+                'error': specific_error,
+                'raw_error': error_msg,
+                'configured_topics': topics,
+                'message': f'Kafka connectivity test failed: {specific_error}'
+            })
+            
+    except Exception as e:
+        logging.error(f"Diagnostic endpoint error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Diagnostic test failed: {str(e)}'
+        })
 
 @app.route('/api/continuous/start', methods=['POST'])
 def start_continuous_simulation():
