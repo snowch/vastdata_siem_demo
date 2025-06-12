@@ -876,7 +876,7 @@ WEB_INTERFACE = """
 </head>
 <body>
     <div class="header">
-        <h1>🔍 Network Traffic Generator for Zeek and Fluentd</h1>
+        <h1>🔍 Data Simulator for Zeek and Fluentd</h1>
         <div class="status-badge">📊 Status: Active | 🔗 Network: zeek-network</div>
     </div>
     
