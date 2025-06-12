@@ -24,7 +24,7 @@ from .zeek_models import *
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -281,9 +281,19 @@ def create_dataflow(settings: Settings) -> Dataflow:
         kafka_input.oks, 
         processor.process_kafka_message
     )
-    
+
+    def count_inspector(step_id, item):
+        if not hasattr(count_inspector, 'counts'):
+            count_inspector.counts = {}
+        
+        count_inspector.counts[step_id] = count_inspector.counts.get(step_id, 0) + 1
+        
+        if count_inspector.counts[step_id] % 100 == 0:
+            print(f"{step_id}: processed {count_inspector.counts[step_id]} items")
+
     # Inspect results for monitoring
-    op.inspect("inspect_results", processed_logs)
+    # op.inspect("inspect_results", processed_logs)
+    op.inspect("summary", processed_logs, count_inspector)
     
     return flow
 
