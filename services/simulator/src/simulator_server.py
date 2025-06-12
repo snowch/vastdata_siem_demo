@@ -1870,53 +1870,118 @@ def diagnose_kafka_connection():
         # Try to create a simple consumer to test connectivity
         try:
             from kafka import KafkaConsumer
+            
+            logging.info(f"Testing Kafka connection to {kafka_broker}")
+            
             test_consumer = KafkaConsumer(
                 bootstrap_servers=[kafka_broker],
                 security_protocol='PLAINTEXT',
-                api_version_auto_timeout_ms=10000,
-                request_timeout_ms=10000,
-                consumer_timeout_ms=5000
+                session_timeout_ms=10000,
+                request_timeout_ms=15000,
+                consumer_timeout_ms=5000,
+                auto_offset_reset='latest'
             )
             
-            # Try to get cluster metadata
-            cluster_metadata = test_consumer.list_consumer_groups()
+            # Test basic connectivity by checking if we can connect
+            connection_successful = False
+            cluster_info = {}
             
-            # Try to get topic partitions
+            try:
+                # Try to get cluster metadata - this tests if we can communicate with Kafka
+                cluster_metadata = test_consumer._client.cluster
+                if cluster_metadata:
+                    connection_successful = True
+                    cluster_info = {
+                        'broker_count': len(cluster_metadata.brokers()),
+                        'available_brokers': [str(broker) for broker in cluster_metadata.brokers()]
+                    }
+                    logging.info(f"Successfully connected to Kafka cluster with {len(cluster_metadata.brokers())} brokers")
+            except Exception as e:
+                logging.warning(f"Could not get cluster metadata: {e}")
+                # Try alternative method - just test if consumer was created successfully
+                connection_successful = test_consumer._client is not None
+            
+            # Try to get topic partitions and metadata
             topic_info = {}
             for topic in topics:
                 try:
+                    # Test if topic exists and get partition info
                     partitions = test_consumer.partitions_for_topic(topic)
-                    topic_info[topic] = {
-                        'exists': partitions is not None,
-                        'partitions': list(partitions) if partitions else []
-                    }
+                    
+                    if partitions is not None:
+                        topic_info[topic] = {
+                            'exists': True,
+                            'partitions': sorted(list(partitions)),
+                            'partition_count': len(partitions)
+                        }
+                        logging.info(f"Topic '{topic}' found with {len(partitions)} partitions")
+                    else:
+                        topic_info[topic] = {
+                            'exists': False,
+                            'error': 'Topic not found or no partitions'
+                        }
+                        logging.warning(f"Topic '{topic}' not found")
+                        
                 except Exception as e:
                     topic_info[topic] = {
                         'exists': False,
                         'error': str(e)
                     }
+                    logging.error(f"Error checking topic '{topic}': {e}")
             
+            # Clean up
             test_consumer.close()
             
-            return jsonify({
-                'success': True,
+            # Determine if diagnostics were successful
+            topics_exist = any(info.get('exists', False) for info in topic_info.values())
+            overall_success = connection_successful and topics_exist
+            
+            result = {
+                'success': overall_success,
                 'broker': kafka_broker,
-                'cluster_accessible': True,
+                'cluster_accessible': connection_successful,
+                'cluster_info': cluster_info,
                 'topics': topic_info,
-                'message': 'Kafka connectivity test successful'
-            })
+                'configured_topics': topics
+            }
+            
+            if overall_success:
+                result['message'] = 'Kafka connectivity test successful - cluster accessible and topics found'
+            elif connection_successful and not topics_exist:
+                result['message'] = 'Kafka cluster accessible but configured topics not found'
+            else:
+                result['message'] = 'Kafka connectivity test failed - cannot access cluster'
+            
+            return jsonify(result)
             
         except Exception as e:
+            error_msg = str(e)
+            logging.error(f"Kafka diagnostic test failed: {error_msg}")
+            
+            # Provide more specific error analysis
+            if "Connection refused" in error_msg:
+                specific_error = "Connection refused - Kafka broker may not be running or accessible"
+            elif "Connection reset by peer" in error_msg:
+                specific_error = "Connection reset - possible authentication or protocol issues"
+            elif "timeout" in error_msg.lower():
+                specific_error = "Connection timeout - check network connectivity and firewall"
+            elif "DNS" in error_msg or "resolve" in error_msg.lower():
+                specific_error = "DNS resolution failed - check broker hostname/IP"
+            else:
+                specific_error = error_msg
+            
             return jsonify({
                 'success': False,
                 'broker': kafka_broker,
                 'cluster_accessible': False,
-                'error': str(e),
-                'topics': topics,
-                'message': f'Kafka connectivity test failed: {str(e)}'
+                'error': specific_error,
+                'raw_error': error_msg,
+                'configured_topics': topics,
+                'message': f'Kafka connectivity test failed: {specific_error}'
             })
             
     except Exception as e:
+        logging.error(f"Diagnostic endpoint error: {e}")
         return jsonify({
             'success': False,
             'error': f'Diagnostic test failed: {str(e)}'
