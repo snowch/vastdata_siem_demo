@@ -161,22 +161,6 @@ The service is defined in `docker-compose.yml`. The environment variables are co
 2.  Open your web browser and navigate to `http://<your_server_ip>:8888`. Replace `<your_server_ip>` with the IP address of the server where the Docker container is running.
 3.  When prompted, enter the password you set in the `JUPYTER_PASSWORD` environment variable.
 
-
-### `trino` Service
-
--   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
--   **Image**: `vastdataorg/trino-vast:429` - Pre-built Trino image with Vast Database connector.
--   **Configuration**:
-    -   **Dependencies**: Requires `trino_setup_config` service to complete successfully before starting.
-    -   **Ports**: `18080:8080` - Maps host port 18080 to container port 8080, providing access to the Trino web UI and query interface.
-    -   **Memory Limit**: `8g` - Allocated 8GB of memory for query processing.
-    -   **Platform**: `linux/amd64` - Specifies the platform architecture.
-    -   **Volumes**:
-        -   `./services/trino/generated/vast.properties:/etc/trino/catalog/vast.properties:ro`: Mounts the generated Vast Database connection configuration (read-only).
-        -   `./services/trino/config.properties:/etc/trino/config.properties:ro`: Mounts the Trino server configuration (read-only).
-    -   **Health Check**: Configured to check service health via HTTP endpoint every 30 seconds with 10 retries.
-    -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
-
 ###  `bytewax-fluentd-etl` Service
 
 -   **Purpose**: Consumes Fluentd logs from Kafka, transforms them, and loads them into Vast.
@@ -195,7 +179,7 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   Transforms the logs into a format suitable for Vast.
     -   Loads the transformed data into Vast.
 
-### Superset Services
+### `trino` Service
 
 -   **Purpose**: Provides a distributed SQL query engine for analyzing data stored in the Vast Database. Acts as the primary query interface for the SIEM analytics platform.
 -   **Image**: `vastdataorg/trino-vast:429` - Pre-built Trino image with Vast Database connector.
@@ -211,8 +195,6 @@ The service is defined in `docker-compose.yml`. The environment variables are co
     -   **Profiles**: `dashboard`, `all` - Service runs when these profiles are active.
 
 ### Superset Services
-
-#### `superset` Service
 
 -   **Purpose**: Provides the main Apache Superset web application for data visualization and dashboard creation.
 -   **Image**: `apachesuperset.docker.scarf.sh/apache/superset:4.0.2` - Official Apache Superset image.
