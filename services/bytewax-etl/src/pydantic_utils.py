@@ -1,6 +1,9 @@
+import logging
 import pyarrow as pa
 from pydantic import BaseModel
 from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
 
 def get_model_data(instance: BaseModel) -> dict:
     """Get dictionary representation regardless of Pydantic version"""
@@ -106,7 +109,7 @@ def remove_null_type_columns(table: pa.Table) -> pa.Table:
             valid_columns.append(table.column(i))
             valid_column_names.append(field.name)
         else:
-            print(f"Removing null type column: {field.name}")
+            logger.debug(f"Removing null type column: {field.name}")
     
     if valid_columns:
         return pa.table(valid_columns, names=valid_column_names)
@@ -123,7 +126,7 @@ def pydantic_to_arrow_table(model_class: BaseModel, instance: BaseModel) -> pa.T
     
     # Return empty table if no valid data
     if not prepared_data:
-        print("No valid data after cleaning - returning empty table")
+        logger.debug("No valid data after cleaning - returning empty table")
         return pa.table({})
     
     try:
@@ -133,9 +136,9 @@ def pydantic_to_arrow_table(model_class: BaseModel, instance: BaseModel) -> pa.T
         # Remove any columns that have null data type
         table = remove_null_type_columns(table)
         
-        print(f"Created pa_table with {len(table.column_names)} columns: {table.column_names}")
+        logger.debug(f"Created pa_table with {len(table.column_names)} columns: {table.column_names}")
         return table
     except Exception as e:
-        print(f"Error creating Arrow table: {e}")
+        logger.debug(f"Error creating Arrow table: {e}")
         # If there's still an issue, create an empty table
         return pa.table({})

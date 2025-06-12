@@ -122,7 +122,7 @@ class OCSFEventProcessor:
         class_name = raw_data.get('class_name', 'Unknown')
         
         if class_uid not in self.SUPPORTED_EVENT_TYPES:
-            logger.warning(f"Unsupported class_uid: {class_uid}")
+            # logger.warning(f"Unsupported class_uid: {class_uid}")
             return None, class_name
         
         event_cls, event_class_name = self.SUPPORTED_EVENT_TYPES[class_uid]

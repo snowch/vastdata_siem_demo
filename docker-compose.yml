@@ -94,19 +94,32 @@ services:
     volumes:
       - ./services/jupyspark/examples:/home/jovyan/examples:rw
     profiles:
-      - etl
       - all
 
-  bytewax-etl:
+  bytewax-fluentd-etl:
     build:
       context: ./services/bytewax-etl
       dockerfile: Dockerfile
-    container_name: bytewax-etl
+    container_name: bytewax-fluentd-etl
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./services/bytewax-etl/src:/app/src/
     command: ["python", "-m", "bytewax.run", "/app/src/fluentd_to_vastdb.py"]
+    profiles:
+      - etl
+      - all
+
+  bytewax-zeek-etl:
+    build:
+      context: ./services/bytewax-etl
+      dockerfile: Dockerfile
+    container_name: bytewax-zeek-etl
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./services/bytewax-etl/src:/app/src/
+    command: ["python", "-m", "bytewax.run", "/app/src/zeek_to_vastdb.py"]
     profiles:
       - etl
       - all
