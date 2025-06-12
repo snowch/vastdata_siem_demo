@@ -23,17 +23,23 @@ class Settings(BaseSettings):
     kafka_event_log_topic: str = os.environ.get("KAFKA_EVENT_LOG_TOPIC")
     kafka_group_id: str = "ocsf-console-logger"
 
+    def __str__(self):
+        """Custom string representation to print each setting on a new line."""
+        # Use model_dump() to get a dictionary of the settings
+        settings_dict = self.model_dump()
+        
+        # Format each key-value pair and join them with a newline character ('\n')
+        return '\n'.join(
+            f"{key}='{value}'" for key, value in settings_dict.items()
+        )
+
 # Load settings
 try:
     settings = Settings()
-    print(
-        f"""
----
-KAFKA_BROKER={settings.kafka_broker}
-KAFKA_TOPIC={settings.kafka_event_log_topic}
----
-        """
-    )
+    print("--- Settings Loaded ---")
+    print(settings) # ✨ Simply print the object
+    print("-----------------------")
+
     if not settings.kafka_broker or not settings.kafka_event_log_topic:
         raise ValueError("KAFKA_BROKER and KAFKA_EVENT_LOG_TOPIC environment variables must be set")
 except Exception as e:

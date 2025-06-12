@@ -104,6 +104,10 @@ services:
     container_name: bytewax-etl
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - ./services/bytewax-etl/bytewax_ocsf_vastdb.py:/app/bytewax_ocsf_vastdb.py
+      - ./services/bytewax-etl/ocsf_mappings.py:/app/ocsf_mappings.py
+    command: ["python", "-m", "bytewax.run", "/app/bytewax_ocsf_vastdb.py"]
     profiles:
       - etl
       - all
