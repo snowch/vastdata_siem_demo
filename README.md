@@ -23,6 +23,7 @@ graph LR
         J[Bytewax ELT]
         T[Trino]
         AS[Superset]
+        B[Jupyter + Spark]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
@@ -44,6 +45,7 @@ graph LR
     S -- Port Forward --> SW
     AS -- Port Forward --> ASW
     T -- Port Forward --> TW
+    B -- Port Foward --> JW
 
     F -- Publishes --> K
     Z -- Publishes --> K
