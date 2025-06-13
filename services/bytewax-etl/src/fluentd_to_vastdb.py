@@ -19,6 +19,8 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from py_ocsf_models.events.findings.compliance_finding import ComplianceFinding
 from py_ocsf_models.events.findings.detection_finding import DetectionFinding
+from py_ocsf_models.events.iam.authentication import Authentication
+from py_ocsf_models.events.file_system.file_system_activity import FileSystemActivity
 
 from .pydantic_utils import pydantic_to_arrow_table
 from .vastdb_utils import connect_to_vastdb, write_to_vastdb
@@ -90,8 +92,10 @@ class OCSFEventProcessor:
     
     # Supported OCSF event types
     SUPPORTED_EVENT_TYPES = {
+        1001: (FileSystemActivity, "File System Activity"),
         2003: (ComplianceFinding, "Compliance Finding"),
         2004: (DetectionFinding, "Detection Finding"),
+        3002: (Authentication, "Authentication"),
     }
     
     def __init__(self, settings: Settings):
@@ -112,7 +116,7 @@ class OCSFEventProcessor:
             logger.error(f"Failed to connect to VastDB: {e}")
             raise
     
-    def parse_ocsf_event(self, raw_data: dict) -> tuple[Optional[Union[ComplianceFinding, DetectionFinding]], str]:
+    def parse_ocsf_event(self, raw_data: dict) -> tuple[Optional[Union[ComplianceFinding, DetectionFinding, Authentication]], str]:
         """
         Parse and validate OCSF event data.
         
@@ -132,10 +136,14 @@ class OCSFEventProcessor:
             validated_event = event_cls(**raw_data)
             return validated_event, event_class_name
         except Exception as e:
-            logger.error(f"Failed to validate {event_class_name}: {e}")
+            if event_class_name == "Authentication":
+                logger.warning(f"Failed to validate {event_class_name}: {e}")
+                logger.warning(f"Sample data keys: {list(raw_data.keys())[:10]}")
+            else:
+                logger.error(f"Failed to validate {event_class_name}: {e}")
             return None, event_class_name
     
-    def write_event_to_vastdb(self, event: Union[ComplianceFinding, DetectionFinding], 
+    def write_event_to_vastdb(self, event: Union[ComplianceFinding, DetectionFinding, Authentication], 
                              event_class_name: str) -> bool:
         """
         Write validated event to VastDB.
@@ -183,6 +191,7 @@ class OCSFEventProcessor:
             event, event_class_name = self.parse_ocsf_event(ocsf_data)
             
             if event is None:
+                logger.warning(f"Skipping unsupported or invalid event type: {event_class_name}")
                 return f"[SKIPPED] Unsupported or invalid event type: {event_class_name}"
             
             # Write to VastDB

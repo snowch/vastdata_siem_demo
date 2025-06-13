@@ -105,6 +105,7 @@ services:
     env_file: .env
     environment:
       - enable_raw_kafka_inspector=false
+      - PYTHONPATH=\${PYTHONPATH}:/app/src
     volumes:
       - ./services/bytewax-etl/src:/app/src/
     command: ["python", "-m", "bytewax.run", "/app/src/fluentd_to_vastdb.py"]

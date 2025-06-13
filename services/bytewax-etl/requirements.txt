@@ -1,8 +1,6 @@
 pydantic>=2.0.0
 pydantic-settings
-# pydantic-to-pyarrow
 bytewax==0.21.1
-py-ocsf-models
 attrs
 confluent-kafka
 httpx
@@ -11,3 +9,5 @@ authlib
 fastavro
 requests
 vastdb
+pydantic[email]
+
