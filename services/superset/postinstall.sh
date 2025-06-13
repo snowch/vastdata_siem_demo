@@ -4,9 +4,11 @@
 set -e
 
 # Change to the script's directory
-cd "$(dirname "$0")"
+script_dir="$(dirname "$0")"
 
-source ../.env-local
+docker cp ${script_dir}/siem_dashboard.zip superset_app:/tmp/
 
-./setup_db_connections.sh "$@"
-./scripts/import_assets.sh "$@"
+docker exec -it superset_app superset import-dashboards --path /tmp/siem_dashboard.zip -u admin 2>&1
+
+
+
