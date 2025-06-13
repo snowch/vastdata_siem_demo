@@ -40,6 +40,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
       
   db:
     env_file:
@@ -56,6 +57,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
 
   superset:
     env_file:
@@ -72,6 +74,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
 
     ### START FIX to install Trino library
     # command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
@@ -104,6 +107,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
 
   superset-worker:
     image: *superset-image
@@ -129,6 +133,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
 
   superset-worker-beat:
     image: *superset-image
@@ -148,6 +153,7 @@ services:
     profiles:
       - dashboard
       - all
+      - superset
 
 volumes:
   superset_home:
