@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 
 class File(BaseModel):
     """
