@@ -163,3 +163,16 @@ class ZeekFtpLog(BaseModel):
 class ZeekGenericLog(BaseModel):
     """Generic Zeek log model for unknown log types."""
     pass
+
+class ZeekKnownHostsLog(BaseModel):
+    """Zeek Known Hosts log model."""
+    ts: Optional[datetime] = None
+    host: Optional[str] = None
+
+class ZeekKnownServicesLog(BaseModel):
+    """Zeek Known Services log model."""
+    ts: Optional[datetime] = None
+    host: Optional[str] = None
+    port_num: Optional[int] = None
+    port_proto: Optional[str] = None
+    service: Optional[str] = None

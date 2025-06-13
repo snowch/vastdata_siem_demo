@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     batch_size: int = 100
     auto_commit_interval_ms: int = 1000
     vastdb_zeek_table_prefix: str = ""
+    enable_raw_kafka_inspector: bool = False
 
     class Config:
         env_prefix = ""
@@ -93,6 +94,8 @@ class ZeekLogProcessor:
         'ssl': ("ZeekSslLog", "SSL Log"),
         'weird': ("ZeekWeirdLog", "Weird Log"),
         'ftp': ("ZeekFtpLog", "FTP Log"),
+        'known_hosts': ("ZeekKnownHostsLog", "Known Hosts Log"),
+        'known_services': ("ZeekKnownServicesLog", "Known Services Log"),
     }
     
     def __init__(self, settings: Settings):
@@ -250,9 +253,69 @@ class ZeekLogProcessor:
             return f"[ERROR] Unexpected error: {e}"
 
 
+def raw_kafka_inspector(step_id, item):
+    print(f"RAW KAFKA MESSAGE: {step_id} - {item}")
+
+def count_inspector(step_id, item):
+    if not hasattr(count_inspector, 'counts'):
+        count_inspector.counts = {
+            'total': 0,
+            'success': 0,
+            'error': 0,
+            'skipped': 0,
+            'by_log_type': {}
+        }
+    
+    count_inspector.counts['total'] += 1
+    
+    # Parse the result message to categorize
+    if isinstance(item, str):
+        if item.startswith('[SUCCESS]'):
+            count_inspector.counts['success'] += 1
+            # Extract log type for detailed tracking
+            if 'Processed ' in item and ' log' in item:
+                log_type = item.split('Processed ')[1].split(' log')[0]
+                if log_type not in count_inspector.counts['by_log_type']:
+                    count_inspector.counts['by_log_type'][log_type] = {'success': 0, 'error': 0, 'skipped': 0}
+                count_inspector.counts['by_log_type'][log_type]['success'] += 1
+                
+        elif item.startswith('[ERROR]'):
+            count_inspector.counts['error'] += 1
+            
+        elif item.startswith('[SKIPPED]'):
+            count_inspector.counts['skipped'] += 1
+            # Extract log type for skipped items too
+            if 'for type: ' in item:
+                log_type = item.split('for type: ')[1]
+                if log_type not in count_inspector.counts['by_log_type']:
+                    count_inspector.counts['by_log_type'][log_type] = {'success': 0, 'error': 0, 'skipped': 0}
+                count_inspector.counts['by_log_type'][log_type]['skipped'] += 1
+    
+    # Print summary every 100 items
+    if count_inspector.counts['total'] % 100 == 0:
+        total = count_inspector.counts['total']
+        success = count_inspector.counts['success']
+        error = count_inspector.counts['error']
+        skipped = count_inspector.counts['skipped']
+        
+        success_rate = (success / total * 100) if total > 0 else 0
+        
+        print(f"\n=== {step_id} Summary (Total: {total}) ===")
+        print(f"✅ SUCCESS: {success} ({success_rate:.1f}%)")
+        print(f"❌ ERROR:   {error} ({error/total*100:.1f}%)" if total > 0 else "❌ ERROR:   0")
+        print(f"⏭️  SKIPPED: {skipped} ({skipped/total*100:.1f}%)" if total > 0 else "⏭️  SKIPPED: 0")
+        
+        # Show breakdown by log type if we have data
+        if count_inspector.counts['by_log_type']:
+            print("📊 By Log Type:")
+            for log_type, counts in count_inspector.counts['by_log_type'].items():
+                type_total = counts['success'] + counts['error'] + counts['skipped']
+                if type_total > 0:
+                    print(f"   {log_type}: {counts['success']}✅ {counts['error']}❌ {counts['skipped']}⏭️")
+        print("=" * 50)
+
 def create_dataflow(settings: Settings) -> Dataflow:
     """Create and configure the Bytewax dataflow."""
-    
     # Initialize log processor
     processor = ZeekLogProcessor(settings)
     
@@ -275,24 +338,16 @@ def create_dataflow(settings: Settings) -> Dataflow:
         add_config=kafka_config
     )
     
+    if settings.enable_raw_kafka_inspector:
+        op.inspect("raw_kafka", kafka_input.oks, raw_kafka_inspector)
+    
     # Process logs
     processed_logs = op.map(
-        "process_logs", 
-        kafka_input.oks, 
+        "process_logs",
+        kafka_input.oks,
         processor.process_kafka_message
     )
 
-    def count_inspector(step_id, item):
-        if not hasattr(count_inspector, 'counts'):
-            count_inspector.counts = {}
-        
-        count_inspector.counts[step_id] = count_inspector.counts.get(step_id, 0) + 1
-        
-        if count_inspector.counts[step_id] % 100 == 0:
-            print(f"{step_id}: processed {count_inspector.counts[step_id]} items")
-
-    # Inspect results for monitoring
-    # op.inspect("inspect_results", processed_logs)
     op.inspect("summary", processed_logs, count_inspector)
     
     return flow

@@ -239,8 +239,8 @@ def create_dataflow(settings: Settings) -> Dataflow:
             print(f"{step_id}: processed {count_inspector.counts[step_id]} items")
     
     # Inspect results for monitoring
-    # op.inspect("inspect_results", processed_events)
-    op.inspect("summary", processed_events, count_inspector)
+    op.inspect("inspect_results", processed_events)
+    # op.inspect("summary", processed_events, count_inspector)
 
     return flow
 

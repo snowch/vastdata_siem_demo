@@ -103,12 +103,21 @@ services:
     container_name: bytewax-fluentd-etl
     restart: unless-stopped
     env_file: .env
+    environment:
+      - enable_raw_kafka_inspector=false
     volumes:
       - ./services/bytewax-etl/src:/app/src/
     command: ["python", "-m", "bytewax.run", "/app/src/fluentd_to_vastdb.py"]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
     profiles:
       - etl
       - all
+
 
   bytewax-zeek-etl:
     build:
@@ -120,6 +129,12 @@ services:
     volumes:
       - ./services/bytewax-etl/src:/app/src/
     command: ["python", "-m", "bytewax.run", "/app/src/zeek_to_vastdb.py"]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
     profiles:
       - etl
       - all
@@ -171,5 +186,7 @@ networks:
   zeek-network:
     driver: bridge
     ipam:
+      config:
+        - subnet: 192.168.100.0/24
       config:
         - subnet: 192.168.100.0/24
