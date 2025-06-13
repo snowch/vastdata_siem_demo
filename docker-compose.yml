@@ -126,6 +126,8 @@ services:
     container_name: bytewax-zeek-etl
     restart: unless-stopped
     env_file: .env
+    environment:
+      - enable_raw_kafka_inspector=false
     volumes:
       - ./services/bytewax-etl/src:/app/src/
     command: ["python", "-m", "bytewax.run", "/app/src/zeek_to_vastdb.py"]
@@ -186,7 +188,5 @@ networks:
   zeek-network:
     driver: bridge
     ipam:
-      config:
-        - subnet: 192.168.100.0/24
       config:
         - subnet: 192.168.100.0/24
