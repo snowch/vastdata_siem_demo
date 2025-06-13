@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     # Processing settings
     batch_size: int = 100
     auto_commit_interval_ms: int = 1000
+    vastdb_fluentd_table_prefix: str = ""
     enable_raw_kafka_inspector: bool = False
 
     class Config:
@@ -157,7 +158,7 @@ class OCSFEventProcessor:
             pa_table = pydantic_to_arrow_table(event_cls, event)
             
             # Write to VastDB
-            table_name = event_class_name.lower().replace(" ", "_")
+            table_name = f"{self.settings.vastdb_zeek_table_prefix}{event_class_name.lower().replace(' ', '_')}"
             write_to_vastdb(
                 self.session,
                 self.settings.vastdb_fluentd_bucket,
@@ -191,7 +192,7 @@ class OCSFEventProcessor:
             event, event_class_name = self.parse_ocsf_event(ocsf_data)
             
             if event is None:
-                logger.warning(f"Skipping unsupported or invalid event type: {event_class_name}")
+                logger.warning(f"Skipping unsupported or invalid event type: {event_class_name} {kafka_message.value}")
                 return f"[SKIPPED] Unsupported or invalid event type: {event_class_name}"
             
             # Write to VastDB
