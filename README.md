@@ -90,3 +90,6 @@ To get the application up and running, follow these steps:
 >  - `dashboard`: run the trino and superset service
 
 
+6. **Run the data Simulator**: `./bin/start_simulator.sh`
+7. **Import the Superset Dashboard**: `./bin/import_superset_dashboard.sh`
+8. **Login to Superset**: [http://<<your-docker-compose-host>:8088](http://<<your-docker-compose-host>:8088) admin/admin
