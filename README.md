@@ -1,18 +1,14 @@
-# SIEM Data Simulator Service Documentation
-
-This document provides detailed documentation for the simplified Docker-based SIEM Data Simulator.
+# SIEM Demo
 
 ## Overview
 
-This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management. The system includes a Zeek monitoring container and a SIEM simulation container to generate test traffic that get sent to Vast Kafka.
+This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management.
 
-Apache Spark and Jupyter has been included and two spark streaming applications provided that perform live consumption of Kafka events that get saved to Vast Database.
-
-Trino SQL query engine and Superset visualisation and exploration applications have also been included, along with an example Superset dashboard.
+This application is usually deployed alongside traditional SIEM solutions like Splunk.
 
 ## Architecture
 
-The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
+The application consists of Docker Compose services.
 
 ```mermaid
 graph LR
