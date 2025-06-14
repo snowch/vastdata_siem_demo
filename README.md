@@ -69,7 +69,7 @@ To get the application up and running, follow these steps:
 1.  **Prerequisites**: Ensure you have Docker and Docker Compose (v2.2+) installed.
 
 2.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-3.  Create a `.env` file in the project root directory and configure the environment variables.
+3.  Create a `.env` file in the project root directory and configure the environment variables. See [.env-example](./.env-example)
 4.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
     docker compose --profile all up --build -d
