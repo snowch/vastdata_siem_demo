@@ -66,17 +66,19 @@ graph LR
 
 To get the application up and running, follow these steps:
 
-1.  **Prerequisites**: Ensure you have Docker and Docker Compose (v2.2+) installed.
+1.  **Prerequisites**:
+    - Ensure you have Docker and Docker Compose (v2.2+) installed. Official docker preferred over distribution provided docker.
+    - Ports free on docker host: 8080, 8088, 8888, 18089
 
-2.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-3.  Create a `.env` file in the project root directory and configure the environment variables. See [.env-example](./.env-example)
-4.  **Build and start the services**: Navigate to the project directory in your terminal and run:
+3.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
+4.  Create a `.env` file in the project root directory and configure the environment variables. See [.env-example](./.env-example)
+5.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
     docker compose --profile all up --build -d
     ```
     The `-d` flag runs the services in detached mode.
     Docker Compose will automatically load the environment variables from the `.env` file.
-5.  **Verify services are running**:
+6.  **Verify services are running**:
     ```bash
     docker compose --profile all ps
     ```
