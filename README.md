@@ -29,7 +29,7 @@ More screenshots ...
 </details>
 
 <details>
-<summary>Traffic Generator</summary>
+<summary>Data Generator</summary>
     
 ![traffic_generator](./docs/traffic_generator.png)
 </details>
