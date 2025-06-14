@@ -1,18 +1,17 @@
-# SIEM Data Simulator Service Documentation
-
-This document provides detailed documentation for the simplified Docker-based SIEM Data Simulator.
+# SIEM Demo
 
 ## Overview
 
-This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management. The system includes a Zeek monitoring container and a SIEM simulation container to generate test traffic that get sent to Vast Kafka.
+This application provides a streamlined environment for generating SIEM events and network traffic using Zeek and Fluentd, open-source network tools. It leverages Docker and standard bridge networking to simplify deployment and management.
 
-Apache Spark and Jupyter has been included and two spark streaming applications provided that perform live consumption of Kafka events that get saved to Vast Database.
+This application is usually deployed alongside traditional SIEM solutions like Splunk.
 
-Trino SQL query engine and Superset visualisation and exploration applications have also been included, along with an example Superset dashboard.
+> [!NOTE]
+> This demo currently showcases how the system works under normal conditions rather than testing its performance limits and ability to scale, which will be the focus of later work.
 
 ## Architecture
 
-The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
+The application consists of Docker Compose services.
 
 ```mermaid
 graph LR
@@ -67,17 +66,19 @@ graph LR
 
 To get the application up and running, follow these steps:
 
-1.  **Prerequisites**: Ensure you have Docker and Docker Compose (v2.2+) installed.
+1.  **Prerequisites**:
+    - Ensure you have Docker and Docker Compose (v2.2+) installed. Official docker preferred over distribution provided docker.
+    - Ports free on docker host: 8080, 8088, 8888, 18080
 
-2.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
-3.  Create a `.env` file in the project root directory and configure the environment variables.
-4.  **Build and start the services**: Navigate to the project directory in your terminal and run:
+3.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
+4.  Create a `.env` file in the project root directory and configure the environment variables. See [.env-example](./.env-example)
+5.  **Build and start the services**: Navigate to the project directory in your terminal and run:
     ```bash
     docker compose --profile all up --build -d
     ```
     The `-d` flag runs the services in detached mode.
     Docker Compose will automatically load the environment variables from the `.env` file.
-5.  **Verify services are running**:
+6.  **Verify services are running**:
     ```bash
     docker compose --profile all ps
     ```
@@ -93,4 +94,8 @@ To get the application up and running, follow these steps:
 
 6. **Run the data Simulator**: `./bin/start_simulator.sh`
 7. **Import the Superset Dashboard**: `./bin/import_superset_dashboard.sh`
-8. **Login to Superset**: [http://<<your-docker-compose-host>:8088](http://<<your-docker-compose-host>:8088) admin/admin
+8. **Login to Superset**: http://your-docker-compose-host:8088 admin/admin
+9. **Wait for tables**: Some dashboard charts will display as broken until enough data has been created to result in creation of the Vast Database tables.
+
+> [!TIP]
+> You can change the parameters of the data generation at http://your-docker-compose-host:8080.
