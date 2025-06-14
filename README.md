@@ -9,6 +9,16 @@ This application is usually deployed alongside traditional SIEM solutions like S
 > [!NOTE]
 > This demo currently showcases how the system works under normal conditions rather than testing its performance limits and ability to scale, which will be the focus of later work.
 
+## Screenshots
+
+Some screenshots ...
+
+### Log Events
+![log_events](./docs/log_events.png)
+
+### Traffic Distribution
+![traffic_distribution](./docs/traffic_distribution.png)
+
 ## Architecture
 
 The application consists of Docker Compose services.
