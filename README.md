@@ -11,16 +11,24 @@ This application is usually deployed alongside traditional SIEM solutions like S
 
 ## Screenshots
 
-Some screenshots ...
-
 ### Traffic Distribution
 ![traffic_distribution](./docs/traffic_distribution.png)
+
+More screenshots ...
+
+<details>
+<summary>Network Connections</summary>
+    
+![log_events](./docs/network_connections.png)
+</details>
 
 <details>
 <summary>Log Events</summary>
     
 ![log_events](./docs/log_events.png)
 </details>
+
+
 
 ## Architecture
 
