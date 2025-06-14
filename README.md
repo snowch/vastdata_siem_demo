@@ -94,3 +94,6 @@ To get the application up and running, follow these steps:
 7. **Import the Superset Dashboard**: `./bin/import_superset_dashboard.sh`
 8. **Login to Superset**: http://your-docker-compose-host:8088 admin/admin
 9. **Wait for tables**: Some dashboard charts will display as broken until enough data has been created to result in creation of the Vast Database tables.
+
+> [!TIP]
+> You can change the parameters of the data generation at http://your-docker-compose-host:8080.
