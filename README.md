@@ -68,7 +68,7 @@ To get the application up and running, follow these steps:
 
 1.  **Prerequisites**:
     - Ensure you have Docker and Docker Compose (v2.2+) installed. Official docker preferred over distribution provided docker.
-    - Ports free on docker host: 8080, 8088, 8888, 18089
+    - Ports free on docker host: 8080, 8088, 8888, 18080
 
 3.  **Clone the repository**: If you haven't already, clone the repository containing the project files.
 4.  Create a `.env` file in the project root directory and configure the environment variables. See [.env-example](./.env-example)
