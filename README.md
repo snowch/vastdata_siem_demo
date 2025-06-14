@@ -7,7 +7,7 @@ This application provides a streamlined environment for generating SIEM events a
 This application is usually deployed alongside traditional SIEM solutions like Splunk.
 
 > [!NOTE]
-> This demo currently focuses on function rather than performance and scale. Those aspects will be the focus of a later phase.
+> This demo currently showcases how the system works under normal conditions rather than testing its performance limits and ability to scale, which will be the focus of later work.
 
 ## Architecture
 
