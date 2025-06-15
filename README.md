@@ -28,6 +28,11 @@ More screenshots ...
 ![log_events](./docs/log_events.png)
 </details>
 
+<details>
+<summary>Data Generator</summary>
+    
+![traffic_generator](./docs/traffic_generator.png)
+</details>
 
 
 ## Architecture
