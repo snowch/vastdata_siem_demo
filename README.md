@@ -34,6 +34,12 @@ More screenshots ...
 ![traffic_generator](./docs/traffic_generator.png)
 </details>
 
+<details>
+<summary>Spark Jupyter Notebook</summary>
+    
+![spark_notebook](./docs/spark_notebook.png)
+</details>
+
 
 ## Architecture
 
