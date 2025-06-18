@@ -86,7 +86,7 @@ graph LR
     J -- Writes To --> VDB
     T -- Queries --> VDB
     B -- Queries --> VDB
-    DBT -- Queries/Updates --> VDB
+    DBT -- Queries/Updates --> T
 ```
 
 -   **SIEM-simulator**: A Python-based container using Scapy and other tools to generate various types of network traffic and SIEM events. It includes a web interface for easy control.
