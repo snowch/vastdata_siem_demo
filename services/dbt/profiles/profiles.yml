@@ -1,0 +1,11 @@
+zeek_stats:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      user: admin
+      host: trino
+      port: 8080
+      catalog: vast
+      schema: "{{ env_var('VASTDB_ZEEK_BUCKET') }}|{{ env_var('VASTDB_ZEEK_SCHEMA') }}"
+      threads: 1

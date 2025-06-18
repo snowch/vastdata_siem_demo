@@ -185,6 +185,32 @@ services:
       - dashboard
       - all
 
+  dbt:
+    image: python:3.11-slim
+    container_name: dbt
+    env_file:
+      - .env
+    environment:
+      DBT_PROFILES_DIR: /dbt/profiles
+    volumes:
+      - ./services/dbt:/dbt
+    working_dir: /dbt
+    command: >
+      bash -c "
+        pip install dbt-trino &&
+        while true; do
+          dbt run --project-dir . &&
+          dbt test --project-dir . ;
+          echo 'Sleeping for 1 hour...';
+          sleep 3600;
+        done
+      "
+    depends_on:
+      - trino
+    restart: unless-stopped
+    profiles:
+      - all
+
 networks:
   zeek-network:
     driver: bridge
