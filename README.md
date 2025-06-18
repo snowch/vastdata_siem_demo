@@ -29,6 +29,12 @@ More screenshots ...
 </details>
 
 <details>
+<summary>System Metadata</summary>
+    
+![metadata](./docs/metadata.png)
+</details>
+
+<details>
 <summary>Data Generator</summary>
     
 ![traffic_generator](./docs/traffic_generator.png)
@@ -39,6 +45,7 @@ More screenshots ...
     
 ![spark_notebook](./docs/spark_notebook.png)
 </details>
+
 
 
 ## Architecture
