@@ -4,3 +4,8 @@ version: 1.0.0
 config-version: 2
 flags:
   require_certificate_validation: False
+
+# dbt observability - capture run results
+on-run-end:
+  - "{% if execute %}{{ upload_dbt_results(results) }}{% endif %}"
+  # - "{% if execute %}{{ show_actual_data() }}{% endif %}"
