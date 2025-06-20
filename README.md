@@ -6,6 +6,12 @@ This application provides a streamlined environment for generating SIEM events a
 
 This application is usually deployed alongside traditional SIEM solutions like Splunk.
 
+## Why VAST?
+
+Vast Data's offerings significantly enhance SIEM capabilities by providing a high-performance, scalable, and AI-ready platform. Vast Database excels in rapid analytics on structured security data, facilitating quick lookups, accelerated investigations, and efficient long-term storage of petabyte-scale log volumes. Vast Kafka delivers real-time, high-throughput data ingestion directly into Vast Database, streamlining the data pipeline and reducing latency for threat detection.
+
+Looking forward, the Vast Vector Store, set for improvements by December 2025, will enable advanced AI-driven security analytics, including anomaly detection and semantic searches for malware, by storing and querying vector embeddings at petabyte scale. Integration with NVIDIA NIMs (NVIDIA Inference Microservices), available from August 2025, will allow for deploying sophisticated AI models directly on the platform, enhancing threat detection and enabling AI-powered threat hunting and natural language interaction with SIEM data. Additionally, Functions and Triggers, becoming available from August 2025, will automate repetitive SIEM workflows like parsing, enrichment, and initial alert triage, thereby improving SOC efficiency and accelerating response times. These future capabilities will contribute to a more proactive and intelligent security posture, capable of detecting and responding to threats at machine speed.
+
 > [!NOTE]
 > This demo currently showcases how the system works under normal conditions rather than testing its performance limits and ability to scale, which will be the focus of later work.
 
