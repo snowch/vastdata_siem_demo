@@ -109,6 +109,7 @@ graph LR
 To get the application up and running, follow these steps:
 
 1.  **Prerequisites**:
+    - Vast 5.3+ Cluster
     - Ensure you have Docker and Docker Compose (v2.2+) installed. Official docker preferred over distribution provided docker.
     - Ports free on docker host: 8080, 8088, 8888, 18080
 
