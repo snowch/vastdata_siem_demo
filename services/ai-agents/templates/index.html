@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Triage</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; }
+        textarea { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        .response-area { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 20px; white-space: pre-wrap; word-wrap: break-word; }
+        .loading { text-align: center; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Agent Triage Interface</h1>
+        <p>Enter raw security logs (JSON format) to get a prioritized task from the Triage Planner Agent.</p>
+        <textarea id="logInput" rows="10" placeholder='Paste your JSON logs here, e.g.:
+[
+    {
+        "timestamp": "2024-08-01T00:00:01",
+        "event_type": "network_connection",
+        "source_ip": "192.168.1.10",
+        "destination_ip": "10.0.0.5",
+        "port": 80
+    },
+    {
+        "timestamp": "2024-08-01T00:00:02",
+        "event_type": "ssh_login_failure",
+        "user_id": "user1",
+        "source_ip": "198.51.100.10",
+        "hostname": "web-server-01"
+    }
+]'></textarea>
+        <button onclick="submitLogs()">Submit Logs</button>
+        <div class="loading" id="loadingSpinner">Loading...</div>
+        <div class="response-area" id="agentResponse">
+            <!-- Agent responses will appear here -->
+        </div>
+    </div>
+
+    <script>
+        async function submitLogs() {
+            const logInput = document.getElementById('logInput').value;
+            const agentResponseDiv = document.getElementById('agentResponse');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            agentResponseDiv.textContent = ''; // Clear previous response
+
+            if (!logInput.trim()) { // Check if input is empty or just whitespace
+                agentResponseDiv.textContent = 'Error: Please paste security logs into the input area.';
+                return; // Stop execution if input is empty
+            }
+
+            loadingSpinner.style.display = 'block'; // Show loading spinner
+
+            try {
+                const response = await fetch('/triage', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ logs: logInput })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                agentResponseDiv.textContent = data.response;
+            } catch (error) {
+                console.error('Error:', error);
+                agentResponseDiv.textContent = `Error: ${error.message}. Please check console for details.`;
+            } finally {
+                loadingSpinner.style.display = 'none'; // Hide loading spinner
+            }
+        }
+    </script>
+</body>
+</html>

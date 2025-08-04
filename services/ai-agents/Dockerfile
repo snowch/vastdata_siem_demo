@@ -9,7 +9,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the source code
-COPY src/ .
+COPY src/ ./src/
+COPY templates/ ./templates/
 
-# Command to run the application
-CMD ["python", "triage_service.py"]
+# Expose the port Flask runs on
+EXPOSE 5000
+
+# Command to run the Flask application
+CMD ["python", "src/web_ui.py"]

@@ -50,8 +50,6 @@ def run_siem_query(query: str) -> str:
 
 def enrich_indicator(indicator: str, source: str = "virustotal") -> str:
     """Enriches a given security indicator using a threat intelligence source."""
-    print(f"--- EXECUTING TOOL: enrich_indicator ---")
-    print(f"--- INDICATOR: {indicator}, SOURCE: {source} ---")
     if indicator == "198.51.100.10":
         enrichment_data = {
             "indicator": indicator,
@@ -64,10 +62,8 @@ def enrich_indicator(indicator: str, source: str = "virustotal") -> str:
         return json.dumps(enrichment_data, indent=2)
     return json.dumps({"is_malicious": False})
 
-async def main():
+async def get_prioritized_task(log_batch: str) -> str:
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
-    
-    # --- STAGE 1: Triage Planning ---
     
     planner_system_message = """You are an expert SOC analyst responsible for initial event triage. 
     Your task is to review a batch of raw security logs in JSON format. Analyze these logs to identify the single most suspicious or anomalous activity that requires immediate investigation.
@@ -82,37 +78,36 @@ async def main():
     )
     
     planner_proxy = UserProxyAgent(name="Planner_Proxy")
-    
-    log_batch = get_log_events()
-    print("--- RAW LOG BATCH ---")
-    print(log_batch)
-    print("\n--- RUNNING TRIAGE PLANNER ---")
-    
+        
     planner_result = await triage_planner_agent.on_messages([TextMessage(content=log_batch, source="user")], cancellation_token=CancellationToken())
     prioritized_task = planner_result.chat_message.content
-    
-    print(f"\n--- PRIORITIZED TASK IDENTIFIED ---\n{prioritized_task}\n")
-    
-    # --- STAGE 2: Investigation by the Triage Team ---
-    
-    print("--- LAUNCHING INVESTIGATION TEAM ---")
-    
+        
+    await model_client.close() # Close client after use in this function
+    return prioritized_task
+
+async def run_investigation_team(prioritized_task: str):
+    model_client = OpenAIChatCompletionClient(model="gpt-4o")
+        
     enrichment_agent = AssistantAgent(name="Alert_Enrichment_Agent", model_client=model_client, system_message="Your task is to enrich the primary indicator (e.g., IP address) from the task description. Use your tools and pass the JSON output to the next agent.", tools=[enrich_indicator])
     correlation_agent = AssistantAgent(name="Log_Correlation_Agent", model_client=model_client, system_message="Your task is to take the enriched indicators and search for them in the SIEM. Pass the raw JSON log findings to the next agent.", tools=[run_siem_query])
     assessment_agent = AssistantAgent(name="Impact_Assessment_Agent", model_client=model_client, system_message="Synthesize all JSON data. Analyze logs for patterns. Create a final summary including: 1. Threat intel summary. 2. Internal activity found. 3. Impact/severity assessment. 4. Recommendation. End with 'TERMINATE'.", tools=[])
     
-async def dummy_input_func(prompt: str, cancellation_token: CancellationToken) -> str:
-    return ""
-
-    investigation_initiator = UserProxyAgent(name="SOC_Manager", input_func=dummy_input_func)
+    investigation_initiator = UserProxyAgent(name="SOC_Manager", input_func=Console.input_func)
     
     triage_team = RoundRobinGroupChat(
         participants=[investigation_initiator, enrichment_agent, correlation_agent, assessment_agent],
     )
     
     await triage_team.run(task=[TextMessage(content=prioritized_task, source="user")], cancellation_token=CancellationToken())
-    
     await model_client.close()
+
+async def main():
+    # This main function is now primarily for demonstration or direct console use
+    # For web UI integration, call get_prioritized_task directly
+    log_batch = get_log_events()
+    
+    prioritized_task = await get_prioritized_task(log_batch)
+    await run_investigation_team(prioritized_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
