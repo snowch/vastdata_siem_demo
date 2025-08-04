@@ -1,60 +1,12 @@
 import asyncio
-import json
 from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.ui import Console
 from autogen_agentchat.messages import TextMessage
 from autogen_core import CancellationToken
-
-# --- SIEM Data Simulator ---
-def generate_log_batch() -> str:
-    """Generates a batch of simulated SIEM logs matching the simulator's schema."""
-    logs = [
-        {
-            "timestamp": "2024-08-01T00:00:00",
-            "event_type": "user_login",
-            "user_id": "admin",
-            "source_ip": "192.0.2.1",
-            "hostname": "web-server-01"
-        },
-        {
-            "timestamp": "2024-08-01T00:00:05",
-            "event_type": "ssh_login_failure",
-            "user_id": "root",
-            "source_ip": "198.51.100.10",
-            "hostname": "db-server-01"
-        },
-        {
-            "timestamp": "2024-08-01T00:00:10",
-            "event_type": "ssh_login_failure",
-            "user_id": "root",
-            "source_ip": "198.51.100.10",
-            "hostname": "db-server-01"
-        },
-        {
-            "timestamp": "2024-08-01T00:00:15",
-            "event_type": "ssh_login_failure",
-            "user_id": "root",
-            "source_ip": "198.51.100.10",
-            "hostname": "db-server-01"
-        },
-        {
-            "timestamp": "2024-08-01T00:00:20",
-            "event_type": "ssh_login_success",
-            "user_id": "admin",
-            "source_ip": "198.51.100.10",
-            "hostname": "db-server-01"
-        },
-        {
-            "timestamp": "2024-08-01T00:00:25",
-            "event_type": "file_access",
-            "user_id": "john.doe",
-            "file_path": "/var/log/auth.log",
-            "access_type": "read"
-        }
-    ]
-    return json.dumps(logs, indent=2)
+from event_reader import get_log_events
+import json
 
 # --- Tool Definitions (for the Triage Team) ---
 def run_siem_query(query: str) -> str:
@@ -131,7 +83,7 @@ async def main():
     
     planner_proxy = UserProxyAgent(name="Planner_Proxy")
     
-    log_batch = generate_log_batch()
+    log_batch = get_log_events()
     print("--- RAW LOG BATCH ---")
     print(log_batch)
     print("\n--- RUNNING TRIAGE PLANNER ---")
