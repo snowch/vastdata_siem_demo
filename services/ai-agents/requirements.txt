@@ -1,0 +1,4 @@
+autogen_agentchat>=0.7.0
+autogen_ext>=0.7.0
+openai
+tiktoken

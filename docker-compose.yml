@@ -77,7 +77,7 @@ services:
       context: ./services/jupyspark/
       dockerfile: Dockerfile
       args:
-        spark_version: "3.4.4"
+        spark_version: "3.5.6"
         scala_version: "2.13"
     container_name: jupyspark
     restart: unless-stopped
@@ -208,6 +208,20 @@ services:
     depends_on:
       - trino
     restart: unless-stopped
+    profiles:
+      - all
+
+  ai-agents:
+    build:
+      context: ./services/ai-agents
+      dockerfile: Dockerfile
+    container_name: ai-agents
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./services/ai-agents/src:/app/src
+    command: ["python", "triage_service.py"]
     profiles:
       - all
 
