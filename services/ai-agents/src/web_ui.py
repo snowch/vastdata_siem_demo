@@ -1,10 +1,15 @@
 import asyncio
 from flask import Flask, request, render_template, jsonify
-from triage_service import get_prioritized_task, run_investigation_team # Import the refactored functions
+from triage_service import get_prioritized_task, init_logging # Import the refactored functions
+# from triage_service import get_prioritized_task, run_investigation_team, init_logging # Import the refactored functions
 import json
 import os
+import markdown
 
 app = Flask(__name__, template_folder='../templates')
+
+# Initialize logging for the triage service
+init_logging()
 
 @app.route('/')
 def index():
@@ -20,7 +25,7 @@ async def triage_agent():
 
     try:
         # Run the triage planning stage
-        prioritized_task = await get_prioritized_task(json.dumps(log_batch))
+        prioritized_task, planner_diagnostics = await get_prioritized_task(json.dumps(log_batch))
         
         # Optionally, run the investigation team and get its output
         # For simplicity, we'll just return the prioritized task for now
@@ -28,7 +33,10 @@ async def triage_agent():
         # to return the assessment_agent's final message.
         # await run_investigation_team(prioritized_task) 
 
-        return jsonify({"response": prioritized_task})
+        # Convert markdown to HTML if prioritized_task is markdown
+        prioritized_task_html = markdown.markdown(prioritized_task)
+
+        return jsonify({"response": prioritized_task_html, "thought_process": planner_diagnostics})
     except Exception as e:
         print(f"Error during triage: {e}")
         return jsonify({"error": str(e)}), 500
