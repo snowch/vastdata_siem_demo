@@ -54,6 +54,7 @@ graph TD
     S -- Consumes --> K
     J -- Writes To --> VDB
     T -- Queries --> VDB
+    B -- Queries --> VDB
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
