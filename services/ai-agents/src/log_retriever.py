@@ -1,3 +1,4 @@
+import os
 import trino
 import json
 import logging
@@ -10,7 +11,8 @@ def get_logs():
     trino_port = 8080
     trino_user = 'admin'
     trino_catalog = 'vast'
-    trino_schema = 'siem'
+    trino_db = os.getenv('VASTDB_FLUENTD_BUCKET', 'csnow-db')
+    trino_schema = os.getenv('VASTDB_FLUENTD_SCHEMA', 'siem')
 
     logs = []
     try:
@@ -24,7 +26,7 @@ def get_logs():
             cursor = connection.cursor()
             query = f"""
                 SELECT raw_data, time_dt
-                FROM "csnow-db|siem"."fluentd_detection_finding"
+                FROM "{trino_db}|{trino_schema}"."fluentd_detection_finding"
                 ORDER BY time_dt DESC
                 LIMIT 20
             """
