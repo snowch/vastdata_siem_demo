@@ -36,7 +36,8 @@
         "hostname": "web-server-01"
     }
 ]'></textarea>
-        <button onclick="submitLogs()">Submit Logs</button>
+        <button onclick="retrieveLogs()">Retrieve Logs</button>
+        <button onclick="submitLogs()">Analyse Logs</button>
         <div class="loading" id="loadingSpinner">Loading...</div>
         <div class="response-area" id="agentResponse">
             <!-- Agent responses will appear here -->
@@ -44,6 +45,37 @@
     </div>
 
     <script>
+        async function retrieveLogs() {
+            const agentResponseDiv = document.getElementById('agentResponse');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            agentResponseDiv.textContent = ''; // Clear previous response
+            loadingSpinner.style.display = 'block'; // Show loading spinner
+
+            try {
+                // Hardcoded API call for now
+                const response = await fetch('/retrieve_logs', {
+                    method: 'GET', // Or POST, depending on future API design
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                document.getElementById('logInput').value = JSON.stringify(data, null, 2);
+                agentResponseDiv.textContent = 'Logs retrieved successfully and populated into the input area.';
+            } catch (error) {
+                console.error('Error retrieving logs:', error);
+                agentResponseDiv.textContent = `Error retrieving logs: ${error.message}. Please check console for details.`;
+            } finally {
+                loadingSpinner.style.display = 'none'; // Hide loading spinner
+            }
+        }
+
         async function submitLogs() {
             const logInput = document.getElementById('logInput').value;
             const agentResponseDiv = document.getElementById('agentResponse');

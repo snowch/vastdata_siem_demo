@@ -1,6 +1,7 @@
 import asyncio
 from flask import Flask, request, render_template, jsonify
 from triage_service import get_prioritized_task, init_logging # Import the refactored functions
+from log_retriever import get_logs # Import the new log retriever
 # from triage_service import get_prioritized_task, run_investigation_team, init_logging # Import the refactored functions
 import json
 import os
@@ -14,6 +15,11 @@ init_logging()
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/retrieve_logs', methods=['GET'])
+def retrieve_logs():
+    logs = get_logs()
+    return jsonify(logs)
 
 @app.route('/triage', methods=['POST'])
 async def triage_agent():

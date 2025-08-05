@@ -4,7 +4,6 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.messages import TextMessage, BaseAgentEvent, ToolCallRequestEvent, ToolCallExecutionEvent
 from autogen_core import CancellationToken
-from event_reader import get_log_events
 import json
 import logging
 from autogen_core import TRACE_LOGGER_NAME, EVENT_LOGGER_NAME

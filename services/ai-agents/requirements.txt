@@ -4,3 +4,4 @@ openai
 tiktoken
 Flask[async]
 markdown
+trino
