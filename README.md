@@ -58,49 +58,7 @@ More screenshots ...
 
 The application consists of Docker Compose services.
 
-```mermaid
-graph LR
-    subgraph "Docker Services"
-        Z[Zeek Monitor - eth0]
-        S[SIEM Simulator]
-        F[Fluentd]
-        J[Bytewax ELT]
-        T[Trino]
-        DBT[DBT-Labs]
-        AS[Superset]
-        B[Jupyter + Spark]
-
-        S -- Simulate Log Files --> F
-        S -- Simulated Network Traffic --> Z
-        AS -- Queries --> T
-    end
-
-    subgraph "Docker Host"
-        SW[Simulator Web UI - 8080]
-        JW[Jupyter Web UI - 8888]
-        ASW[Superset Web UI - 8088]
-        TW[Trino Web UI - 18080]
-    end
-
-    subgraph "Vast Cluster"
-        K[Vast Kafka Broker]
-        VDB[Vast Database]
-    end
-
-    S -- Port Forward --> SW
-    AS -- Port Forward --> ASW
-    T -- Port Forward --> TW
-    B -- Port Foward --> JW
-
-    F -- Publishes --> K
-    Z -- Publishes --> K
-    J -- Consumes --> K
-    S -- Consumes --> K
-    J -- Writes To --> VDB
-    T -- Queries --> VDB
-    B -- Queries --> VDB
-    DBT -- Queries/Updates --> T
-```
+![architecture](./architecture.png)
 
 -   **SIEM-simulator**: A Python-based container using Scapy and other tools to generate various types of network traffic and SIEM events. It includes a web interface for easy control.
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
