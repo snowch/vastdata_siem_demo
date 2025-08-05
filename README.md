@@ -52,7 +52,11 @@ More screenshots ...
 ![spark_notebook](./docs/spark_notebook.png)
 </details>
 
-
+<details>
+<summary>AI Agent UI</summary>
+    
+![ai agent](./docs/aiagent.png)
+</details>
 
 ## Architecture
 
