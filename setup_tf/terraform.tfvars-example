@@ -1,0 +1,4 @@
+vast_host     = "10.10.10.1"
+vast_port     = 443
+vast_user     = "admin"
+vast_password = "123456"
