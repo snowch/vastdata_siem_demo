@@ -15,7 +15,7 @@ Trino SQL query engine and Superset visualisation and exploration applications h
 The application consists of two main Docker services connected via a standard Docker bridge network (`zeek-network`). Zeek monitors the traffic flowing between containers on this network and outputs logs to a Kafka broker.
 
 ```mermaid
-graph LR
+graph TD
     subgraph "Docker Services"
         Z[Zeek Monitor - eth0]
         S[SIEM Simulator]
@@ -24,17 +24,23 @@ graph LR
         T[Trino]
         AS[Superset]
         B[Jupyter + Spark]
+        AI[AI Agent UI]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
         AS -- Queries --> T
-    end
+        AI -- Queries --> T
 
-    subgraph "Docker Host"
-        SW[Simulator Web UI - 8080]
-        JW[Jupyter Web UI - 8888]
-        ASW[Superset Web UI - 8088]
-        TW[Trino Web UI - 18080]
+        subgraph "Docker Host (UIs)"
+            SW[Simulator Web UI - 8080]
+            JW[Jupyter Web UI - 8888]
+            ASW[Superset Web UI - 8088]
+            TW[Trino Web UI - 18080]
+            AG[AI Agent Web UI - 5000]
+
+            %% This is the new line that forces the vertical layout %%
+            SW ~~~ JW ~~~ ASW ~~~ TW ~~~ AG
+        end
     end
 
     subgraph "Vast Cluster"
@@ -42,17 +48,13 @@ graph LR
         VDB[Vast Database]
     end
 
-    S -- Port Forward --> SW
-    AS -- Port Forward --> ASW
-    T -- Port Forward --> TW
-    B -- Port Foward --> JW
-
     F -- Publishes --> K
     Z -- Publishes --> K
     J -- Consumes --> K
     S -- Consumes --> K
     J -- Writes To --> VDB
     T -- Queries --> VDB
+    B -- Queries --> VDB
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
