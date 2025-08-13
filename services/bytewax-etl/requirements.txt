@@ -10,4 +10,6 @@ fastavro
 requests
 vastdb
 pydantic[email]
-
+chromadb
+openai
+chromadb

@@ -3,16 +3,17 @@ include:
 - path: ./services/superset/docker-compose.yml
 
 services:
-  milvus:
-    image: milvusdb/milvus:v2.4.0
-    container_name: milvus
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma
     ports:
-      - "19530:19530"   # Milvus gRPC
-      - "9091:9091"     # Milvus HTTP
-    environment:
-      - TZ=UTC
+      - "8000:8000"
     volumes:
-      - milvus_data:/var/lib/milvus
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
     restart: unless-stopped
 
   # Simplified Zeek monitoring using container's default network interface
@@ -237,7 +238,7 @@ services:
       - all
 
 volumes:
-  milvus_data:
+  chroma_data:
 
 networks:
   zeek-network:

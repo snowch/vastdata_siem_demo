@@ -21,6 +21,7 @@ from pydantic_settings import BaseSettings
 from .pydantic_utils import pydantic_to_arrow_table
 from .vastdb_utils import connect_to_vastdb, write_to_vastdb
 from .zeek_models import *
+from . import vectordb_utils
 
 # Configure logging
 logging.basicConfig(
@@ -212,6 +213,17 @@ class ZeekLogProcessor:
                 table_name,
                 pa_table
             )
+
+            # Write to ChromaDB
+            try:
+                # Use the validated_log as text (JSON string)
+                event_text = validated_log.json()
+                embedding_raw = vectordb_utils.embed_text(event_text)
+                embedding_norm = vectordb_utils.normalize_embedding(embedding_raw)
+                vectordb_utils.insert_event(event_text, embedding_raw, embedding_norm)
+                logger.info(f"Successfully wrote {log_type} log to ChromaDB")
+            except Exception as chroma_exc:
+                logger.error(f"Failed to write {log_type} log to ChromaDB: {chroma_exc}")
             
             logger.info(f"Successfully wrote {log_type} log to VastDB table {table_name}")
             return True

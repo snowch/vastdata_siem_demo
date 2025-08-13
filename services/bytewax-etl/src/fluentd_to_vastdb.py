@@ -24,6 +24,7 @@ from py_ocsf_models.events.file_system.file_system_activity import FileSystemAct
 
 from .pydantic_utils import pydantic_to_arrow_table
 from .vastdb_utils import connect_to_vastdb, write_to_vastdb
+from . import vectordb_utils
 
 # Configure logging
 logging.basicConfig(
@@ -147,7 +148,7 @@ class OCSFEventProcessor:
     def write_event_to_vastdb(self, event: Union[ComplianceFinding, DetectionFinding, Authentication], 
                              event_class_name: str) -> bool:
         """
-        Write validated event to VastDB.
+        Write validated event to VastDB and ChromaDB.
         
         Returns:
             True if successful, False otherwise
@@ -166,6 +167,16 @@ class OCSFEventProcessor:
                 table_name,
                 pa_table
             )
+            
+            # Write to ChromaDB
+            try:
+                event_text = event.json()
+                embedding_raw = vectordb_utils.embed_text(event_text)
+                embedding_norm = vectordb_utils.normalize_embedding(embedding_raw)
+                vectordb_utils.insert_event(event_text, embedding_raw, embedding_norm)
+                logger.info(f"Successfully wrote {event_class_name} to ChromaDB")
+            except Exception as chroma_exc:
+                logger.error(f"Failed to write {event_class_name} to ChromaDB: {chroma_exc}")
             
             logger.info(f"Successfully wrote {event_class_name} to VastDB")
             return True
