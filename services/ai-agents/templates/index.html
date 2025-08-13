@@ -11,7 +11,7 @@
         textarea { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; }
         button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         button:hover { background-color: #0056b3; }
-        .response-area { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 20px; }
+        .response-area { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 16px; }
         .loading { text-align: center; margin-top: 10px; display: none; }
     </style>
 </head>
@@ -19,7 +19,7 @@
     <div class="container">
         <h1>AI Agent Triage Interface</h1>
         <p>Retrieve security logs from Vast to get a prioritized task from the Triage Planner Agent.</p>
-        <button onclick="retrieveLogs()">Retrieve Logs</button>
+        <button onclick="retrieveLogs()" style="margin-bottom: 10px;">Retrieve Logs</button>
         <textarea id="logInput" rows="10" placeholder='Retrieved logs will appear here.
 '></textarea>
         <button onclick="submitLogs()">Analyse Logs</button>

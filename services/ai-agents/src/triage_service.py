@@ -13,6 +13,10 @@ trace_logger = None
 event_logger = None
 agent_logger = None
 
+# TODO: @/services/ai-agents/src/triage_service.py  ... 
+#       Agent should call the LLM chroma_search tool → Fetches top matching docs 
+#       from Chroma and pass the matchng docs along with..
+
 def init_logging():
     """Initializes logging for the triage service."""
     global trace_logger, event_logger, agent_logger
@@ -45,77 +49,6 @@ def init_logging():
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     agent_logger.addHandler(handler)
-
-# --- Tool Definitions (for the Triage Team) ---
-def run_siem_query(query: str) -> str:
-    """Executes a search query against the SIEM and returns the results as a JSON string."""
-    print(f"--- EXECUTING TOOL: run_siem_query ---")
-    print(f"--- QUERY: {query} ---")
-    if agent_logger:
-        agent_logger.info(f"SIEM Query Executed: {query}")
-    
-    if "198.51.100.10" in query:
-        # Return only the logs matching the suspicious IP from our simulated batch
-        mock_siem_results = [
-            {
-                "timestamp": "2024-08-01T00:00:05",
-                "event_type": "ssh_login_failure",
-                "user_id": "root",
-                "source_ip": "198.51.100.10",
-                "hostname": "db-server-01"
-            },
-            {
-                "timestamp": "2024-08-01T00:00:10",
-                "event_type": "ssh_login_failure",
-                "user_id": "root",
-                "source_ip": "198.51.100.10",
-                "hostname": "db-server-01"
-            },
-            {
-                "timestamp": "2024-08-01T00:00:15",
-                "event_type": "ssh_login_failure",
-                "user_id": "root",
-                "source_ip": "198.51.100.10",
-                "hostname": "db-server-01"
-            },
-            {
-                "timestamp": "2024-08-01T00:00:20",
-                "event_type": "ssh_login_success",
-                "user_id": "admin",
-                "source_ip": "198.51.100.10",
-                "hostname": "db-server-01"
-            }
-        ]
-        result = json.dumps(mock_siem_results, indent=2)
-        if agent_logger:
-            agent_logger.info(f"SIEM Query Results: {len(mock_siem_results)} records found")
-        return result
-    
-    if agent_logger:
-        agent_logger.info("SIEM Query Results: No records found")
-    return json.dumps([])
-
-def enrich_indicator(indicator: str, source: str = "virustotal") -> str:
-    """Enriches a given security indicator using a threat intelligence source."""
-    if agent_logger:
-        agent_logger.info(f"Enriching indicator: {indicator} using source: {source}")
-    
-    if indicator == "198.51.100.10":
-        enrichment_data = {
-            "indicator": indicator,
-            "source": source,
-            "is_malicious": True,
-            "reputation_score": 85,
-            "country": "RU",
-            "last_analysis_date": "2024-08-15"
-        }
-        if agent_logger:
-            agent_logger.info(f"Enrichment completed - Malicious: True, Score: 85")
-        return json.dumps(enrichment_data, indent=2)
-    
-    if agent_logger:
-        agent_logger.info(f"Enrichment completed - Malicious: False")
-    return json.dumps({"is_malicious": False})
 
 def log_all_messages(messages, context="Unknown"):
     """Log all messages with context and debugging."""
@@ -187,6 +120,11 @@ async def get_prioritized_task(log_batch: str) -> tuple[str, list]:
     if agent_logger:
         agent_logger.info(f"Planner diagnostics collected: {len(planner_diagnostics)} messages")
     return prioritized_task, planner_diagnostics
+
+
+
+
+
 
 # async def run_investigation_team(prioritized_task: str) -> tuple[str, list]:
 #     if agent_logger:
