@@ -44,5 +44,5 @@ def get_logs():
                     logs.append({"raw_data": row[0], "parse_error": "Not a valid JSON string"})
         return logs
     except Exception as e:
-        logger.error(f"Error connecting to Trino or executing query: {e}")
-        return []
+        logger.error(e)
+        raise(e)

@@ -18,25 +18,10 @@
 <body>
     <div class="container">
         <h1>AI Agent Triage Interface</h1>
-        <p>Enter raw security logs (JSON format) to get a prioritized task from the Triage Planner Agent.</p>
-        <textarea id="logInput" rows="10" placeholder='Paste your JSON logs here, e.g.:
-[
-    {
-        "timestamp": "2024-08-01T00:00:01",
-        "event_type": "network_connection",
-        "source_ip": "192.168.1.10",
-        "destination_ip": "10.0.0.5",
-        "port": 80
-    },
-    {
-        "timestamp": "2024-08-01T00:00:02",
-        "event_type": "ssh_login_failure",
-        "user_id": "user1",
-        "source_ip": "198.51.100.10",
-        "hostname": "web-server-01"
-    }
-]'></textarea>
+        <p>Retrieve security logs from Vast to get a prioritized task from the Triage Planner Agent.</p>
         <button onclick="retrieveLogs()">Retrieve Logs</button>
+        <textarea id="logInput" rows="10" placeholder='Retrieved logs will appear here.
+'></textarea>
         <button onclick="submitLogs()">Analyse Logs</button>
         <div class="loading" id="loadingSpinner">Loading...</div>
         <div class="response-area" id="agentResponse">

@@ -18,8 +18,11 @@ def index():
 
 @app.route('/retrieve_logs', methods=['GET'])
 def retrieve_logs():
-    logs = get_logs()
-    return jsonify(logs)
+    try:
+        logs = get_logs()
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({ "error_retrieving_logs": str(e) })
 
 @app.route('/triage', methods=['POST'])
 async def triage_agent():

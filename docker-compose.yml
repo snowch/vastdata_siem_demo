@@ -219,9 +219,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    volumes:
-      - ./services/ai-agents/src:/app/src
-    command: ["python", "triage_service.py"]
+    ports:
+      - "5000:5000" # Flask web UI
     profiles:
       - all
 

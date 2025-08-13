@@ -1,2 +1,3 @@
 ${sys:SPARK_LOGS_DIR}/
 .ipynb_checkpoints/
+metastore_db/
