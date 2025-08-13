@@ -34,7 +34,7 @@ async def triage_agent():
 
     try:
         # Run the triage planning stage
-        prioritized_task, planner_diagnostics = await get_prioritized_task(json.dumps(log_batch))
+        prioritized_task, planner_diagnostics, chroma_results = await get_prioritized_task(json.dumps(log_batch))
         
         # Optionally, run the investigation team and get its output
         # For simplicity, we'll just return the prioritized task for now
@@ -45,7 +45,7 @@ async def triage_agent():
         # Convert markdown to HTML if prioritized_task is markdown
         prioritized_task_html = markdown.markdown(prioritized_task)
 
-        return jsonify({"response": prioritized_task_html, "thought_process": planner_diagnostics})
+        return jsonify({"response": prioritized_task_html, "thought_process": planner_diagnostics, "chroma_results": chroma_results})
     except Exception as e:
         print(f"Error during triage: {e}")
         return jsonify({"error": str(e)}), 500

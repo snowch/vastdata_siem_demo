@@ -5,3 +5,4 @@ tiktoken
 Flask[async]
 markdown
 trino
+chromadb

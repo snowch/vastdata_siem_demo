@@ -7,6 +7,7 @@ from autogen_core import CancellationToken
 import json
 import logging
 from autogen_core import TRACE_LOGGER_NAME, EVENT_LOGGER_NAME
+from vectordb_utils import search_chroma
 
 # Global logger instances (initialized by init_logging)
 trace_logger = None
@@ -61,7 +62,7 @@ def log_all_messages(messages, context="Unknown"):
             except Exception as e:
                 agent_logger.error('Error at %s', exc_info=e)
 
-async def get_prioritized_task(log_batch: str) -> tuple[str, list]:
+async def get_prioritized_task(log_batch: str) -> tuple[str, list, dict]:
     if agent_logger:
         agent_logger.info("Starting prioritized task analysis")
     
@@ -101,6 +102,16 @@ async def get_prioritized_task(log_batch: str) -> tuple[str, list]:
     if agent_logger:
         agent_logger.info(f"Triage planner completed. Task: {prioritized_task}")
     
+    # ChromaDB search for relevant context
+    try:
+        chroma_results = search_chroma(prioritized_task, n_results=5)
+        if agent_logger:
+            agent_logger.info(f"Chroma search returned {len(chroma_results.get('documents', []))} results")
+    except Exception as e:
+        chroma_results = {"error": str(e)}
+        if agent_logger:
+            agent_logger.error(f"Chroma search failed: {e}")
+
     await model_client.close()
     
     # Enhanced message collection - now we get the full thought process!
@@ -118,8 +129,10 @@ async def get_prioritized_task(log_batch: str) -> tuple[str, list]:
             agent_logger.warning("No messages found in planner result")
     
     if agent_logger:
+        agent_logger.debug(chroma_results)
         agent_logger.info(f"Planner diagnostics collected: {len(planner_diagnostics)} messages")
-    return prioritized_task, planner_diagnostics
+
+    return prioritized_task, planner_diagnostics, chroma_results
 
 
 
