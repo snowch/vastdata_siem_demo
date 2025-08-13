@@ -3,6 +3,18 @@ include:
 - path: ./services/superset/docker-compose.yml
 
 services:
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: milvus
+    ports:
+      - "19530:19530"   # Milvus gRPC
+      - "9091:9091"     # Milvus HTTP
+    environment:
+      - TZ=UTC
+    volumes:
+      - milvus_data:/var/lib/milvus
+    restart: unless-stopped
+
   # Simplified Zeek monitoring using container's default network interface
   zeek-live:
     build:
@@ -223,6 +235,9 @@ services:
       - "5000:5000" # Flask web UI
     profiles:
       - all
+
+volumes:
+  milvus_data:
 
 networks:
   zeek-network:
