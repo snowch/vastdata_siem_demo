@@ -56,3 +56,23 @@ variable "s3_view_path" {
   type        = string
   description = "The path for the s3 view."
 }
+
+variable "vip_pool_name" {
+  type        = string
+  description = "The name for the vip pool."
+}
+
+variable "vip_pool_start_ip" {
+  type        = string
+  description = "The start IP for the vip pool."
+}
+
+variable "vip_pool_end_ip" {
+  type        = string
+  description = "The end IP for the vip pool."
+}
+
+variable "vip_pool_subnet_cidr" {
+  type        = string
+  description = "The subnet cidr for the vip pool."
+}

@@ -4,6 +4,12 @@ vast_user     = "admin"
 vast_password = "123456"
 
 tenant_name   = "default"      # only the default tenant is supported
+
+vip_pool_name        = "john_doe_vip"
+vip_pool_start_ip    = "172.200.204.211"
+vip_pool_end_ip      = "172.200.204.212"
+vip_pool_subnet_cidr = "16"
+
 user_name     = "john.doe"
 user_context  = "ad"           #  "ad", "nis" or "ldap"
 
