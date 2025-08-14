@@ -22,6 +22,21 @@ variable "vast_password" {
   sensitive   = true
 }
 
+variable "tenant_name" {
+  type        = string
+  description = "The Tenant Name."
+}
+
+variable "user_name" {
+  type        = string
+  description = "The User Name."
+}
+
+variable "user_context" {
+  type        = string
+  description = "The User Context."
+}
+
 variable "database_owner" {
   type        = string
   description = "The name of the user to be created as the database owner."

@@ -2,3 +2,7 @@ vast_host     = "10.10.10.1"
 vast_port     = 443
 vast_user     = "admin"
 vast_password = "123456"
+
+tenant_name   = "default"      # only the default tenant is supported
+user_name     = "john.doe"
+user_context  = "ad"           #  "ad", "nis" or "ldap"
