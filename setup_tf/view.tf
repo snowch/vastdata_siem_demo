@@ -9,7 +9,6 @@ resource "vastdata_view" "database_view" {
   bucket_owner = data.vastdata_non_local_user.the_user.username
   create_dir   = true
   policy_id    = data.vastdata_view_policy.s3policy.id
-  # depends_on = [vastdata_vip_pool.demo_pool]
 }
 
 resource "vastdata_view" "s3_view" {
@@ -19,5 +18,14 @@ resource "vastdata_view" "s3_view" {
   bucket_owner = data.vastdata_non_local_user.the_user.username
   create_dir   = true
   policy_id    = data.vastdata_view_policy.s3policy.id
-  # depends_on = [vastdata_vip_pool.demo_pool]
+}
+
+resource "vastdata_view" "kafka_view" {
+  path            = var.kafka_view_path
+  protocols       = ["S3", "DATABASE", "KAFKA"]
+  bucket          = var.kafka_view_name
+  bucket_owner    = data.vastdata_non_local_user.the_user.username
+  create_dir      = true
+  policy_id       = data.vastdata_view_policy.s3policy.id
+  kafka_vip_pools = [ vastdata_vip_pool.pool1.id ]
 }

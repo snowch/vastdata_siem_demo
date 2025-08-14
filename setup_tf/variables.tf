@@ -57,6 +57,16 @@ variable "s3_view_path" {
   description = "The path for the s3 view."
 }
 
+variable "kafka_view_name" {
+  type        = string
+  description = "The name of the kafka bucket."
+}
+
+variable "kafka_view_path" {
+  type        = string
+  description = "The path for the kafka view."
+}
+
 variable "vip_pool_name" {
   type        = string
   description = "The name for the vip pool."
