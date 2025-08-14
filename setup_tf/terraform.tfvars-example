@@ -6,3 +6,9 @@ vast_password = "123456"
 tenant_name   = "default"      # only the default tenant is supported
 user_name     = "john.doe"
 user_context  = "ad"           #  "ad", "nis" or "ldap"
+
+database_view_path = "/johndoe-db"
+database_view_name = "johndoe-db"
+
+s3_view_path = "/johndoe-s3"
+s3_view_name = "johndoe-s3"

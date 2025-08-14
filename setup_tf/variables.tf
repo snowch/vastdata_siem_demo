@@ -37,20 +37,22 @@ variable "user_context" {
   description = "The User Context."
 }
 
-variable "database_owner" {
+variable "database_view_name" {
   type        = string
-  description = "The name of the user to be created as the database owner."
-  default     = "demo-owner"
-}
-
-variable "database_name" {
-  type        = string
-  description = "The name of the database (and bucket)."
-  default     = "demo-database"
+  description = "The name of the database (bucket)."
 }
 
 variable "database_view_path" {
   type        = string
-  description = "The path for the new view."
-  default     = "/demo-view"
+  description = "The path for the new database view."
+}
+
+variable "s3_view_name" {
+  type        = string
+  description = "The name of the s3 bucket."
+}
+
+variable "s3_view_path" {
+  type        = string
+  description = "The path for the s3 view."
 }
