@@ -71,7 +71,7 @@ The application consists of Docker Compose services.
 -   **trino**: A distributed SQL query engine that provides the primary interface for analyzing data stored in the Vast Database. Includes a web UI for query execution and management.
 -   **superset**: An Apache Superset web application for data visualization and dashboard creation, with pre-configured connections to Trino for exploring SIEM analytics data.
 -   **jupyspark**: A Jupyter Notebook environment with Apache Spark pre-installed for data analysis and processing.
--   **AI Agent UI**: (work in progress).  UI for interacting with AI agents to help automate role of security analyst.
+-   **AI Agent UI**: (work in progress).  UI for interacting with AI agents to help automate role of security analyst.  Currently the agent functionality relies on local (CPU) based sentence_transformer for embeddings with chromadb, OpenAI for LLM interactions, and Microsoft Autogen as the agentic framework.
 
 ## Setup
 
