@@ -32,7 +32,12 @@
         <button onclick="submitLogs()">Analyse Logs</button>
         <div class="loading" id="loadingSpinner">Loading...</div>
         <div class="response-area" id="agentResponse">
+            <h2>Agent Response</h2>
             <!-- Agent responses will appear here -->
+        </div>
+        <div class="response-area" id="prioritizedTask" style="margin-top: 20px;">
+            <h2>Prioritized Task</h2>
+            <!-- Prioritized task will appear here -->
         </div>
         <div class="response-area" id="chromaResults" style="margin-top: 20px;">
             <h2>ChromaDB Results</h2>
@@ -45,9 +50,11 @@
             const agentResponseDiv = document.getElementById('agentResponse');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const chromaResultsDiv = document.getElementById('chromaResults');
+            const prioritizedTaskDiv = document.getElementById('prioritizedTask');
 
             agentResponseDiv.textContent = ''; // Clear previous response
             chromaResultsDiv.innerHTML = '<h2>ChromaDB Results</h2>'; // Clear previous Chroma results
+            prioritizedTaskDiv.innerHTML = '<h2>Prioritized Task</h2>'; // Clear previous prioritized task
             loadingSpinner.style.display = 'block'; // Show loading spinner
 
             try {
@@ -79,9 +86,11 @@
             const agentResponseDiv = document.getElementById('agentResponse');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const chromaResultsDiv = document.getElementById('chromaResults');
+            const prioritizedTaskDiv = document.getElementById('prioritizedTask');
 
             agentResponseDiv.textContent = ''; // Clear previous response
             chromaResultsDiv.innerHTML = '<h2>ChromaDB Results</h2>'; // Clear previous Chroma results
+            prioritizedTaskDiv.innerHTML = '<h2>Prioritized Task</h2>'; // Clear previous prioritized task
 
             if (!logInput.trim()) { // Check if input is empty or just whitespace
                 agentResponseDiv.textContent = 'Error: Please paste security logs into the input area.';
@@ -105,6 +114,13 @@
 
                 const data = await response.json();
                 agentResponseDiv.innerHTML = data.response;
+
+                // Display prioritized task if available
+                if (data.response) {
+                    prioritizedTaskDiv.innerHTML += `<pre>${data.response}</pre>`;
+                } else {
+                    prioritizedTaskDiv.innerHTML += '<p>No prioritized task found.</p>';
+                }
 
                 // Display ChromaDB results as pretty-printed JSON if available
                 if (data.chroma_results) {
