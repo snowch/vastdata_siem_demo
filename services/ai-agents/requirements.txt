@@ -6,3 +6,4 @@ Flask[async]
 markdown
 trino
 chromadb
+sentence-transformers

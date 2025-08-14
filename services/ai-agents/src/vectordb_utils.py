@@ -1,10 +1,10 @@
 import os
-from openai import OpenAI
 import chromadb
+from sentence_transformers import SentenceTransformer
 
-# OpenAI embeddings
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "YOUR_OPENAI_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Local CPU embedding model - same as bytewax-etl service
+# Using 'all-MiniLM-L6-v2' to match the embeddings stored in ChromaDB
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # ChromaDB client setup
 # Connect to ChromaDB server running in Docker Compose (service name 'chroma', port 8000)
@@ -14,15 +14,12 @@ COLLECTION_NAME = "security_events_dual"
 
 def embed_text(text):
     """
-    Generate an embedding for the given text using OpenAI.
+    Generate an embedding for the given text using the same model as bytewax-etl.
     :param text: str
-    :return: list[float] (dim=1536)
+    :return: list[float] (dim=384)
     """
-    resp = client.embeddings.create(
-        model="text-embedding-3-large",
-        input=text
-    )
-    return resp.data[0].embedding
+    embedding = model.encode(text).tolist()
+    return embedding
 
 def get_or_create_collection():
     """
@@ -46,6 +43,6 @@ def search_chroma(query_text, n_results=5):
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
-        include=["documents", "distances"]
+        include=["documents", "distances", "embeddings", "metadatas"] # Include embeddings and metadatas
     )
     return results

@@ -13,6 +13,12 @@
         button:hover { background-color: #0056b3; }
         .response-area { background-color: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 16px; }
         .loading { text-align: center; margin-top: 10px; display: none; }
+        #chromaResults pre {
+            max-height: 300px; /* Adjust as needed */
+            overflow: auto;
+            white-space: pre; /* Ensures long lines do not wrap, enabling horizontal scroll */
+            /* Removed word-wrap: break-word; to prevent wrapping */
+        }
     </style>
 </head>
 <body>
@@ -27,14 +33,20 @@
         <div class="response-area" id="agentResponse">
             <!-- Agent responses will appear here -->
         </div>
+        <div class="response-area" id="chromaResults" style="margin-top: 20px;">
+            <h2>ChromaDB Results</h2>
+            <!-- ChromaDB results will appear here -->
+        </div>
     </div>
 
     <script>
         async function retrieveLogs() {
             const agentResponseDiv = document.getElementById('agentResponse');
             const loadingSpinner = document.getElementById('loadingSpinner');
+            const chromaResultsDiv = document.getElementById('chromaResults');
 
             agentResponseDiv.textContent = ''; // Clear previous response
+            chromaResultsDiv.innerHTML = '<h2>ChromaDB Results</h2>'; // Clear previous Chroma results
             loadingSpinner.style.display = 'block'; // Show loading spinner
 
             try {
@@ -65,8 +77,10 @@
             const logInput = document.getElementById('logInput').value;
             const agentResponseDiv = document.getElementById('agentResponse');
             const loadingSpinner = document.getElementById('loadingSpinner');
+            const chromaResultsDiv = document.getElementById('chromaResults');
 
             agentResponseDiv.textContent = ''; // Clear previous response
+            chromaResultsDiv.innerHTML = '<h2>ChromaDB Results</h2>'; // Clear previous Chroma results
 
             if (!logInput.trim()) { // Check if input is empty or just whitespace
                 agentResponseDiv.textContent = 'Error: Please paste security logs into the input area.';
@@ -90,6 +104,57 @@
 
                 const data = await response.json();
                 agentResponseDiv.innerHTML = data.response;
+
+                // Display ChromaDB results as pretty-printed JSON if available
+                if (data.chroma_results) {
+                    let chromaToDisplay = data.chroma_results;
+
+                    // If the top-level chroma_results is a string, parse it first
+                    if (typeof chromaToDisplay === 'string') {
+                        try {
+                            chromaToDisplay = JSON.parse(chromaToDisplay);
+                        } catch (e) {
+                            console.error("Error parsing top-level chroma_results string:", e);
+                            // If it's not a valid JSON string, keep it as is for stringify
+                        }
+                    }
+
+                    // Check if 'documents' array exists and contains nested arrays of strings that need parsing
+                    if (chromaToDisplay && chromaToDisplay.documents && Array.isArray(chromaToDisplay.documents)) {
+                        chromaToDisplay.documents = chromaToDisplay.documents.map(innerDocArray => {
+                            if (Array.isArray(innerDocArray)) {
+                                return innerDocArray.map(doc => {
+                                    let parsedDoc = doc;
+                                    if (typeof doc === 'string') {
+                                        try {
+                                            parsedDoc = JSON.parse(doc);
+                                        } catch (e) {
+                                            console.error("Error parsing document string:", e);
+                                            // Keep original if parsing fails
+                                        }
+                                    }
+
+                                    // Now check for raw_data inside the parsed document
+                                    if (parsedDoc && typeof parsedDoc.raw_data === 'string') {
+                                        try {
+                                            parsedDoc.raw_data = JSON.parse(parsedDoc.raw_data);
+                                        } catch (e) {
+                                            console.error("Error parsing raw_data string:", e);
+                                            // Keep original if parsing fails
+                                        }
+                                    }
+                                    return parsedDoc;
+                                });
+                            }
+                            return innerDocArray; // Return as is if not an array
+                        });
+                    }
+
+                    chromaResultsDiv.innerHTML += `<pre>${JSON.stringify(chromaToDisplay, null, 2)}</pre>`;
+                } else {
+                    chromaResultsDiv.innerHTML += '<p>No ChromaDB results found.</p>';
+                }
+
             } catch (error) {
                 console.error('Error:', error);
                 agentResponseDiv.textContent = `Error: ${error.message}. Please check console for details.`;
