@@ -1,9 +1,5 @@
 Setup automation for VAST SE Labs.
 
-Limitations:
-
-- does not deploy kafka (coming soon)
-
 Expectations:
 
 - setup is for default tenant only.
