@@ -113,6 +113,7 @@ services:
     build:
       context: ./services/bytewax-etl
       dockerfile: Dockerfile
+    image: bytewax-etl-image # Define a common image name
     container_name: bytewax-fluentd-etl
     restart: unless-stopped
     env_file: .env
@@ -134,9 +135,7 @@ services:
 
 
   bytewax-zeek-etl:
-    build:
-      context: ./services/bytewax-etl
-      dockerfile: Dockerfile
+    image: bytewax-etl-image # Use the common image name
     container_name: bytewax-zeek-etl
     restart: unless-stopped
     env_file: .env

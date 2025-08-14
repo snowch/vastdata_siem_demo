@@ -218,9 +218,7 @@ class ZeekLogProcessor:
             try:
                 # Use the validated_log as text (JSON string)
                 event_text = validated_log.json()
-                embedding_raw = vectordb_utils.embed_text(event_text)
-                embedding_norm = vectordb_utils.normalize_embedding(embedding_raw)
-                vectordb_utils.insert_event(event_text, embedding_raw, embedding_norm)
+                vectordb_utils.insert_event(event_text)
                 logger.info(f"Successfully wrote {log_type} log to ChromaDB")
             except Exception as chroma_exc:
                 logger.error(f"Failed to write {log_type} log to ChromaDB: {chroma_exc}")

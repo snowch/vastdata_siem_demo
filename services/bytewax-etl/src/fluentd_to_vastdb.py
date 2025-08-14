@@ -171,9 +171,7 @@ class OCSFEventProcessor:
             # Write to ChromaDB
             try:
                 event_text = event.json()
-                embedding_raw = vectordb_utils.embed_text(event_text)
-                embedding_norm = vectordb_utils.normalize_embedding(embedding_raw)
-                vectordb_utils.insert_event(event_text, embedding_raw, embedding_norm)
+                vectordb_utils.insert_event(event_text)
                 logger.info(f"Successfully wrote {event_class_name} to ChromaDB")
             except Exception as chroma_exc:
                 logger.error(f"Failed to write {event_class_name} to ChromaDB: {chroma_exc}")
