@@ -31,6 +31,7 @@ graph TD
         AS -- Queries --> T
         AI -- Queries --> T
 
+
         subgraph "Docker Host (UIs)"
             SW[Simulator Web UI - 8080]
             JW[Jupyter Web UI - 8888]
@@ -44,6 +45,7 @@ graph TD
     end
 
     subgraph "Vast Cluster"
+        V[Vector DB]
         K[Vast Kafka Broker]
         VDB[Vast Database]
     end
@@ -53,8 +55,10 @@ graph TD
     J -- Consumes --> K
     S -- Consumes --> K
     J -- Writes To --> VDB
+    J -- Writes To --> V
     T -- Queries --> VDB
     B -- Queries --> VDB
+    AI -- Queries --> V
 ```
 
 -   **zeek-live**: The core Zeek monitoring container. It captures traffic on its `eth0` interface within the `zeek-network` (including traffic from the Traffic Simulator) and sends analyzed logs to the Kafka Broker.
