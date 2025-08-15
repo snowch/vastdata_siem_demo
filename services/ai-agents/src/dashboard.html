@@ -924,8 +924,8 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
                 showStatus('Starting multi-agent analysis...', 'info');
                 updateProgress(5, 'Initializing agents...');
                 
-                // Simulate the analysis workflow
-                await simulateAnalysisWorkflow();
+                // Run the real analysis workflow
+                await runRealAnalysisWorkflow();
 
             } catch (error) {
                 showStatus(`Analysis failed: ${error.message}`, 'error');
@@ -933,113 +933,127 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
                 showAgentOutput('triage', `Error: ${error.message}`);
                 analysisInProgress = false;
                 document.getElementById('analyzeBtn').disabled = false;
+                updateProgress(0, 'Error');
                 debugLog(`Analysis failed: ${error.message}`, 'ERROR');
             }
         }
 
-        async function simulateAnalysisWorkflow() {
-            // Step 1: Triage Agent
-            updateProgress(15, 'Running triage analysis...');
-            updateAgentStatus('triage', 'active');
-            showAgentSpinner('triage', true);
-            document.getElementById('triageCard').classList.add('active');
+        async function runRealAnalysisWorkflow() {
+            const logInput = document.getElementById('logInput').value.trim();
             
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            updateAgentStatus('triage', 'complete');
-            showAgentSpinner('triage', false);
-            showAgentOutput('triage', `[${new Date().toLocaleTimeString()}] Triage analysis initiated
-Parsing security logs...
-Identified 2 potential security events
-- High severity: Suspicious SSH connection attempt
-- Medium severity: Failed authentication event
-Priority threat detected: Unauthorized SSH access attempt from 192.168.1.100
-Escalating to context research agent...`);
-            
-            document.getElementById('triageCard').classList.remove('active');
-            
-            // Step 2: Context Research Agent
-            updateProgress(50, 'Researching historical context...');
-            updateAgentStatus('context', 'active');
-            showAgentSpinner('context', true);
-            document.getElementById('contextCard').classList.add('active');
-            
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            updateAgentStatus('context', 'complete');
-            showAgentSpinner('context', false);
-            showAgentOutput('context', `[${new Date().toLocaleTimeString()}] Context research initiated
-Querying historical incident database...
-Found 3 similar incidents in the past 30 days
-- Pattern match: SSH brute force attempts from similar IP ranges
-- Geographic correlation: Source IP traced to known threat actor region
-- Timeline analysis: Recent uptick in similar activities
-Threat actor profile: APT group with focus on SSH exploitation
-Providing enriched context to senior analyst...`);
-            
-            document.getElementById('contextCard').classList.remove('active');
-            
-            // Step 3: Senior Analyst
-            updateProgress(85, 'Performing deep analysis...');
-            updateAgentStatus('analyst', 'active');
-            showAgentSpinner('analyst', true);
-            document.getElementById('analystCard').classList.add('active');
-            
-            await new Promise(resolve => setTimeout(resolve, 2500));
-            
-            updateAgentStatus('analyst', 'complete');
-            showAgentSpinner('analyst', false);
-            showAgentOutput('analyst', `[${new Date().toLocaleTimeString()}] Senior analyst assessment
-Comprehensive threat analysis completed
-Risk Assessment: HIGH
-- Attack vector: SSH brute force with credential stuffing
-- Business impact: Potential system compromise and data exfiltration
-- Urgency: Immediate action required
-
-Recommended Actions:
-1. Block source IP 192.168.1.100 at firewall level
-2. Reset credentials for 'admin' account
-3. Enable MFA for SSH access
-4. Monitor for lateral movement indicators
-5. Initiate incident response protocol
-
-Analysis complete. Generating final report...`);
-            
-            document.getElementById('analystCard').classList.remove('active');
-            
-            // Complete analysis
-            updateProgress(100, 'Analysis complete!');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Show final results
-            displayFinalResults({
-                structured_findings: {
-                    priority_threat: {
-                        threat_type: 'SSH Brute Force Attack',
-                        source_ip: '192.168.1.100',
-                        priority: 'high',
-                        brief_summary: 'Unauthorized SSH access attempt detected with credential stuffing patterns'
+            try {
+                // Start the analysis by calling the real API
+                updateProgress(10, 'Starting analysis...');
+                debugLog('Calling real triage API');
+                
+                const response = await makeRequest('/triage', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
                     },
-                    detailed_analysis: {
-                        business_impact: 'High - Potential system compromise',
-                        recommended_actions: [
-                            'Block malicious IP',
-                            'Reset compromised credentials',
-                            'Enable MFA',
-                            'Monitor for lateral movement',
-                            'Initiate incident response'
-                        ]
-                    }
-                },
-                chroma_context: {
-                    documents: ['incident_1', 'incident_2', 'incident_3']
+                    body: JSON.stringify({ logs: logInput })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-            });
+                
+                const result = await response.json();
+                debugLog(`Analysis started with session ID: ${result.session_id}`);
+                
+                if (result.session_id) {
+                    // Start polling for progress
+                    await pollAnalysisProgress(result.session_id);
+                } else {
+                    throw new Error('No session ID returned from analysis start');
+                }
+                
+            } catch (error) {
+                debugLog(`Analysis workflow error: ${error.message}`, 'ERROR');
+                throw error;
+            }
+        }
+        
+        async function pollAnalysisProgress(sessionId) {
+            const maxPolls = 120; // 2 minutes max (120 * 1 second)
+            let pollCount = 0;
             
-            analysisInProgress = false;
-            document.getElementById('analyzeBtn').disabled = false;
-            updateProgress(0, 'Ready');
-            showStatus('Multi-agent analysis completed successfully!', 'success');
+            while (pollCount < maxPolls) {
+                try {
+                    const response = await makeRequest(`/progress/${sessionId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Progress check failed: ${response.status}`);
+                    }
+                    
+                    const progress = await response.json();
+                    debugLog(`Progress update: ${progress.status} - ${progress.progress_percent}%`);
+                    
+                    // Update UI based on progress
+                    updateProgress(progress.progress_percent, progress.status.replace('_', ' '));
+                    
+                    // Update agent statuses and outputs
+                    updateAgentFromProgress(progress, 'triage');
+                    updateAgentFromProgress(progress, 'context');
+                    updateAgentFromProgress(progress, 'analyst');
+                    
+                    // Check if completed
+                    if (progress.completed) {
+                        debugLog('Analysis completed successfully');
+                        
+                        if (progress.results) {
+                            displayFinalResults({
+                                structured_findings: progress.results.structured_findings,
+                                chroma_context: progress.results.chroma_context
+                            });
+                        }
+                        
+                        analysisInProgress = false;
+                        document.getElementById('analyzeBtn').disabled = false;
+                        updateProgress(0, 'Ready');
+                        showStatus('Multi-agent analysis completed successfully!', 'success');
+                        return;
+                    }
+                    
+                    // Check for errors
+                    if (progress.error) {
+                        throw new Error(progress.error);
+                    }
+                    
+                    // Wait before next poll
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    pollCount++;
+                    
+                } catch (error) {
+                    debugLog(`Progress polling error: ${error.message}`, 'ERROR');
+                    throw error;
+                }
+            }
+            
+            throw new Error('Analysis timed out - maximum polling time exceeded');
+        }
+        
+        function updateAgentFromProgress(progress, agentType) {
+            const agentOutputs = progress.agent_outputs[agentType] || [];
+            const currentAgent = progress.current_agent;
+            
+            // Update agent status based on progress
+            if (currentAgent === agentType && !progress.completed) {
+                updateAgentStatus(agentType, 'active');
+                showAgentSpinner(agentType, true);
+                document.getElementById(`${agentType}Card`).classList.add('active');
+            } else if (agentOutputs.length > 0 || progress.completed) {
+                updateAgentStatus(agentType, 'complete');
+                showAgentSpinner(agentType, false);
+                document.getElementById(`${agentType}Card`).classList.remove('active');
+            }
+            
+            // Update agent output with latest messages
+            if (agentOutputs.length > 0) {
+                const latestOutput = agentOutputs[agentOutputs.length - 1];
+                const timestamp = new Date(latestOutput.timestamp).toLocaleTimeString();
+                showAgentOutput(agentType, `[${timestamp}] ${latestOutput.message}`);
+            }
         }
 
         function displayFinalResults(results) {
