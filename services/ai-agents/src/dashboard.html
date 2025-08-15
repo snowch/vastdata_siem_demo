@@ -160,6 +160,8 @@
             resize: vertical;
             transition: border-color 0.3s ease;
             line-height: 1.4;
+            white-space: nowrap;
+            overflow-x: auto;
         }
 
         textarea:focus {
@@ -834,8 +836,17 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
             let eventCount = 0;
             try {
                 if (typeof logData === 'string') {
-                    const parsed = JSON.parse(logData);
-                    eventCount = Array.isArray(parsed) ? parsed.length : 1;
+                    // Handle single-line JSON format - count non-empty lines that start with {
+                    const lines = logData.split('\n').filter(line => line.trim());
+                    eventCount = lines.filter(line => {
+                        const trimmed = line.trim();
+                        return trimmed.startsWith('{') && trimmed.endsWith('}');
+                    }).length;
+                    
+                    // Fallback: if no JSON objects found, count all non-empty lines
+                    if (eventCount === 0 && lines.length > 0) {
+                        eventCount = lines.length;
+                    }
                 } else if (Array.isArray(logData)) {
                     eventCount = logData.length;
                 }
@@ -889,7 +900,8 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
                 // Simulate API delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-                const logText = JSON.stringify(demoLogs, null, 2);
+                // Remove square brackets and display one JSON record per line
+                const logText = demoLogs.map(record => JSON.stringify(record)).join('\n');
                 document.getElementById('logInput').value = logText;
                 
                 updateLogCounter(logText);
