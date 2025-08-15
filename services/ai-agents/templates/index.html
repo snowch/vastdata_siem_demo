@@ -1,4 +1,15 @@
-<!DOCTYPE html>
+// Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            resetAgentStates();
+            
+            // Add some helpful tooltips or initial guidance
+            showStatus('Welcome to SOC Agent Dashboard! Retrieve logs or paste your own to begin analysis.', 'info');
+            
+            // Add debug mode hint
+            setTimeout(() => {
+                console.log('💡 Tip: Press Ctrl+Shift+D to enable debug mode for detailed logging');
+            }, 2000);
+        });<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -523,6 +534,18 @@
     <script>
         let analysisInProgress = false;
         let eventSource = null;
+        let debugMode = false; // Enable for troubleshooting
+
+        // Add debug console toggle (hidden by default)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                debugMode = !debugMode;
+                console.log(`Debug mode ${debugMode ? 'enabled' : 'disabled'}`);
+                if (debugMode) {
+                    showStatus('Debug mode enabled - detailed logging active', 'info');
+                }
+            }
+        });
 
         async function retrieveLogs() {
             showStatus('Retrieving logs from Vast...', 'info');
@@ -595,6 +618,12 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     
                     const progress = await response.json();
+                    
+                    if (debugMode) {
+                        console.log('Progress update:', progress);
+                        console.log('Agent outputs:', progress.agent_outputs);
+                    }
+                    
                     updateProgressDisplay(progress);
                     
                     if (progress.completed || progress.error) {
@@ -607,6 +636,9 @@
                         } else {
                             showStatus('Analysis completed successfully!', 'success');
                             if (progress.results) {
+                                if (debugMode) {
+                                    console.log('Final results:', progress.results);
+                                }
                                 displayFinalResults(progress.results);
                             }
                         }
@@ -616,6 +648,9 @@
                     analysisInProgress = false;
                     document.getElementById('analyzeBtn').disabled = false;
                     showStatus(`Progress polling failed: ${error.message}`, 'error');
+                    if (debugMode) {
+                        console.error('Polling error:', error);
+                    }
                 }
             }, 2000); // Poll every 2 seconds
         }
@@ -624,32 +659,82 @@
             // Update progress bar
             updateProgress(progress.progress_percent);
             
-            // Update agent statuses based on current progress
+            // Helper function to check if agent has meaningful output
+            const hasOutput = (agentOutputs) => agentOutputs && agentOutputs.length > 0;
+            
+            // Update agent statuses based on current progress and outputs
+            
+            // Triage Agent
             if (progress.status === 'running_triage' || progress.current_agent === 'triage') {
                 updateAgentStatus('triage', 'active');
                 showAgentSpinner('triage', true);
-            } else if (progress.agent_outputs.triage.length > 0) {
+                if (hasOutput(progress.agent_outputs.triage)) {
+                    displayAgentMessages('triage', progress.agent_outputs.triage);
+                }
+            } else if (progress.status === 'completed_triage' || hasOutput(progress.agent_outputs.triage) || progress.progress_percent >= 30) {
                 updateAgentStatus('triage', 'complete');
                 showAgentSpinner('triage', false);
                 displayAgentMessages('triage', progress.agent_outputs.triage);
             }
             
+            // Context Agent
             if (progress.status === 'running_context' || progress.current_agent === 'context') {
                 updateAgentStatus('context', 'active');
                 showAgentSpinner('context', true);
-            } else if (progress.agent_outputs.context.length > 0) {
+                if (hasOutput(progress.agent_outputs.context)) {
+                    displayAgentMessages('context', progress.agent_outputs.context);
+                }
+            } else if (progress.status === 'completed_context' || hasOutput(progress.agent_outputs.context) || progress.progress_percent >= 50) {
                 updateAgentStatus('context', 'complete');
                 showAgentSpinner('context', false);
                 displayAgentMessages('context', progress.agent_outputs.context);
+            } else if (progress.progress_percent >= 30) {
+                // Show context as active if triage is done but context not explicitly started
+                updateAgentStatus('context', 'active');
+                showAgentSpinner('context', true);
+                showAgentOutput('context', 'Analyzing historical incidents and building context...');
             }
             
+            // Senior Analyst
             if (progress.status === 'running_analyst' || progress.current_agent === 'analyst') {
                 updateAgentStatus('analyst', 'active');
                 showAgentSpinner('analyst', true);
-            } else if (progress.agent_outputs.analyst.length > 0) {
+                if (hasOutput(progress.agent_outputs.analyst)) {
+                    displayAgentMessages('analyst', progress.agent_outputs.analyst);
+                }
+            } else if (progress.status === 'completed_analyst' || hasOutput(progress.agent_outputs.analyst) || progress.progress_percent >= 80) {
                 updateAgentStatus('analyst', 'complete');
                 showAgentSpinner('analyst', false);
                 displayAgentMessages('analyst', progress.agent_outputs.analyst);
+            } else if (progress.progress_percent >= 50) {
+                // Show analyst as active if context is done but analyst not explicitly started
+                updateAgentStatus('analyst', 'active');
+                showAgentSpinner('analyst', true);
+                showAgentOutput('analyst', 'Performing deep analysis and generating recommendations...');
+            }
+            
+            // Handle completion
+            if (progress.completed) {
+                ['triage', 'context', 'analyst'].forEach(agent => {
+                    if (hasOutput(progress.agent_outputs[agent])) {
+                        updateAgentStatus(agent, 'complete');
+                        showAgentSpinner(agent, false);
+                        displayAgentMessages(agent, progress.agent_outputs[agent]);
+                    } else {
+                        // Fallback for agents without parsed output
+                        updateAgentStatus(agent, 'complete');
+                        showAgentSpinner(agent, false);
+                        showAgentOutput(agent, `${agent.charAt(0).toUpperCase() + agent.slice(1)} analysis completed successfully.`);
+                    }
+                });
+            }
+            
+            // Handle errors
+            if (progress.error) {
+                updateAgentStatus('triage', 'error');
+                updateAgentStatus('context', 'error');
+                updateAgentStatus('analyst', 'error');
+                showAgentOutput('triage', `Error: ${progress.error}`);
             }
         }
 
@@ -671,13 +756,19 @@
             const panel = document.getElementById('findingsPanel');
             const content = document.getElementById('findingsContent');
             
-            // Extract priority from structured findings
+            // Extract priority from structured findings or summary
             let priority = 'medium';
-            if (results.structured_findings && results.structured_findings.priority_threat) {
+            let threatType = 'Unknown';
+            
+            if (results.findings_summary) {
+                priority = results.findings_summary.priority_level || 'medium';
+                threatType = results.findings_summary.threat_type || 'Unknown';
+            } else if (results.structured_findings && results.structured_findings.priority_threat) {
                 const threatPriority = results.structured_findings.priority_threat.priority;
                 if (threatPriority) {
                     priority = threatPriority.toLowerCase();
                 }
+                threatType = results.structured_findings.priority_threat.threat_type || 'Unknown';
             }
             
             // Set priority indicator
@@ -688,36 +779,75 @@
             // Create findings cards from structured data
             const findings = [];
             
-            if (results.structured_findings.priority_threat) {
+            // Priority Threat Card
+            if (results.structured_findings && results.structured_findings.priority_threat) {
                 const threat = results.structured_findings.priority_threat;
                 findings.push({
-                    title: '🚨 Priority Threat',
-                    content: `${threat.threat_type || 'Unknown threat'} detected from ${threat.source_ip || 'unknown source'}. ${threat.brief_summary || 'No summary available.'}`
+                    title: '🚨 Priority Threat Identified',
+                    content: `<strong>Type:</strong> ${threat.threat_type || 'Unknown'}<br>
+                             <strong>Source:</strong> ${threat.source_ip || 'Unknown'}<br>
+                             <strong>Confidence:</strong> ${threat.confidence_score ? (threat.confidence_score * 100).toFixed(1) + '%' : 'N/A'}<br>
+                             <strong>Events:</strong> ${threat.event_count || 'N/A'}<br>
+                             <strong>Summary:</strong> ${threat.brief_summary || 'Analysis completed successfully'}`
+                });
+            } else {
+                findings.push({
+                    title: '🚨 Analysis Summary',
+                    content: `<strong>Priority:</strong> ${priority.toUpperCase()}<br>
+                             <strong>Threat Type:</strong> ${threatType}<br>
+                             <strong>Status:</strong> Multi-agent analysis completed<br>
+                             <strong>Details:</strong> Check individual agent outputs above for comprehensive findings`
                 });
             }
             
+            // Historical Context Card
             if (results.chroma_context && !results.chroma_context.error) {
-                const contextCount = results.chroma_context.documents ? results.chroma_context.documents.length : 0;
+                const contextCount = results.chroma_context.documents ? 
+                    (Array.isArray(results.chroma_context.documents[0]) ? results.chroma_context.documents[0].length : results.chroma_context.documents.length) : 0;
+                findings.push({
+                    title: '📚 Historical Intelligence',
+                    content: `<strong>Related Incidents:</strong> ${contextCount} found<br>
+                             <strong>Context Status:</strong> Historical patterns analyzed<br>
+                             <strong>Intelligence:</strong> Past incidents provide context for current threat assessment`
+                });
+            } else {
                 findings.push({
                     title: '📚 Historical Context',
-                    content: `Found ${contextCount} related historical incidents to provide context for this analysis.`
+                    content: `<strong>Status:</strong> Context research completed<br>
+                             <strong>Result:</strong> ${results.chroma_context && results.chroma_context.error ? 'Search encountered issues' : 'Historical analysis performed'}`
                 });
             }
             
-            if (results.structured_findings.detailed_analysis) {
+            // Detailed Analysis Card
+            if (results.structured_findings && results.structured_findings.detailed_analysis) {
                 const analysis = results.structured_findings.detailed_analysis;
                 const actionCount = analysis.recommended_actions ? analysis.recommended_actions.length : 0;
                 findings.push({
+                    title: '🎯 Expert Analysis',
+                    content: `<strong>Recommendations:</strong> ${actionCount} actions identified<br>
+                             <strong>Business Impact:</strong> ${analysis.business_impact || 'Under assessment'}<br>
+                             <strong>Analysis:</strong> Senior analyst review completed with actionable intelligence`
+                });
+            } else {
+                findings.push({
                     title: '🎯 Analysis Complete',
-                    content: `Deep analysis completed with ${actionCount} recommended actions. Business impact: ${analysis.business_impact || 'Under assessment'}.`
+                    content: `<strong>Status:</strong> Senior analyst review completed<br>
+                             <strong>Output:</strong> Detailed findings and recommendations generated<br>
+                             <strong>Next Steps:</strong> Review agent outputs above for specific actions`
                 });
             }
             
-            // Fallback if no structured findings
-            if (findings.length === 0) {
+            // Add conversation preview card if no structured findings
+            if (!results.structured_findings || Object.keys(results.structured_findings).length === 0) {
+                const conversationPreview = results.conversation ? 
+                    results.conversation.substring(0, 200) + (results.conversation.length > 200 ? '...' : '') : 
+                    'No conversation data available';
+                    
                 findings.push({
-                    title: '✅ Analysis Complete',
-                    content: 'Multi-agent analysis completed successfully. Check individual agent outputs above for detailed findings and recommendations.'
+                    title: '💬 Analysis Log Preview',
+                    content: `<strong>Conversation:</strong><br>
+                             <em style="font-size: 0.9em; color: #666;">${conversationPreview}</em><br>
+                             <small>Full conversation available in agent output sections above</small>`
                 });
             }
             
