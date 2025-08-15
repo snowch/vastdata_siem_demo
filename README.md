@@ -55,7 +55,8 @@ More screenshots ...
 <details>
 <summary>AI Agent UI</summary>
     
-![ai agent](./docs/aiagent.png)
+![ai agent](./docs/aiagent1.png)
+![ai agent](./docs/aiagent2.png)
 </details>
 
 ## Architecture
