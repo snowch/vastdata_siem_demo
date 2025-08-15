@@ -131,7 +131,10 @@ async def triage_agent():
         web_logger.info(f"Processing log batch with {len(str(log_batch))} characters")
 
         # Run the triage planning stage
-        prioritized_task, planner_diagnostics, chroma_results = await get_prioritized_task(json.dumps(log_batch))
+        # prioritized_task, planner_diagnostics, chroma_results = await get_prioritized_task(json.dumps(log_batch))
+        prioritized_task, structured_findings, chroma_results = await get_prioritized_task(json.dumps(log_batch))
+
+        web_logger.info(structured_findings)
         
         web_logger.info("Triage planning completed successfully")
 
@@ -142,7 +145,9 @@ async def triage_agent():
         sanitized_chroma_results = sanitize_chroma_results(chroma_results)
         
         web_logger.info("Successfully completed triage processing")
-        return jsonify({"response": prioritized_task_html, "thought_process": planner_diagnostics, "chroma_results": sanitized_chroma_results})
+        # return jsonify({"response": prioritized_task_html, "thought_process": planner_diagnostics, "chroma_results": sanitized_chroma_results})
+        return jsonify({"response": prioritized_task_html, "chroma_results": sanitized_chroma_results})
+
         
     except json.JSONDecodeError as e:
         web_logger.error(f"JSON decode error: {str(e)}")
