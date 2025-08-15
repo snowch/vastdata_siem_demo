@@ -32,7 +32,8 @@ def get_logs():
             """
             cursor.execute(query)
             rows = cursor.fetchall()
-            # logger.debug(f"Rows {len(rows)}")
+
+            logger.debug(f"Rows {len(rows)} | Query {query}")
             for row in rows:
                 try:
                     json_row = json.loads(row[0])

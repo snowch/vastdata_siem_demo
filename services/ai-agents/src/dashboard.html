@@ -865,49 +865,36 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
             debugLog('Starting log retrieval');
 
             try {
-                // Demo data for testing
-                const demoLogs = [
-                    {
-                        "timestamp": "2024-01-15T10:30:00Z",
-                        "category_name": "Network Activity",
-                        "activity_name": "Connection Attempt",
-                        "type_name": "Connection",
-                        "src_endpoint": {
-                            "ip": "192.168.1.100",
-                            "port": 443
-                        },
-                        "dst_endpoint": {
-                            "ip": "10.0.0.5",
-                            "port": 22
-                        },
-                        "severity": "High"
-                    },
-                    {
-                        "timestamp": "2024-01-15T10:31:00Z",
-                        "category_name": "Authentication",
-                        "activity_name": "Logon",
-                        "type_name": "Failed Logon",
-                        "src_endpoint": {
-                            "ip": "192.168.1.100"
-                        },
-                        "user": {
-                            "name": "admin"
-                        },
-                        "severity": "Medium"
-                    }
-                ];
+                // Make actual API call to retrieve logs
+                const response = await makeRequest('/retrieve_logs');
                 
-                // Simulate API delay
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 
-                // Remove square brackets and display one JSON record per line
-                const logText = demoLogs.map(record => JSON.stringify(record)).join('\n');
+                const logs = await response.json();
+                debugLog(`Received ${Array.isArray(logs) ? logs.length : 'unknown'} logs from API`);
+                
+                // Handle error response
+                if (logs.error_retrieving_logs) {
+                    throw new Error(logs.error_retrieving_logs);
+                }
+                
+                // Convert logs to flattened JSON format - one record per line
+                let logText = '';
+                if (Array.isArray(logs)) {
+                    logText = logs.map(record => JSON.stringify(record)).join('\n');
+                } else {
+                    // If single log object, just stringify it
+                    logText = JSON.stringify(logs);
+                }
+                
                 document.getElementById('logInput').value = logText;
                 
                 updateLogCounter(logText);
-                showStatus('Demo logs loaded successfully!', 'success');
+                showStatus('Logs retrieved successfully!', 'success');
                 updateProgress(0, 'Ready');
-                debugLog(`Retrieved ${demoLogs.length} demo log entries`);
+                debugLog(`Retrieved ${Array.isArray(logs) ? logs.length : 1} log entries`);
             } catch (error) {
                 showStatus(`Error retrieving logs: ${error.message}`, 'error');
                 updateProgress(0, 'Error');
