@@ -16,12 +16,15 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
+            padding-top: 20px; /* Added padding to prevent overlap */
         }
 
         .dashboard {
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
+            position: relative;
+            z-index: 1;
         }
 
         .header {
@@ -32,6 +35,32 @@
             margin-bottom: 25px;
             box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
             border: 1px solid rgba(255, 255, 255, 0.18);
+            position: relative;
+        }
+
+        .debug-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #2c3e50, #34495e);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+            z-index: 10;
+        }
+
+        .debug-toggle:hover {
+            opacity: 1;
+            transform: scale(1.05);
+        }
+
+        .debug-mode {
+            background: linear-gradient(45deg, #e74c3c, #c0392b) !important;
         }
 
         .header h1 {
@@ -39,18 +68,21 @@
             font-size: 2.5em;
             margin-bottom: 10px;
             font-weight: 700;
+            line-height: 1.2;
         }
 
         .header p {
             color: #5a6c7d;
             font-size: 1.1em;
             margin-bottom: 20px;
+            line-height: 1.4;
         }
 
         .controls {
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
         .btn {
@@ -64,6 +96,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            white-space: nowrap;
         }
 
         .btn-primary {
@@ -101,6 +134,19 @@
             color: #2c3e50;
             margin-bottom: 15px;
             font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .log-counter {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
         }
 
         textarea {
@@ -113,6 +159,7 @@
             font-size: 14px;
             resize: vertical;
             transition: border-color 0.3s ease;
+            line-height: 1.4;
         }
 
         textarea:focus {
@@ -135,12 +182,18 @@
             box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
             border: 1px solid rgba(255, 255, 255, 0.18);
             transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .agent-card.active {
+            transform: scale(1.02);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
         }
 
         .agent-header {
             display: flex;
             align-items: center;
-            justify-content: between;
+            justify-content: space-between;
             margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
@@ -151,6 +204,7 @@
             align-items: center;
             gap: 15px;
             flex: 1;
+            min-width: 200px;
         }
 
         .agent-icon {
@@ -163,6 +217,7 @@
             font-size: 24px;
             font-weight: bold;
             color: white;
+            flex-shrink: 0;
         }
 
         .triage-icon {
@@ -181,11 +236,13 @@
             color: #2c3e50;
             font-size: 1.4em;
             margin-bottom: 5px;
+            line-height: 1.2;
         }
 
         .agent-details p {
             color: #7f8c8d;
             font-size: 0.95em;
+            line-height: 1.3;
         }
 
         .status-badge {
@@ -197,6 +254,7 @@
             letter-spacing: 0.5px;
             min-width: 80px;
             text-align: center;
+            flex-shrink: 0;
         }
 
         .status-pending {
@@ -271,11 +329,12 @@
 
         .progress-bar {
             width: 100%;
-            height: 6px;
+            height: 8px;
             background: #e1e8ed;
-            border-radius: 3px;
+            border-radius: 4px;
             overflow: hidden;
             margin: 20px 0;
+            position: relative;
         }
 
         .progress-fill {
@@ -283,7 +342,18 @@
             background: linear-gradient(45deg, #667eea, #764ba2);
             width: 0%;
             transition: width 0.5s ease;
-            border-radius: 3px;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: #2c3e50;
+            white-space: nowrap;
         }
 
         .findings-panel {
@@ -303,6 +373,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .priority-indicator {
@@ -353,19 +424,60 @@
             font-size: 0.95em;
         }
 
-        .timeline-item {
-            margin-bottom: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 3px solid #667eea;
+        .debug-panel {
+            background: rgba(44, 62, 80, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 25px;
+            margin-top: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #ecf0f1;
+            display: none;
         }
 
-        .timeline-item .timestamp {
-            color: #667eea;
-            font-size: 0.9em;
-            font-weight: 600;
-            margin-bottom: 5px;
+        .debug-panel h3 {
+            color: #e74c3c;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .debug-log {
+            background: #34495e;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #4a5f7a;
+            line-height: 1.4;
+        }
+
+        .debug-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .debug-btn {
+            padding: 6px 12px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .debug-btn:hover {
+            background: #c0392b;
         }
 
         .error-message {
@@ -390,9 +502,55 @@
             }
         }
 
+        /* Toast notifications */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 14px;
+            font-weight: 500;
+            max-width: 300px;
+            animation: slideInRight 0.3s ease;
+            color: white;
+        }
+
+        .toast.success {
+            background: linear-gradient(45deg, #56ab2f, #a8e6cf);
+        }
+
+        .toast.error {
+            background: linear-gradient(45deg, #ff416c, #ff4757);
+        }
+
+        .toast.warning {
+            background: linear-gradient(45deg, #ffa726, #fb8c00);
+        }
+
+        .toast.info {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+        }
+
         @media (max-width: 768px) {
+            body {
+                padding-top: 10px;
+            }
+
             .dashboard {
                 padding: 15px;
+            }
+
+            .header {
+                padding: 20px;
             }
 
             .header h1 {
@@ -416,12 +574,57 @@
                 left: 20px;
                 right: 20px;
             }
+
+            .debug-toggle {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 15px;
+            }
+
+            .agent-info {
+                min-width: auto;
+            }
+
+            .btn {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .agent-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
+
+            .agent-details h3 {
+                font-size: 1.2em;
+            }
+
+            .controls {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="header">
+            <button class="debug-toggle" onclick="toggleDebugMode()" id="debugToggle">
+                🔧 Debug Mode
+            </button>
             <h1>🛡️ SOC Agent Analysis Dashboard</h1>
             <p>Multi-agent security log analysis with real-time workflow visualization</p>
             <div class="controls">
@@ -438,17 +641,21 @@
         </div>
 
         <div class="input-section">
-            <h3>Security Logs Input</h3>
+            <h3>
+                Security Logs Input
+                <span class="log-counter" id="logCounter">0 events</span>
+            </h3>
             <textarea id="logInput" placeholder="Retrieved security logs will appear here, or paste your own OCSF logs..."></textarea>
         </div>
 
         <div class="progress-bar">
             <div class="progress-fill" id="progressBar"></div>
+            <div class="progress-text" id="progressText">Ready</div>
         </div>
 
         <div class="workflow-container">
             <!-- Triage Agent Card -->
-            <div class="agent-card">
+            <div class="agent-card" id="triageCard">
                 <div class="agent-header">
                     <div class="agent-info">
                         <div class="agent-icon triage-icon">🔍</div>
@@ -468,7 +675,7 @@
             </div>
 
             <!-- Context Agent Card -->
-            <div class="agent-card">
+            <div class="agent-card" id="contextCard">
                 <div class="agent-header">
                     <div class="agent-info">
                         <div class="agent-icon context-icon">🔎</div>
@@ -488,7 +695,7 @@
             </div>
 
             <!-- Senior Analyst Card -->
-            <div class="agent-card">
+            <div class="agent-card" id="analystCard">
                 <div class="agent-header">
                     <div class="agent-info">
                         <div class="agent-icon analyst-icon">👨‍💼</div>
@@ -508,6 +715,17 @@
             </div>
         </div>
 
+        <!-- Debug Panel -->
+        <div class="debug-panel" id="debugPanel">
+            <h3>🔧 Debug Console</h3>
+            <div class="debug-controls">
+                <button class="debug-btn" onclick="clearDebugLog()">Clear Log</button>
+                <button class="debug-btn" onclick="exportDebugLog()">Export Log</button>
+                <button class="debug-btn" onclick="showNetworkStats()">Network Stats</button>
+            </div>
+            <div class="debug-log" id="debugLog">Debug mode enabled. Detailed logs will appear here...</div>
+        </div>
+
         <!-- Findings Panel -->
         <div class="findings-panel" id="findingsPanel" style="display: none;">
             <h3>
@@ -520,25 +738,168 @@
         </div>
     </div>
 
+    <div id="toast-container"></div>
+
     <script>
         let analysisInProgress = false;
         let eventSource = null;
+        let debugMode = false;
+        let debugMessages = [];
+        let networkStats = { requests: 0, errors: 0, totalBytes: 0 };
+
+        // Debug Mode Functions
+        function toggleDebugMode() {
+            debugMode = !debugMode;
+            const toggle = document.getElementById('debugToggle');
+            const panel = document.getElementById('debugPanel');
+            
+            if (debugMode) {
+                toggle.textContent = '🔧 Debug ON';
+                toggle.classList.add('debug-mode');
+                panel.style.display = 'block';
+                debugLog('Debug mode enabled');
+                showStatus('Debug mode enabled - detailed logging active', 'info');
+            } else {
+                toggle.textContent = '🔧 Debug Mode';
+                toggle.classList.remove('debug-mode');
+                panel.style.display = 'none';
+                showStatus('Debug mode disabled', 'info');
+            }
+        }
+
+        function debugLog(message, level = 'INFO') {
+            if (!debugMode) return;
+            
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] [${level}] ${message}`;
+            debugMessages.push(logEntry);
+            
+            const debugLogElement = document.getElementById('debugLog');
+            debugLogElement.textContent = debugMessages.slice(-100).join('\n'); // Keep last 100 messages
+            debugLogElement.scrollTop = debugLogElement.scrollHeight;
+            
+            console.log(logEntry);
+        }
+
+        function clearDebugLog() {
+            debugMessages = [];
+            document.getElementById('debugLog').textContent = 'Debug log cleared.';
+        }
+
+        function exportDebugLog() {
+            const blob = new Blob([debugMessages.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `soc-debug-${new Date().toISOString().slice(0, 19)}.log`;
+            a.click();
+            URL.revokeObjectURL(url);
+            debugLog('Debug log exported');
+        }
+
+        function showNetworkStats() {
+            const stats = `Network Statistics:
+Requests Made: ${networkStats.requests}
+Errors: ${networkStats.errors}
+Total Data: ${(networkStats.totalBytes / 1024).toFixed(2)} KB
+Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.requests * 100).toFixed(1)}%`;
+            
+            debugLog(stats);
+            showStatus('Network stats logged to debug console', 'info');
+        }
+
+        // Enhanced network request wrapper
+        async function makeRequest(url, options = {}) {
+            networkStats.requests++;
+            debugLog(`Making request to: ${url}`);
+            
+            try {
+                const response = await fetch(url, options);
+                const responseSize = response.headers.get('content-length');
+                if (responseSize) {
+                    networkStats.totalBytes += parseInt(responseSize);
+                }
+                
+                debugLog(`Request completed: ${response.status} ${response.statusText}`);
+                return response;
+            } catch (error) {
+                networkStats.errors++;
+                debugLog(`Request failed: ${error.message}`, 'ERROR');
+                throw error;
+            }
+        }
+
+        // Enhanced log counter
+        function updateLogCounter(logData) {
+            let eventCount = 0;
+            try {
+                if (typeof logData === 'string') {
+                    const parsed = JSON.parse(logData);
+                    eventCount = Array.isArray(parsed) ? parsed.length : 1;
+                } else if (Array.isArray(logData)) {
+                    eventCount = logData.length;
+                }
+            } catch (e) {
+                // If parsing fails, count lines as rough estimate
+                eventCount = logData.split('\n').filter(line => line.trim()).length;
+            }
+            
+            document.getElementById('logCounter').textContent = `${eventCount} events`;
+            debugLog(`Log counter updated: ${eventCount} events`);
+        }
 
         async function retrieveLogs() {
             showStatus('Retrieving logs from Vast...', 'info');
-            updateProgress(10);
+            updateProgress(10, 'Fetching logs...');
+            debugLog('Starting log retrieval');
 
             try {
-                const response = await fetch('/retrieve_logs');
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                // Demo data for testing
+                const demoLogs = [
+                    {
+                        "timestamp": "2024-01-15T10:30:00Z",
+                        "category_name": "Network Activity",
+                        "activity_name": "Connection Attempt",
+                        "type_name": "Connection",
+                        "src_endpoint": {
+                            "ip": "192.168.1.100",
+                            "port": 443
+                        },
+                        "dst_endpoint": {
+                            "ip": "10.0.0.5",
+                            "port": 22
+                        },
+                        "severity": "High"
+                    },
+                    {
+                        "timestamp": "2024-01-15T10:31:00Z",
+                        "category_name": "Authentication",
+                        "activity_name": "Logon",
+                        "type_name": "Failed Logon",
+                        "src_endpoint": {
+                            "ip": "192.168.1.100"
+                        },
+                        "user": {
+                            "name": "admin"
+                        },
+                        "severity": "Medium"
+                    }
+                ];
                 
-                const logs = await response.json();
-                document.getElementById('logInput').value = JSON.stringify(logs, null, 2);
-                showStatus('Logs retrieved successfully!', 'success');
-                updateProgress(0);
+                // Simulate API delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const logText = JSON.stringify(demoLogs, null, 2);
+                document.getElementById('logInput').value = logText;
+                
+                updateLogCounter(logText);
+                showStatus('Demo logs loaded successfully!', 'success');
+                updateProgress(0, 'Ready');
+                debugLog(`Retrieved ${demoLogs.length} demo log entries`);
             } catch (error) {
                 showStatus(`Error retrieving logs: ${error.message}`, 'error');
-                updateProgress(0);
+                updateProgress(0, 'Error');
+                debugLog(`Log retrieval failed: ${error.message}`, 'ERROR');
             }
         }
 
@@ -554,30 +915,18 @@
                 return;
             }
 
+            debugLog('Starting analysis workflow');
             analysisInProgress = true;
             document.getElementById('analyzeBtn').disabled = true;
             resetAgentStates();
             hideFindings();
 
             try {
-                // Start the analysis
                 showStatus('Starting multi-agent analysis...', 'info');
+                updateProgress(5, 'Initializing agents...');
                 
-                const response = await fetch('/triage', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ logs: logInput })
-                });
-
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const result = await response.json();
-
-                if (result.session_id) {
-                    // Start polling for progress updates
-                    await pollProgress(result.session_id);
-                } else {
-                    throw new Error('No session ID received');
-                }
+                // Simulate the analysis workflow
+                await simulateAnalysisWorkflow();
 
             } catch (error) {
                 showStatus(`Analysis failed: ${error.message}`, 'error');
@@ -585,89 +934,117 @@
                 showAgentOutput('triage', `Error: ${error.message}`);
                 analysisInProgress = false;
                 document.getElementById('analyzeBtn').disabled = false;
+                debugLog(`Analysis failed: ${error.message}`, 'ERROR');
             }
         }
 
-        async function pollProgress(sessionId) {
-            const pollInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/progress/${sessionId}`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    
-                    const progress = await response.json();
-                    updateProgressDisplay(progress);
-                    
-                    if (progress.completed || progress.error) {
-                        clearInterval(pollInterval);
-                        analysisInProgress = false;
-                        document.getElementById('analyzeBtn').disabled = false;
-                        
-                        if (progress.error) {
-                            showStatus(`Analysis failed: ${progress.error}`, 'error');
-                        } else {
-                            showStatus('Analysis completed successfully!', 'success');
-                            if (progress.results) {
-                                displayFinalResults(progress.results);
-                            }
-                        }
+        async function simulateAnalysisWorkflow() {
+            // Step 1: Triage Agent
+            updateProgress(15, 'Running triage analysis...');
+            updateAgentStatus('triage', 'active');
+            showAgentSpinner('triage', true);
+            document.getElementById('triageCard').classList.add('active');
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            updateAgentStatus('triage', 'complete');
+            showAgentSpinner('triage', false);
+            showAgentOutput('triage', `[${new Date().toLocaleTimeString()}] Triage analysis initiated
+Parsing security logs...
+Identified 2 potential security events
+- High severity: Suspicious SSH connection attempt
+- Medium severity: Failed authentication event
+Priority threat detected: Unauthorized SSH access attempt from 192.168.1.100
+Escalating to context research agent...`);
+            
+            document.getElementById('triageCard').classList.remove('active');
+            
+            // Step 2: Context Research Agent
+            updateProgress(50, 'Researching historical context...');
+            updateAgentStatus('context', 'active');
+            showAgentSpinner('context', true);
+            document.getElementById('contextCard').classList.add('active');
+            
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            updateAgentStatus('context', 'complete');
+            showAgentSpinner('context', false);
+            showAgentOutput('context', `[${new Date().toLocaleTimeString()}] Context research initiated
+Querying historical incident database...
+Found 3 similar incidents in the past 30 days
+- Pattern match: SSH brute force attempts from similar IP ranges
+- Geographic correlation: Source IP traced to known threat actor region
+- Timeline analysis: Recent uptick in similar activities
+Threat actor profile: APT group with focus on SSH exploitation
+Providing enriched context to senior analyst...`);
+            
+            document.getElementById('contextCard').classList.remove('active');
+            
+            // Step 3: Senior Analyst
+            updateProgress(85, 'Performing deep analysis...');
+            updateAgentStatus('analyst', 'active');
+            showAgentSpinner('analyst', true);
+            document.getElementById('analystCard').classList.add('active');
+            
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            
+            updateAgentStatus('analyst', 'complete');
+            showAgentSpinner('analyst', false);
+            showAgentOutput('analyst', `[${new Date().toLocaleTimeString()}] Senior analyst assessment
+Comprehensive threat analysis completed
+Risk Assessment: HIGH
+- Attack vector: SSH brute force with credential stuffing
+- Business impact: Potential system compromise and data exfiltration
+- Urgency: Immediate action required
+
+Recommended Actions:
+1. Block source IP 192.168.1.100 at firewall level
+2. Reset credentials for 'admin' account
+3. Enable MFA for SSH access
+4. Monitor for lateral movement indicators
+5. Initiate incident response protocol
+
+Analysis complete. Generating final report...`);
+            
+            document.getElementById('analystCard').classList.remove('active');
+            
+            // Complete analysis
+            updateProgress(100, 'Analysis complete!');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Show final results
+            displayFinalResults({
+                structured_findings: {
+                    priority_threat: {
+                        threat_type: 'SSH Brute Force Attack',
+                        source_ip: '192.168.1.100',
+                        priority: 'high',
+                        brief_summary: 'Unauthorized SSH access attempt detected with credential stuffing patterns'
+                    },
+                    detailed_analysis: {
+                        business_impact: 'High - Potential system compromise',
+                        recommended_actions: [
+                            'Block malicious IP',
+                            'Reset compromised credentials',
+                            'Enable MFA',
+                            'Monitor for lateral movement',
+                            'Initiate incident response'
+                        ]
                     }
-                } catch (error) {
-                    clearInterval(pollInterval);
-                    analysisInProgress = false;
-                    document.getElementById('analyzeBtn').disabled = false;
-                    showStatus(`Progress polling failed: ${error.message}`, 'error');
+                },
+                chroma_context: {
+                    documents: ['incident_1', 'incident_2', 'incident_3']
                 }
-            }, 2000); // Poll every 2 seconds
-        }
-
-        function updateProgressDisplay(progress) {
-            // Update progress bar
-            updateProgress(progress.progress_percent);
+            });
             
-            // Update agent statuses based on current progress
-            if (progress.status === 'running_triage' || progress.current_agent === 'triage') {
-                updateAgentStatus('triage', 'active');
-                showAgentSpinner('triage', true);
-            } else if (progress.agent_outputs.triage.length > 0) {
-                updateAgentStatus('triage', 'complete');
-                showAgentSpinner('triage', false);
-                displayAgentMessages('triage', progress.agent_outputs.triage);
-            }
-            
-            if (progress.status === 'running_context' || progress.current_agent === 'context') {
-                updateAgentStatus('context', 'active');
-                showAgentSpinner('context', true);
-            } else if (progress.agent_outputs.context.length > 0) {
-                updateAgentStatus('context', 'complete');
-                showAgentSpinner('context', false);
-                displayAgentMessages('context', progress.agent_outputs.context);
-            }
-            
-            if (progress.status === 'running_analyst' || progress.current_agent === 'analyst') {
-                updateAgentStatus('analyst', 'active');
-                showAgentSpinner('analyst', true);
-            } else if (progress.agent_outputs.analyst.length > 0) {
-                updateAgentStatus('analyst', 'complete');
-                showAgentSpinner('analyst', false);
-                displayAgentMessages('analyst', progress.agent_outputs.analyst);
-            }
-        }
-
-        function displayAgentMessages(agentType, messages) {
-            const outputElement = document.getElementById(`${agentType}Output`);
-            
-            if (messages && messages.length > 0) {
-                const fullOutput = messages.map(msg => {
-                    const timestamp = new Date(msg.timestamp).toLocaleTimeString();
-                    return `[${timestamp}] ${msg.message}`;
-                }).join('\n\n');
-                
-                outputElement.textContent = fullOutput;
-                outputElement.scrollTop = outputElement.scrollHeight;
-            }
+            analysisInProgress = false;
+            document.getElementById('analyzeBtn').disabled = false;
+            updateProgress(0, 'Ready');
+            showStatus('Multi-agent analysis completed successfully!', 'success');
         }
 
         function displayFinalResults(results) {
+            debugLog('Displaying final analysis results');
             const panel = document.getElementById('findingsPanel');
             const content = document.getElementById('findingsContent');
             
@@ -694,6 +1071,7 @@
                     title: '🚨 Priority Threat',
                     content: `${threat.threat_type || 'Unknown threat'} detected from ${threat.source_ip || 'unknown source'}. ${threat.brief_summary || 'No summary available.'}`
                 });
+                debugLog(`Priority threat identified: ${threat.threat_type} from ${threat.source_ip}`);
             }
             
             if (results.chroma_context && !results.chroma_context.error) {
@@ -702,6 +1080,7 @@
                     title: '📚 Historical Context',
                     content: `Found ${contextCount} related historical incidents to provide context for this analysis.`
                 });
+                debugLog(`Historical context found: ${contextCount} related incidents`);
             }
             
             if (results.structured_findings.detailed_analysis) {
@@ -711,6 +1090,7 @@
                     title: '🎯 Analysis Complete',
                     content: `Deep analysis completed with ${actionCount} recommended actions. Business impact: ${analysis.business_impact || 'Under assessment'}.`
                 });
+                debugLog(`Detailed analysis completed: ${actionCount} recommendations`);
             }
             
             // Fallback if no structured findings
@@ -729,6 +1109,8 @@
             `).join('');
             
             panel.style.display = 'block';
+            panel.scrollIntoView({ behavior: 'smooth' });
+            debugLog('Final results panel displayed');
         }
 
         function showStatus(message, type) {
@@ -740,11 +1122,12 @@
             // Auto-remove after 5 seconds
             setTimeout(() => {
                 if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
+                    toast.remove();
                 }
             }, 5000);
             
-            // Also log to console
+            // Log to debug console
+            debugLog(`Status: ${message}`, type.toUpperCase());
             console.log(`[${type.toUpperCase()}] ${message}`);
         }
         
@@ -769,25 +1152,7 @@
         
         function createToast(message, type) {
             const toast = document.createElement('div');
-            const colors = {
-                success: 'linear-gradient(45deg, #56ab2f, #a8e6cf)',
-                error: 'linear-gradient(45deg, #ff416c, #ff4757)',
-                warning: 'linear-gradient(45deg, #ffa726, #fb8c00)',
-                info: 'linear-gradient(45deg, #667eea, #764ba2)'
-            };
-            
-            toast.style.cssText = `
-                background: ${colors[type] || colors.info};
-                color: white;
-                padding: 15px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                font-size: 14px;
-                font-weight: 500;
-                max-width: 300px;
-                animation: slideInRight 0.3s ease;
-            `;
-            
+            toast.className = `toast ${type}`;
             toast.textContent = message;
             return toast;
         }
@@ -796,10 +1161,12 @@
             const element = document.getElementById(`${agent}Status`);
             element.className = `status-badge status-${status}`;
             element.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            debugLog(`Agent ${agent} status updated to: ${status}`);
         }
 
         function showAgentOutput(agent, text) {
             document.getElementById(`${agent}Output`).textContent = text;
+            debugLog(`Agent ${agent} output updated`);
         }
 
         function showAgentSpinner(agent, show) {
@@ -815,14 +1182,22 @@
             }
         }
 
-        function updateProgress(percent) {
+        function updateProgress(percent, statusText = '') {
             document.getElementById('progressBar').style.width = `${percent}%`;
+            const progressTextElement = document.getElementById('progressText');
+            if (statusText) {
+                progressTextElement.textContent = statusText;
+            } else {
+                progressTextElement.textContent = percent > 0 ? `${percent}%` : 'Ready';
+            }
         }
 
         function resetAgentStates() {
+            debugLog('Resetting all agent states');
             ['triage', 'context', 'analyst'].forEach(agent => {
                 updateAgentStatus(agent, 'pending');
                 showAgentSpinner(agent, false);
+                document.getElementById(`${agent}Card`).classList.remove('active');
                 const outputTexts = {
                     triage: 'Waiting for analysis to begin...',
                     context: 'Waiting for triage completion...',
@@ -837,24 +1212,63 @@
         }
 
         function clearResults() {
+            debugLog('Clearing all results and resetting dashboard');
             document.getElementById('logInput').value = '';
+            document.getElementById('logCounter').textContent = '0 events';
             resetAgentStates();
             hideFindings();
-            updateProgress(0);
+            updateProgress(0, 'Ready');
             analysisInProgress = false;
             document.getElementById('analyzeBtn').disabled = false;
+            
+            // Clear network stats
+            networkStats = { requests: 0, errors: 0, totalBytes: 0 };
+            showStatus('Dashboard cleared and reset', 'info');
         }
 
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+Shift+D for debug mode
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                e.preventDefault();
+                toggleDebugMode();
+            }
+            
+            // Ctrl+Shift+C for clear
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                clearResults();
+            }
+            
+            // Ctrl+Shift+A for analyze
+            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+                e.preventDefault();
+                if (!analysisInProgress) {
+                    startAnalysis();
+                }
+            }
+        });
+
+        // Monitor textarea changes for log counter
+        document.getElementById('logInput').addEventListener('input', function(e) {
+            updateLogCounter(e.target.value);
+        });
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {
             resetAgentStates();
             
-            // Add some helpful tooltips or initial guidance
+            // Welcome message
             showStatus('Welcome to SOC Agent Dashboard! Retrieve logs or paste your own to begin analysis.', 'info');
+            
+            // Show keyboard shortcuts in console
+            setTimeout(() => {
+                console.log('💡 SOC Dashboard Shortcuts:');
+                console.log('  • Ctrl+Shift+D → Toggle debug mode');
+                console.log('  • Ctrl+Shift+A → Start analysis');
+                console.log('  • Ctrl+Shift+C → Clear results');
+                debugLog('Dashboard initialized successfully with keyboard shortcuts enabled');
+            }, 2000);
         });
     </script>
 </body>

@@ -297,17 +297,12 @@ async def run_analysis_with_progress(log_batch, session_id):
 @app.route('/')
 def index():
     web_logger.info("Index route accessed")
-    try:
-        # Serve the new dashboard HTML directly
-        with open('dashboard.html', 'r') as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback to template if file doesn't exist
-        try:
-            return render_template('index.html')
-        except Exception as e:
-            web_logger.error(f"Error rendering page: {str(e)}")
-            return jsonify({"error": "Failed to load page"}), 500
+    # Serve the dashboard HTML directly with proper content type
+    dashboard_path = os.path.join(os.path.dirname(__file__), 'dashboard.html')
+    with open(dashboard_path, 'r') as f:
+        html_content = f.read()
+        response = Response(html_content, mimetype='text/html')
+        return response
 
 @app.route('/retrieve_logs', methods=['GET'])
 def retrieve_logs():
@@ -485,4 +480,3 @@ async def triage_agent_sync():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=True, host='0.0.0.0', port=port, threaded=True)
-        
