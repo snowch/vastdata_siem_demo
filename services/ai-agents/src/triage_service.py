@@ -2,7 +2,7 @@ import asyncio
 from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-from autogen_agentchat.messages import TextMessage, BaseAgentEvent, ToolCallRequestEvent, ToolCallExecutionEvent
+from autogen_agentchat.messages import TextMessage, BaseAgentEvent, ToolCallRequestEvent, ToolCallExecutionEvent, StructuredMessage
 from autogen_agentchat.conditions import (
     TextMentionTermination, 
     MaxMessageTermination, 
@@ -12,11 +12,14 @@ from autogen_agentchat.conditions import (
     FunctionCallTermination
 )
 from autogen_core import CancellationToken
+from autogen_core.tools import FunctionTool
 import json
 import logging
 import traceback
 from autogen_core import TRACE_LOGGER_NAME, EVENT_LOGGER_NAME
 from vectordb_utils import search_chroma
+from typing import List, Dict, Any, Literal
+from pydantic import BaseModel, Field
 
 # Global logger instances (initialized by init_logging)
 trace_logger = None
@@ -56,45 +59,100 @@ def init_logging():
     handler.setFormatter(formatter)
     agent_logger.addHandler(handler)
 
-# Tool functions for agents to use
-def report_priority_findings(
-    priority: str,
+# Structured output models
+class Timeline(BaseModel):
+    start: str = Field(description="Timeline start time")
+    end: str = Field(description="Timeline end time")
+
+class ThreatAssessment(BaseModel):
+    severity: Literal["critical", "high", "medium", "low"] = Field(description="Threat severity level")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score between 0 and 1")
+    threat_type: str = Field(description="Type of threat identified")
+
+class AttackEvent(BaseModel):
+    timestamp: str = Field(description="Event timestamp")
+    event_type: str = Field(description="Type of attack event")
+    description: str = Field(description="Event description")
+    severity: Literal["critical", "high", "medium", "low"] = Field(description="Event severity")
+
+class PriorityFindings(BaseModel):
+    priority: Literal["critical", "high", "medium", "low"] = Field(description="Priority level")
+    threat_type: str = Field(description="Type of threat")
+    source_ip: str = Field(description="Source IP address")
+    target_hosts: List[str] = Field(default_factory=list, description="List of target hosts")
+    attack_pattern: str = Field(description="Observed attack pattern")
+    timeline: Timeline = Field(description="Attack timeline")
+    indicators: List[str] = Field(default_factory=list, description="List of indicators")
+    confidence_score: float = Field(ge=0.0, le=1.0, description="Confidence score")
+    event_count: int = Field(ge=1, description="Number of events")
+    affected_services: List[str] = Field(default_factory=list, description="List of affected services")
+    brief_summary: str = Field(description="Brief summary of findings")
+
+class DetailedAnalysis(BaseModel):
+    threat_assessment: ThreatAssessment = Field(description="Detailed threat assessment")
+    attack_timeline: List[AttackEvent] = Field(default_factory=list, description="Chronological attack timeline")
+    attribution_indicators: List[str] = Field(default_factory=list, description="Attribution indicators")
+    lateral_movement_evidence: List[str] = Field(default_factory=list, description="Evidence of lateral movement")
+    data_at_risk: List[str] = Field(default_factory=list, description="Data at risk")
+    business_impact: str = Field(description="Business impact assessment")
+    recommended_actions: List[str] = Field(default_factory=list, description="Recommended actions")
+    investigation_notes: str = Field(description="Investigation notes")
+
+class SOCAnalysisResult(BaseModel):
+    """Final structured output for SOC analysis"""
+    executive_summary: str = Field(description="Executive summary of the analysis")
+    priority_findings: PriorityFindings = Field(description="Priority threat findings")
+    detailed_analysis: DetailedAnalysis = Field(description="Detailed analysis results")
+    historical_context: str = Field(description="Historical context from similar incidents")
+    confidence_level: Literal["high", "medium", "low"] = Field(description="Overall confidence in analysis")
+    analyst_notes: str = Field(description="Additional analyst notes and observations")
+
+# Enhanced tool functions with strict mode compatibility
+def _report_priority_findings(
+    priority: Literal["critical", "high", "medium", "low"],
     threat_type: str,
     source_ip: str,
-    target_hosts: list,
+    target_hosts: List[str],
     attack_pattern: str,
     timeline_start: str,
     timeline_end: str,
-    indicators: list,
+    indicators: List[str],
     confidence_score: float,
     event_count: int,
-    affected_services: list,
+    affected_services: List[str],
     brief_summary: str
-) -> dict:
+) -> Dict[str, Any]:
     """Function for initial triage to report the highest priority threat found."""
-    findings = {
-        "priority": priority,
-        "threat_type": threat_type,
-        "source_ip": source_ip,
-        "target_hosts": target_hosts,
-        "attack_pattern": attack_pattern,
-        "timeline": {
-            "start": timeline_start,
-            "end": timeline_end
-        },
-        "indicators": indicators,
-        "confidence_score": confidence_score,
-        "event_count": event_count,
-        "affected_services": affected_services,
-        "brief_summary": brief_summary
-    }
     
-    if agent_logger:
-        agent_logger.info(f"Priority findings recorded: {findings['threat_type']} from {findings['source_ip']}")
+    # Validate and convert data to proper types
+    try:        
+        # Validate using Pydantic model
+        timeline = Timeline(start=timeline_start, end=timeline_end)
+        validated_findings = PriorityFindings(
+            priority=priority,
+            threat_type=threat_type,
+            source_ip=source_ip,
+            target_hosts=target_hosts,
+            attack_pattern=attack_pattern,
+            timeline=timeline,
+            indicators=indicators,
+            confidence_score=confidence_score,
+            event_count=event_count,
+            affected_services=affected_services,
+            brief_summary=brief_summary
+        )
+        
+        if agent_logger:
+            agent_logger.info(f"Priority findings validated: {validated_findings.threat_type} from {validated_findings.source_ip}")
+        
+        return {"status": "priority_identified", "data": validated_findings.model_dump()}
     
-    return {"status": "priority_identified", "data": findings}
+    except Exception as e:
+        if agent_logger:
+            agent_logger.error(f"Priority findings validation error: {e}")
+        return {"status": "validation_error", "error": str(e)}
 
-def search_historical_incidents(search_query: str, max_results: int = 10) -> dict:
+def _search_historical_incidents(search_query: str, max_results: int) -> Dict[str, Any]:
     """Function for context agent to search ChromaDB for historical incidents."""
     try:
         if agent_logger:
@@ -112,36 +170,103 @@ def search_historical_incidents(search_query: str, max_results: int = 10) -> dic
             agent_logger.error(f"ChromaDB search error: {e}")
         return {"status": "search_failed", "error": str(e)}
 
-def report_detailed_analysis(
-    threat_assessment: dict,
-    attack_timeline: list,
-    attribution_indicators: list,
-    lateral_movement_evidence: list,
-    data_at_risk: list,
+def _report_detailed_analysis(
+    threat_severity: Literal["critical", "high", "medium", "low"],
+    threat_confidence: float,
+    threat_type_detailed: str,
+    attack_timeline: List[Dict[str, str]],  # More specific typing
+    attribution_indicators: List[str],
+    lateral_movement_evidence: List[str],
+    data_at_risk: List[str],
     business_impact: str,
-    recommended_actions: list,
+    recommended_actions: List[str],
     investigation_notes: str
-) -> dict:
+) -> Dict[str, Any]:
     """Function for detailed analysis after ChromaDB context enrichment."""
-    analysis = {
-        "threat_assessment": threat_assessment,
-        "attack_timeline": attack_timeline,
-        "attribution_indicators": attribution_indicators,
-        "lateral_movement_evidence": lateral_movement_evidence,
-        "data_at_risk": data_at_risk,
-        "business_impact": business_impact,
-        "recommended_actions": recommended_actions,
-        "investigation_notes": investigation_notes
-    }
+    try:
+        # Validate and convert attack timeline
+        timeline_events = []
+        for event in attack_timeline:
+            if isinstance(event, dict):
+                # Ensure required fields exist with defaults
+                timeline_event = AttackEvent(
+                    timestamp=event.get("timestamp", "unknown"),
+                    event_type=event.get("event_type", "unknown"),
+                    description=event.get("description", "No description"),
+                    severity=event.get("severity", "medium")
+                )
+                timeline_events.append(timeline_event)
+        
+        # Create threat assessment
+        threat_assessment = ThreatAssessment(
+            severity=threat_severity,
+            confidence=float(threat_confidence),
+            threat_type=threat_type_detailed
+        )
+        
+        # Validate using Pydantic model
+        validated_analysis = DetailedAnalysis(
+            threat_assessment=threat_assessment,
+            attack_timeline=timeline_events,
+            attribution_indicators=attribution_indicators,
+            lateral_movement_evidence=lateral_movement_evidence,
+            data_at_risk=data_at_risk,
+            business_impact=business_impact,
+            recommended_actions=recommended_actions,
+            investigation_notes=investigation_notes
+        )
+        
+        if agent_logger:
+            agent_logger.info(f"Detailed analysis validated: {len(recommended_actions)} recommendations generated")
+        
+        return {"status": "analysis_complete", "data": validated_analysis.model_dump()}
     
-    if agent_logger:
-        agent_logger.info(f"Detailed analysis completed: {len(recommended_actions)} recommendations generated")
-    
-    return {"status": "analysis_complete", "data": analysis}
+    except Exception as e:
+        if agent_logger:
+            agent_logger.error(f"Detailed analysis validation error: {e}")
+        return {"status": "validation_error", "error": str(e)}
 
-async def create_soc_team():
+async def _create_soc_team(use_structured_output: bool = False):
     """Create the SOC analysis team with specialized agents."""
-    model_client = OpenAIChatCompletionClient(model="gpt-4o")
+    model_client = OpenAIChatCompletionClient(model="gpt-4o", parallel_tool_calls=False)
+    
+    if use_structured_output:
+        # Create strict function tools - required when using structured output
+        # priority_tool = FunctionTool(
+        #     report_priority_findings, 
+        #     description="Report priority threat findings from initial triage",
+        #     strict=True
+        # )
+        
+        search_tool = FunctionTool(
+            _search_historical_incidents,
+            description="Search historical incidents in ChromaDB",
+            strict=True
+        )
+        
+        analysis_tool = FunctionTool(
+            _report_detailed_analysis,
+            description="Report detailed analysis results",
+            strict=True
+        )
+        
+        # triage_tools = [priority_tool]
+        context_tools = [search_tool] 
+        analysis_tools = [analysis_tool]
+        analyst_output_type = SOCAnalysisResult
+    else:
+        # Use regular function tools for better reliability
+        # triage_tools = [report_priority_findings]
+        context_tools = [_search_historical_incidents]
+        analysis_tools = [_report_detailed_analysis]
+        analyst_output_type = None
+
+    priority_tool = FunctionTool(
+        _report_priority_findings, 
+        description="Report priority threat findings from initial triage",
+        strict=True
+    )
+    triage_tools = [priority_tool]
     
     # Agent 1: Triage Specialist
     triage_agent = AssistantAgent(
@@ -164,17 +289,18 @@ async def create_soc_team():
    - File access anomalies
    - Privilege escalation attempts
 
-5. **CALL FUNCTION**: Use report_priority_findings() to structure your findings with proper data types:
-   - target_hosts: must be a list (e.g., ["host1", "host2"])
-   - indicators: must be a list (e.g., ["indicator1", "indicator2"]) 
-   - affected_services: must be a list (e.g., ["ssh", "rdp"])
-   - confidence_score: must be a float (e.g., 0.85)
-   - event_count: must be an integer
+5. **CALL FUNCTION**: Use report_priority_findings() with EXACT parameter types:
+   - priority: MUST be one of: "critical", "high", "medium", "low"
+   - target_hosts: List[str] - e.g., ["192.168.1.100", "server01"]
+   - indicators: List[str] - e.g., ["failed_logins", "privilege_escalation"]
+   - affected_services: List[str] - e.g., ["ssh", "rdp", "web_server"]
+   - confidence_score: float - e.g., 0.85 (between 0.0 and 1.0)
+   - event_count: int - e.g., 15
 
 6. **HAND OFF**: After successfully calling the function, say "CONTEXT_AGENT please search for similar historical incidents" and provide the key search terms.
 
 Focus ONLY on initial triage. Don't do deep analysis - that's for later agents.""",
-        tools=[report_priority_findings]
+        tools=[triage_tools[0]]
     )
     
     # Agent 2: Context Research Specialist  
@@ -185,6 +311,9 @@ Focus ONLY on initial triage. Don't do deep analysis - that's for later agents."
 
 1. **RECEIVE HANDOFF**: Wait for TriageSpecialist to identify priority threat
 2. **SEARCH HISTORICAL DATA**: Use search_historical_incidents() to find similar past incidents
+   - search_query: string describing what to search for
+   - max_results: integer (must provide - no default, recommend 5-10)
+
 3. **BUILD SEARCH QUERIES**: Create effective searches using:
    - Threat type (brute_force_attack, lateral_movement, etc.)
    - Attack patterns (ssh_login_failure, privilege_escalation, etc.) 
@@ -192,9 +321,9 @@ Focus ONLY on initial triage. Don't do deep analysis - that's for later agents."
    - Priority levels
 
 4. **MULTIPLE SEARCHES**: Perform 2-3 different searches to get comprehensive context:
-   - Search by threat type
-   - Search by attack pattern  
-   - Search by affected services
+   - Search by threat type (max_results: 5)
+   - Search by attack pattern (max_results: 5)
+   - Search by affected services (max_results: 5)
 
 5. **SUMMARIZE CONTEXT**: Provide a clear summary of historical patterns:
    - How similar attacks progressed
@@ -205,14 +334,14 @@ Focus ONLY on initial triage. Don't do deep analysis - that's for later agents."
 6. **HAND OFF**: After completing searches, say "ANALYST_AGENT please perform deep analysis with this context" and provide both original findings and historical context.
 
 You are the bridge between initial triage and deep analysis.""",
-        tools=[search_historical_incidents]
+        tools=[context_tools[0]]
     )
     
-    # Agent 3: Senior Analyst
-    analyst_agent = AssistantAgent(
-        name="SeniorAnalyst",
-        model_client=model_client, 
-        system_message="""You are a Senior SOC Analyst. Your role is to:
+    # Agent 3: Senior Analyst with conditional structured output
+    analyst_kwargs = {
+        "name": "SeniorAnalyst",
+        "model_client": model_client,
+        "system_message": """You are a Senior SOC Analyst. Your role is to:
 
 1. **RECEIVE CONTEXT**: Get priority threat + historical context from previous agents
 2. **DEEP ANALYSIS**: Perform comprehensive investigation:
@@ -234,52 +363,40 @@ You are the bridge between initial triage and deep analysis.""",
    - Business operations impact
    - Compliance implications
 
-5. **ACTIONABLE RECOMMENDATIONS**: Provide specific, prioritized actions:
-   - Immediate containment steps
-   - Investigation procedures
-   - Evidence preservation
-   - Communication requirements
+5. **CALL FUNCTION**: Use report_detailed_analysis() with EXACT parameter types:
+   - threat_severity: MUST be one of: "critical", "high", "medium", "low"
+   - threat_confidence: float between 0.0 and 1.0
+   - attack_timeline: List[Dict[str, str]] where each dict has keys: "timestamp", "event_type", "description", "severity"
+   - attribution_indicators: List[str]
+   - lateral_movement_evidence: List[str]
+   - data_at_risk: List[str]
+   - recommended_actions: List[str]
 
-6. **STRUCTURE FINDINGS**: Use report_detailed_analysis() with proper data types:
-   - threat_assessment: must be a dict (e.g., {"severity": "critical", "confidence": 0.9})
-   - attack_timeline: must be a list of events
-   - attribution_indicators: must be a list
-   - lateral_movement_evidence: must be a list
-   - data_at_risk: must be a list
-   - business_impact: must be a string
-   - recommended_actions: must be a list
-   - investigation_notes: must be a string
+6. **CONCLUDE**: After calling the function, end with "ANALYSIS_COMPLETE - Senior SOC investigation finished"
 
-7. **CONCLUDE**: After successfully calling the function, end with "ANALYSIS_COMPLETE - Senior SOC investigation finished"
-
-CRITICAL: You must call report_detailed_analysis() with the correct parameter types before concluding.""",
-        tools=[report_detailed_analysis]
-    )
+CRITICAL: You must call report_detailed_analysis() before concluding.""",
+        "tools": analysis_tools
+    }
+    
+    # Add structured output only if requested and available
+    if analyst_output_type:
+        analyst_kwargs["output_content_type"] = analyst_output_type
+    
+    analyst_agent = AssistantAgent(**analyst_kwargs)
     
     # Create multi-layered failsafe termination conditions
-    # Primary termination: Normal completion
     normal_completion = TextMentionTermination("ANALYSIS_COMPLETE")
-    
-    # Failsafe 1: Maximum messages (prevents infinite loops)
-    max_messages = MaxMessageTermination(20)  # Increased to allow for tool call retries
-    
-    # Failsafe 2: Token usage limit (prevents excessive API costs)
-    token_limit = TokenUsageTermination(max_total_token=50000)
-    
-    # Failsafe 3: Timeout (prevents hanging processes)
-    timeout = TimeoutTermination(timeout_seconds=300)  # 5 minutes max
-    
-    # Failsafe 4: Final analyst completion (alternative success condition)
+    max_messages = MaxMessageTermination(25)  # Increased for structured output
+    token_limit = TokenUsageTermination(max_total_token=60000)
+    timeout = TimeoutTermination(timeout_seconds=400)  # Increased for structured output
     analyst_completion = SourceMatchTermination("SeniorAnalyst") & FunctionCallTermination("report_detailed_analysis")
     
-    # Combine all termination conditions with OR logic
-    # Process terminates when ANY condition is met
     termination = (
-        normal_completion |           # Best case: normal completion
-        analyst_completion |          # Alternative: analyst completes function call
-        max_messages |               # Failsafe: too many messages
-        token_limit |                # Failsafe: too many tokens
-        timeout                      # Failsafe: too much time
+        normal_completion |
+        analyst_completion |
+        max_messages |
+        token_limit |
+        timeout
     )
     
     # Create team with round-robin order and robust termination
@@ -294,13 +411,15 @@ async def get_prioritized_task(log_batch: str) -> tuple[str, dict, dict]:
     """
     Run the SOC team analysis workflow.
     Returns: (full_conversation, structured_findings, chroma_context)
+    
+    Note: structured_result is embedded in structured_findings if available
     """
     if agent_logger:
         agent_logger.info("Starting SOC team analysis")
     
     try:
         # Create the team
-        team, model_client = await create_soc_team()
+        team, model_client = await _create_soc_team(use_structured_output=False)  # Start with reliable mode
         
         # Run the analysis
         task = f"""SECURITY LOG ANALYSIS REQUEST
@@ -319,6 +438,7 @@ TriageSpecialist: Begin initial triage analysis. Remember to use proper data typ
         priority_findings = {}
         detailed_analysis = {}
         chroma_context = {}
+        structured_result = None
         
         if result.messages:
             conversation_parts = []
@@ -327,12 +447,17 @@ TriageSpecialist: Begin initial triage analysis. Remember to use proper data typ
                 if hasattr(msg, 'source') and hasattr(msg, 'content'):
                     conversation_parts.append(f"[{msg.source}]: {msg.content}")
                     
+                    # Extract structured output from SeniorAnalyst
+                    if (msg.source == "SeniorAnalyst" and 
+                        isinstance(msg, StructuredMessage) and
+                        isinstance(msg.content, SOCAnalysisResult)):
+                        structured_result = msg.content
+                    
                     # Look for tool call results in the conversation
                     if hasattr(msg, 'content') and isinstance(msg.content, str):
                         # Check for tool call results patterns
                         if "status" in msg.content and "priority_identified" in msg.content:
                             try:
-                                # Try to extract structured data from tool results
                                 import re
                                 json_match = re.search(r'\{.*"status".*\}', msg.content, re.DOTALL)
                                 if json_match:
@@ -369,27 +494,14 @@ TriageSpecialist: Begin initial triage analysis. Remember to use proper data typ
         
         if agent_logger:
             agent_logger.info("SOC team analysis completed successfully")
-            agent_logger.debug(f"Conversation length: {len(full_conversation)}")
-            agent_logger.debug(f"Priority findings extracted: {bool(priority_findings)}")
-            agent_logger.debug(f"Chroma context available: {bool(chroma_context)}")
-            agent_logger.debug(f"Detailed analysis available: {bool(detailed_analysis)}")
-            agent_logger.debug(f"Total messages in conversation: {len(result.messages) if result.messages else 0}")
-            
-            # Log termination reason for debugging
-            if hasattr(result, 'stop_reason'):
-                agent_logger.info(f"Team terminated due to: {result.stop_reason}")
-            elif "ANALYSIS_COMPLETE" in full_conversation:
-                agent_logger.info("Team terminated: Normal completion detected")
-            elif len(result.messages) >= 20:
-                agent_logger.warning("Team terminated: Maximum message limit reached")
-            else:
-                agent_logger.info("Team terminated: Unknown reason")
+            agent_logger.debug(f"Structured result available: {structured_result is not None}")
         
-        # Combine findings for return
+        # Combine findings for return - include structured result if available
         combined_findings = {
             "priority_threat": priority_findings,
             "detailed_analysis": detailed_analysis,
-            "team_conversation": full_conversation
+            "team_conversation": full_conversation,
+            "structured_result": structured_result.model_dump() if structured_result else None
         }
         
         return full_conversation, combined_findings, chroma_context

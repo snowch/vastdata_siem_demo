@@ -212,6 +212,16 @@ async def run_analysis_with_progress(log_batch, session_id):
         
         web_logger.info(f"Raw structured findings for session {session_id}: {structured_findings}")
         
+        # Fix missing threat_assessment in detailed_analysis if needed
+        if 'detailed_analysis' in structured_findings:
+            detailed = structured_findings['detailed_analysis']
+            if 'threat_assessment' not in detailed or not detailed['threat_assessment']:
+                detailed['threat_assessment'] = {
+                    "severity": "unknown",
+                    "confidence": 0.0
+                }
+                web_logger.warning(f"Added default threat_assessment for session {session_id} due to missing field")
+        
         # Parse the conversation to extract agent outputs
         agent_outputs = parse_agent_conversation(full_conversation)
         
@@ -441,41 +451,6 @@ def progress_stream(session_id):
             cleanup_thread.start()
     
     return Response(event_stream(), mimetype="text/plain")
-
-# Legacy endpoint for backward compatibility
-@app.route('/triage_sync', methods=['POST'])
-async def triage_agent_sync():
-    """Synchronous triage endpoint for backward compatibility."""
-    web_logger.info("Synchronous triage route accessed")
-    
-    try:
-        data = request.get_json()
-        
-        if data is None:
-            return jsonify({"error": "No JSON data provided"}), 400
-            
-        log_batch = data.get('logs')
-        if not log_batch:
-            return jsonify({"error": "No logs provided"}), 400
-
-        # Run analysis synchronously
-        prioritized_task, structured_findings, chroma_results = await get_prioritized_task(json.dumps(log_batch))
-        
-        # Convert markdown to HTML
-        prioritized_task_html = markdown.markdown(prioritized_task)
-        
-        # Sanitize ChromaDB results
-        sanitized_chroma_results = sanitize_chroma_results(chroma_results)
-        
-        return jsonify({
-            "response": prioritized_task_html, 
-            "chroma_results": sanitized_chroma_results,
-            "structured_findings": structured_findings
-        })
-        
-    except Exception as e:
-        web_logger.error(f"Unexpected error during sync triage: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
