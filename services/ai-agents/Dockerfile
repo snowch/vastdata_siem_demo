@@ -19,4 +19,4 @@ COPY src/ ./src/
 EXPOSE 5000
 
 # Command to run the Flask application
-CMD ["python", "src/web_ui.py"]
+CMD ["python", "src/web.py"]
