@@ -32,13 +32,11 @@ async def _create_soc_team(use_structured_output: bool = False):
             description="Search historical incidents in ChromaDB",
             strict=True
         )
-        
         analysis_tool = FunctionTool(
             report_detailed_analysis,
             description="Report detailed analysis results",
             strict=True
         )
-        
         context_tools = [search_tool] 
         analysis_tools = [analysis_tool]
         analyst_output_type = SOCAnalysisResult
@@ -47,12 +45,7 @@ async def _create_soc_team(use_structured_output: bool = False):
         analysis_tools = [report_detailed_analysis]
         analyst_output_type = None
 
-    priority_tool = FunctionTool(
-        report_priority_findings, 
-        description="Report priority threat findings from initial triage",
-        strict=True
-    )
-    triage_tools = [priority_tool]
+
     
     triage_agent = TriageAgent(model_client)
     
