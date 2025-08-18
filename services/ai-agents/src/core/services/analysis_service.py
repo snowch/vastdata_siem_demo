@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Literal
 import json
 import logging
 from core.models.analysis import Timeline, PriorityFindings, DetailedAnalysis, AttackEvent, ThreatAssessment, SOCAnalysisResult
-from infrastructure.database.vectordb_utils import search_chroma
+from infrastructure.vectordb_utils import search_chroma
 
 agent_logger = logging.getLogger("agent_diagnostics")
 
