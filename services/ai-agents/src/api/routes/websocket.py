@@ -3,8 +3,8 @@ import uuid
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.models.websocket import AnalysisProgress
-from triage_service import get_prioritized_task
-from core.services.analysis_service import parse_agent_conversation, extract_structured_findings
+from core.services.agent_service import get_prioritized_task
+from core.services.analysis_helpers import parse_agent_conversation, extract_structured_findings
 from utils.serialization import sanitize_chroma_results
 from log_retriever import get_logs
 import logging

@@ -1,83 +1,96 @@
-from datetime import datetime
+from typing import List, Dict, Any, Literal
+import json
+import logging
+from core.models.analysis import Timeline, PriorityFindings, DetailedAnalysis, AttackEvent, ThreatAssessment, SOCAnalysisResult
+from vectordb_utils import search_chroma
 
-def parse_agent_conversation(conversation):
-    """Parse the conversation string to extract individual agent outputs."""
-    lines = conversation.split('\n')
-    agent_outputs = {'triage': [], 'context': [], 'analyst': []}
-    current_agent = None
-    current_message = []
+agent_logger = logging.getLogger("agent_diagnostics")
 
-    agent_mapping = {
-        'TriageSpecialist': 'triage',
-        'ContextAgent': 'context',
-        'SeniorAnalyst': 'analyst'
-    }
+def report_priority_findings(
+    priority: Literal["critical", "high", "medium", "low"],
+    threat_type: str,
+    source_ip: str,
+    target_hosts: List[str],
+    attack_pattern: str,
+    timeline_start: str,
+    timeline_end: str,
+    indicators: List[str],
+    confidence_score: float,
+    event_count: int,
+    affected_services: List[str],
+    brief_summary: str
+) -> Dict[str, Any]:
+    try:
+        timeline = Timeline(start=timeline_start, end=timeline_end)
+        validated_findings = PriorityFindings(
+            priority=priority,
+            threat_type=threat_type,
+            source_ip=source_ip,
+            target_hosts=target_hosts,
+            attack_pattern=attack_pattern,
+            timeline=timeline,
+            indicators=indicators,
+            confidence_score=confidence_score,
+            event_count=event_count,
+            affected_services=affected_services,
+            brief_summary=brief_summary
+        )
+        agent_logger.info(f"Priority findings validated: {validated_findings.threat_type} from {validated_findings.source_ip}")
+        return {"status": "priority_identified", "data": validated_findings.model_dump()}
+    except Exception as e:
+        agent_logger.error(f"Priority findings validation error: {e}")
+        return {"status": "validation_error", "error": str(e)}
 
-    for line in lines:
-        # Check if line contains agent identifier
-        agent_found = None
-        for agent_name, agent_key in agent_mapping.items():
-            if f'[{agent_name}]' in line:
-                agent_found = agent_key
-                break
+def search_historical_incidents(search_query: str, max_results: int) -> Dict[str, Any]:
+    try:
+        agent_logger.info(f"Searching ChromaDB with query: {search_query}")
+        results = search_chroma(search_query, n_results=max_results)
+        agent_logger.info(f"ChromaDB returned {len(results.get('documents', []))} results")
+        return {"status": "search_complete", "results": results}
+    except Exception as e:
+        agent_logger.error(f"ChromaDB search error: {e}")
+        return {"status": "search_failed", "error": str(e)}
 
-        if agent_found:
-            # Save previous agent's message if exists
-            if current_agent and current_message:
-                message_text = '\n'.join(current_message).strip()
-                if message_text:
-                    agent_outputs[current_agent].append(message_text)
-
-            # Start new agent message
-            current_agent = agent_found
-            current_message = [line]
-        elif current_agent and line.strip():
-            current_message.append(line)
-
-    # Don't forget the last message
-    if current_agent and current_message:
-        message_text = '\n'.join(current_message).strip()
-        if message_text:
-            agent_outputs[current_agent].append(message_text)
-
-    return agent_outputs
-
-def extract_structured_findings(conversation, structured_findings):
-    """Extract key findings information for better progress tracking."""
-    findings_summary = {
-        'priority_found': False,
-        'context_searched': False,
-        'analysis_completed': False,
-        'priority_level': 'unknown',
-        'threat_type': 'unknown'
-    }
-
-    # Check structured findings first
-    if structured_findings and 'priority_threat' in structured_findings:
-        priority_threat = structured_findings['priority_threat']
-        if priority_threat:
-            findings_summary['priority_found'] = True
-            findings_summary['priority_level'] = priority_threat.get('priority', 'unknown').lower()
-            findings_summary['threat_type'] = priority_threat.get('threat_type', 'unknown')
-
-    if structured_findings and 'detailed_analysis' in structured_findings:
-        if structured_findings['detailed_analysis']:
-            findings_summary['analysis_completed'] = True
-
-    # Check conversation for context search activity
-    if 'search_historical_incidents' in conversation or 'ChromaDB' in conversation:
-        findings_summary['context_searched'] = True
-
-    # Fallback to conversation parsing if structured findings incomplete
-    conversation_lower = conversation.lower()
-    if 'priority_identified' in conversation_lower or 'critical' in conversation_lower or 'high priority' in conversation_lower:
-        findings_summary['priority_found'] = True
-
-    if 'critical' in conversation_lower:
-        findings_summary['priority_level'] = 'critical'
-    elif 'high' in conversation_lower:
-        findings_summary['priority_level'] = 'high'
-    elif 'medium' in conversation_lower:
-        findings_summary['priority_level'] = 'medium'
-
-    return findings_summary
+def report_detailed_analysis(
+    threat_severity: Literal["critical", "high", "medium", "low"],
+    threat_confidence: float,
+    threat_type_detailed: str,
+    attack_timeline: List[Dict[str, str]],
+    attribution_indicators: List[str],
+    lateral_movement_evidence: List[str],
+    data_at_risk: List[str],
+    business_impact: str,
+    recommended_actions: List[str],
+    investigation_notes: str
+) -> Dict[str, Any]:
+    try:
+        timeline_events = []
+        for event in attack_timeline:
+            if isinstance(event, dict):
+                timeline_event = AttackEvent(
+                    timestamp=event.get("timestamp", "unknown"),
+                    event_type=event.get("event_type", "unknown"),
+                    description=event.get("description", "No description"),
+                    severity=event.get("severity", "medium")
+                )
+                timeline_events.append(timeline_event)
+        threat_assessment = ThreatAssessment(
+            severity=threat_severity,
+            confidence=float(threat_confidence),
+            threat_type=threat_type_detailed
+        )
+        validated_analysis = DetailedAnalysis(
+            threat_assessment=threat_assessment,
+            attack_timeline=timeline_events,
+            attribution_indicators=attribution_indicators,
+            lateral_movement_evidence=lateral_movement_evidence,
+            data_at_risk=data_at_risk,
+            business_impact=business_impact,
+            recommended_actions=recommended_actions,
+            investigation_notes=investigation_notes
+        )
+        agent_logger.info(f"Detailed analysis validated: {len(recommended_actions)} recommendations generated")
+        return {"status": "analysis_complete", "data": validated_analysis.model_dump()}
+    except Exception as e:
+        agent_logger.error(f"Detailed analysis validation error: {e}")
+        return {"status": "validation_error", "error": str(e)}

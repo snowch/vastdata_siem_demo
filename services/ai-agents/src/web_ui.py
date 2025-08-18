@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
-from triage_service import init_logging
+from core.logging.config import init_logging
 
 # Initialize logging for the triage service
 init_logging()
