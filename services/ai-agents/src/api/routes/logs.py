@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from log_retriever import get_logs
+from infrastructure.database.trino_db_reader import get_logs
 import logging
 
 router = APIRouter()

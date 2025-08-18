@@ -6,7 +6,7 @@ from core.models.websocket import AnalysisProgress
 from core.services.agent_service import get_prioritized_task
 from core.services.analysis_helpers import parse_agent_conversation, extract_structured_findings
 from utils.serialization import sanitize_chroma_results
-from log_retriever import get_logs
+from infrastructure.database.trino_db_reader import get_logs
 import logging
 import traceback
 
