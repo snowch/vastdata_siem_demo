@@ -1,32 +1,49 @@
 import asyncio
-from flask import Flask, request, render_template, jsonify, Response
+import json
+import logging
+import os
+import traceback
+import uuid
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+import numpy as np
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
 from triage_service import get_prioritized_task, init_logging
 from log_retriever import get_logs
-import json
-import os
-import markdown
-import logging
-import traceback
-import numpy as np
-import threading
-import time
-from datetime import datetime
-
-app = Flask(__name__, template_folder='../templates')
 
 # Initialize logging for the triage service
 init_logging()
 
-# Create a dedicated logger for web_ui
-web_logger = logging.getLogger("web_ui")
-web_logger.setLevel(logging.INFO)
+# Create a dedicated logger for websocket server
+ws_logger = logging.getLogger("websocket_server")
+ws_logger.setLevel(logging.INFO)
 
-# Global store for progress tracking
-progress_store = {}
+app = FastAPI(title="SOC Agent Analysis WebSocket Server")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static files and dashboard
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+# Store active WebSocket connections
+active_connections: Dict[str, WebSocket] = {}
 
 class AnalysisProgress:
-    def __init__(self, session_id):
+    def __init__(self, session_id: str, websocket: WebSocket):
         self.session_id = session_id
+        self.websocket = websocket
         self.status = "initializing"
         self.current_agent = None
         self.agent_outputs = {
@@ -38,18 +55,46 @@ class AnalysisProgress:
         self.error = None
         self.completed = False
         self.start_time = datetime.now()
+        self.final_results = None
         
-    def update_status(self, status, agent=None, message=None, progress=None):
-        self.status = status
-        if agent:
-            self.current_agent = agent
-        if message and agent:
-            self.agent_outputs[agent].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': message
-            })
-        if progress is not None:
-            self.progress_percent = progress
+    async def send_update(self, status: Optional[str] = None, agent: Optional[str] = None, 
+                         message: Optional[str] = None, progress: Optional[int] = None):
+        """Send progress update via WebSocket"""
+        try:
+            if status:
+                self.status = status
+            if agent:
+                self.current_agent = agent
+            if message and agent:
+                self.agent_outputs[agent].append({
+                    'timestamp': datetime.now().isoformat(),
+                    'message': message
+                })
+            if progress is not None:
+                self.progress_percent = progress
+
+            # Create update message
+            update = {
+                "type": "progress_update",
+                "session_id": self.session_id,
+                "status": self.status,
+                "current_agent": self.current_agent,
+                "progress_percent": self.progress_percent,
+                "agent_outputs": self.agent_outputs,
+                "completed": self.completed,
+                "error": self.error,
+                "start_time": self.start_time.isoformat()
+            }
+            
+            # Include final results if completed
+            if self.completed and self.final_results:
+                update["results"] = self.final_results
+
+            await self.websocket.send_json(update)
+            ws_logger.debug(f"Sent update for session {self.session_id}: {status} - {progress}%")
+            
+        except Exception as e:
+            ws_logger.error(f"Failed to send WebSocket update: {e}")
 
 def truncate_embedding_recursive(obj, max_dims=5):
     """Recursively truncate any embedding vectors found in nested structures."""
@@ -84,7 +129,7 @@ def truncate_embedding_recursive(obj, max_dims=5):
         return obj
 
 def sanitize_chroma_results(chroma_results):
-    """Convert numpy arrays in ChromaDB results to lists for JSON serialization and limit embeddings to first 5."""
+    """Convert numpy arrays in ChromaDB results to lists for JSON serialization."""
     if not isinstance(chroma_results, dict):
         return chroma_results
     
@@ -196,21 +241,19 @@ def extract_structured_findings(conversation, structured_findings):
     
     return findings_summary
 
-async def run_analysis_with_progress(log_batch, session_id):
-    """Run analysis with progress tracking."""
-    progress = progress_store[session_id]
-    
+async def run_analysis_with_websocket(log_batch: str, progress: AnalysisProgress):
+    """Run analysis with real-time WebSocket progress updates."""
     try:
-        progress.update_status("starting", progress=10)
-        web_logger.info(f"Starting analysis for session {session_id}")
+        await progress.send_update("starting", progress=10)
+        ws_logger.info(f"Starting analysis for session {progress.session_id}")
         
         # Update status for triage phase
-        progress.update_status("running_triage", "triage", "🔍 Starting initial triage analysis...", 20)
+        await progress.send_update("running_triage", "triage", "🔍 Starting initial triage analysis...", 20)
         
         # Execute the team workflow
         full_conversation, structured_findings, chroma_context = await get_prioritized_task(log_batch)
         
-        web_logger.info(f"Raw structured findings for session {session_id}: {structured_findings}")
+        ws_logger.info(f"Raw structured findings for session {progress.session_id}: {structured_findings}")
         
         # Fix missing threat_assessment in detailed_analysis if needed
         if 'detailed_analysis' in structured_findings:
@@ -220,7 +263,7 @@ async def run_analysis_with_progress(log_batch, session_id):
                     "severity": "unknown",
                     "confidence": 0.0
                 }
-                web_logger.warning(f"Added default threat_assessment for session {session_id} due to missing field")
+                ws_logger.warning(f"Added default threat_assessment for session {progress.session_id}")
         
         # Parse the conversation to extract agent outputs
         agent_outputs = parse_agent_conversation(full_conversation)
@@ -233,7 +276,9 @@ async def run_analysis_with_progress(log_batch, session_id):
         
         # Update triage outputs
         if agent_outputs['triage'] or findings_summary['priority_found']:
-            progress.update_status("completed_triage", "triage", f"✅ Triage completed - {findings_summary['priority_level']} priority {findings_summary['threat_type']} detected", current_progress)
+            await progress.send_update("completed_triage", "triage", 
+                f"✅ Triage completed - {findings_summary['priority_level']} priority {findings_summary['threat_type']} detected", 
+                current_progress)
             for output in agent_outputs['triage']:
                 progress.agent_outputs['triage'].append({
                     'timestamp': datetime.now().isoformat(),
@@ -248,7 +293,8 @@ async def run_analysis_with_progress(log_batch, session_id):
         
         # Update context search outputs
         if agent_outputs['context'] or findings_summary['context_searched']:
-            progress.update_status("completed_context", "context", "🔎 Historical context research completed", current_progress)
+            await progress.send_update("completed_context", "context", 
+                "🔎 Historical context research completed", current_progress)
             for output in agent_outputs['context']:
                 progress.agent_outputs['context'].append({
                     'timestamp': datetime.now().isoformat(),
@@ -263,7 +309,8 @@ async def run_analysis_with_progress(log_batch, session_id):
         
         # Update analyst outputs
         if agent_outputs['analyst'] or findings_summary['analysis_completed']:
-            progress.update_status("completed_analyst", "analyst", "👨‍💼 Deep analysis and recommendations completed", current_progress)
+            await progress.send_update("completed_analyst", "analyst", 
+                "👨‍💼 Deep analysis and recommendations completed", current_progress)
             for output in agent_outputs['analyst']:
                 progress.agent_outputs['analyst'].append({
                     'timestamp': datetime.now().isoformat(),
@@ -292,166 +339,135 @@ async def run_analysis_with_progress(log_batch, session_id):
             'findings_summary': findings_summary
         }
         
-        progress.update_status("completed", progress=100)
         progress.completed = True
+        await progress.send_update("completed", progress=100)
         
-        web_logger.info(f"Analysis completed for session {session_id}")
-        web_logger.debug(f"Final agent outputs - Triage: {len(progress.agent_outputs['triage'])}, Context: {len(progress.agent_outputs['context'])}, Analyst: {len(progress.agent_outputs['analyst'])}")
+        ws_logger.info(f"Analysis completed for session {progress.session_id}")
         
     except Exception as e:
-        web_logger.error(f"Analysis failed for session {session_id}: {str(e)}")
-        web_logger.error(f"Traceback: {traceback.format_exc()}")
+        ws_logger.error(f"Analysis failed for session {progress.session_id}: {str(e)}")
+        ws_logger.error(f"Full traceback: {traceback.format_exc()}")
         progress.error = str(e)
-        progress.update_status("error", progress=100)
+        progress.completed = True
+        await progress.send_update("error", progress=100)
 
-@app.route('/')
-def index():
-    web_logger.info("Index route accessed")
-    # Serve the dashboard HTML directly with proper content type
+@app.get("/")
+async def root():
+    """Serve the dashboard HTML directly"""
     dashboard_path = os.path.join(os.path.dirname(__file__), 'dashboard.html')
-    with open(dashboard_path, 'r') as f:
-        html_content = f.read()
-        response = Response(html_content, mimetype='text/html')
-        return response
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    else:
+        raise HTTPException(status_code=404, detail="Dashboard file not found")
 
-@app.route('/retrieve_logs', methods=['GET'])
-def retrieve_logs():
-    web_logger.info("Retrieve logs route accessed")
+@app.get("/retrieve_logs")
+async def retrieve_logs():
+    """REST endpoint for log retrieval (kept for compatibility)"""
+    ws_logger.info("Retrieve logs endpoint accessed")
     try:
         logs = get_logs()
-        web_logger.info(f"Successfully retrieved {len(logs)} logs")
-        return jsonify(logs)
+        ws_logger.info(f"Successfully retrieved {len(logs)} logs")
+        return logs
     except Exception as e:
-        web_logger.error(f"Error retrieving logs: {str(e)}")
-        return jsonify({ "error_retrieving_logs": str(e) }), 500
+        ws_logger.error(f"Error retrieving logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving logs: {str(e)}")
 
-@app.route('/triage', methods=['POST'])
-def triage_agent():
-    web_logger.info("Triage route accessed")
+@app.websocket("/ws/analysis")
+async def websocket_analysis(websocket: WebSocket):
+    """WebSocket endpoint for real-time SOC analysis"""
+    await websocket.accept()
+    session_id = str(uuid.uuid4())
+    active_connections[session_id] = websocket
+    
+    ws_logger.info(f"WebSocket connection established: {session_id}")
+    
+    # Send connection confirmation
+    await websocket.send_json({
+        "type": "connection_established",
+        "session_id": session_id,
+        "message": "Connected to SOC Analysis WebSocket"
+    })
     
     try:
-        data = request.get_json()
-        
-        if data is None:
-            web_logger.error("No JSON data received in request")
-            return jsonify({"error": "No JSON data provided"}), 400
+        while True:
+            # Wait for client messages
+            data = await websocket.receive_json()
+            message_type = data.get("type")
             
-        log_batch = data.get('logs')
-        if not log_batch:
-            web_logger.error("No logs provided in request data")
-            return jsonify({"error": "No logs provided"}), 400
-
-        web_logger.info(f"Processing log batch with {len(str(log_batch))} characters")
-
-        # Create session ID and progress tracker
-        session_id = f"session_{int(time.time())}"
-        progress_store[session_id] = AnalysisProgress(session_id)
-        
-        # Start analysis in background thread
-        def run_async():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(run_analysis_with_progress(log_batch, session_id))
-            loop.close()
-        
-        thread = threading.Thread(target=run_async)
-        thread.daemon = True
-        thread.start()
-        
-        # Return session ID for progress tracking
-        return jsonify({
-            "session_id": session_id,
-            "status": "analysis_started",
-            "message": "Analysis started successfully. Use /progress endpoint to track status."
-        })
-        
-    except json.JSONDecodeError as e:
-        web_logger.error(f"JSON decode error: {str(e)}")
-        return jsonify({"error": f"Invalid JSON data: {str(e)}"}), 400
-    except Exception as e:
-        web_logger.error(f"Unexpected error during triage: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/progress/<session_id>')
-def get_progress(session_id):
-    """Get current progress for a session."""
-    if session_id not in progress_store:
-        return jsonify({"error": "Session not found"}), 404
-    
-    progress = progress_store[session_id]
-    
-    response_data = {
-        "session_id": session_id,
-        "status": progress.status,
-        "current_agent": progress.current_agent,
-        "progress_percent": progress.progress_percent,
-        "agent_outputs": progress.agent_outputs,
-        "completed": progress.completed,
-        "error": progress.error,
-        "start_time": progress.start_time.isoformat()
-    }
-    
-    # Include final results if completed
-    if progress.completed and hasattr(progress, 'final_results'):
-        response_data["results"] = progress.final_results
-    
-    return jsonify(response_data)
-
-@app.route('/progress_stream/<session_id>')
-def progress_stream(session_id):
-    """Server-sent events stream for real-time progress updates."""
-    if session_id not in progress_store:
-        return jsonify({"error": "Session not found"}), 404
-    
-    def event_stream():
-        progress = progress_store[session_id]
-        last_update_time = time.time()
-        
-        while not progress.completed and not progress.error:
-            current_time = time.time()
-            
-            # Send update every 2 seconds or when status changes
-            if current_time - last_update_time >= 2:
-                data = {
-                    "status": progress.status,
-                    "current_agent": progress.current_agent,
-                    "progress_percent": progress.progress_percent,
-                    "agent_outputs": progress.agent_outputs
-                }
+            if message_type == "start_analysis":
+                log_batch = data.get("logs")
+                if not log_batch:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "No logs provided for analysis"
+                    })
+                    continue
                 
-                yield f"data: {json.dumps(data)}\n\n"
-                last_update_time = current_time
+                ws_logger.info(f"Starting analysis for session {session_id}")
+                
+                # Create progress tracker
+                progress = AnalysisProgress(session_id, websocket)
+                
+                # Run analysis in background task
+                asyncio.create_task(run_analysis_with_websocket(log_batch, progress))
+                
+            elif message_type == "retrieve_logs":
+                ws_logger.info(f"Log retrieval requested via WebSocket: {session_id}")
+                try:
+                    logs = get_logs()
+                    await websocket.send_json({
+                        "type": "logs_retrieved",
+                        "logs": logs,
+                        "message": f"Retrieved {len(logs)} log entries successfully"
+                    })
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Error retrieving logs: {str(e)}"
+                    })
             
-            time.sleep(0.5)
-        
-        # Send final update
-        final_data = {
-            "status": progress.status,
-            "progress_percent": progress.progress_percent,
-            "completed": progress.completed,
-            "error": progress.error,
-            "agent_outputs": progress.agent_outputs
-        }
-        
-        if progress.completed and hasattr(progress, 'final_results'):
-            final_data["results"] = progress.final_results
-        
-        yield f"data: {json.dumps(final_data)}\n\n"
-        
-        # Clean up old sessions after completion
-        if session_id in progress_store:
-            # Keep for 5 minutes after completion for result retrieval
-            def cleanup():
-                time.sleep(300)  # 5 minutes
-                if session_id in progress_store:
-                    del progress_store[session_id]
+            elif message_type == "ping":
+                # Handle ping/pong for connection health
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": datetime.now().isoformat()
+                })
             
-            cleanup_thread = threading.Thread(target=cleanup)
-            cleanup_thread.daemon = True
-            cleanup_thread.start()
-    
-    return Response(event_stream(), mimetype="text/plain")
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {message_type}"
+                })
+                
+    except WebSocketDisconnect:
+        ws_logger.info(f"WebSocket disconnected: {session_id}")
+    except Exception as e:
+        ws_logger.error(f"WebSocket error for session {session_id}: {str(e)}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Server error: {str(e)}"
+            })
+        except:
+            # Connection already closed
+            pass
+    finally:
+        # Clean up connection
+        if session_id in active_connections:
+            del active_connections[session_id]
+        ws_logger.info(f"Cleaned up session: {session_id}")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "active_connections": len(active_connections),
+        "timestamp": datetime.now().isoformat()
+    }
 
 if __name__ == '__main__':
+    import uvicorn
     port = int(os.environ.get('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=port, threaded=True)
+    ws_logger.info(f"Starting WebSocket SOC Analysis Server on port {port}")
+    uvicorn.run(app, host='0.0.0.0', port=port)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOC Agent Analysis Dashboard</title>
+    <title>SOC Agent Analysis Dashboard - WebSocket</title>
     <style>
         * {
             margin: 0;
@@ -16,7 +16,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
-            padding-top: 20px; /* Added padding to prevent overlap */
+            padding-top: 20px;
         }
 
         .dashboard {
@@ -38,9 +38,36 @@
             position: relative;
         }
 
-        .debug-toggle {
+        .connection-status {
             position: absolute;
             top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+        }
+
+        .status-indicator.connecting {
+            background: #f39c12;
+        }
+
+        .debug-toggle {
+            position: absolute;
+            top: 50px;
             right: 20px;
             background: linear-gradient(45deg, #2c3e50, #34495e);
             color: white;
@@ -331,9 +358,9 @@
 
         .progress-bar {
             width: 100%;
-            height: 24px; /* Increased from 8px */
+            height: 24px;
             background: #e1e8ed;
-            border-radius: 12px; /* Half of the new height */
+            border-radius: 12px;
             overflow: hidden;
             margin: 20px 0;
             position: relative;
@@ -344,7 +371,7 @@
             background: linear-gradient(45deg, #667eea, #764ba2);
             width: 0%;
             transition: width 0.5s ease;
-            border-radius: 12px; /* Match the container's radius */
+            border-radius: 12px;
         }
 
         .progress-text {
@@ -354,7 +381,7 @@
             transform: translate(-50%, -50%);
             font-size: 12px;
             font-weight: 600;
-            color: #1a1a2e; /* Darker color for contrast */
+            color: #1a1a2e;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
             white-space: nowrap;
         }
@@ -505,7 +532,6 @@
             }
         }
 
-        /* Toast notifications */
         #toast-container {
             position: fixed;
             top: 20px;
@@ -585,6 +611,13 @@
                 margin-bottom: 15px;
             }
 
+            .connection-status {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 10px;
+            }
+
             .agent-info {
                 min-width: auto;
             }
@@ -594,44 +627,22 @@
                 font-size: 14px;
             }
         }
-
-        @media (max-width: 480px) {
-            .header h1 {
-                font-size: 1.8em;
-            }
-
-            .agent-icon {
-                width: 40px;
-                height: 40px;
-                font-size: 20px;
-            }
-
-            .agent-details h3 {
-                font-size: 1.2em;
-            }
-
-            .controls {
-                flex-direction: column;
-                width: 100%;
-            }
-
-            .btn {
-                width: 100%;
-                justify-content: center;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="header">
+            <div class="connection-status">
+                <span class="status-indicator" id="connectionIndicator"></span>
+                <span id="connectionStatus">Connecting...</span>
+            </div>
             <button class="debug-toggle" onclick="toggleDebugMode()" id="debugToggle">
                 🔧 Debug Mode
             </button>
-            <h1>🛡️ SOC Agent Analysis Dashboard (work in progress)</h1>
-            <p>Multi-agent security log analysis with real-time workflow visualization</p>
+            <h1>🛡️ SOC Agent Analysis Dashboard - Compatible</h1>
+            <p>Real-time multi-agent security log analysis with cross-browser WebSocket support</p>
             <div class="controls">
-                <button class="btn btn-secondary" onclick="retrieveLogs()">
+                <button class="btn btn-secondary" onclick="retrieveLogs()" id="retrieveBtn">
                     📥 Retrieve Logs
                 </button>
                 <button class="btn btn-primary" onclick="startAnalysis()" id="analyzeBtn">
@@ -724,9 +735,10 @@
             <div class="debug-controls">
                 <button class="debug-btn" onclick="clearDebugLog()">Clear Log</button>
                 <button class="debug-btn" onclick="exportDebugLog()">Export Log</button>
-                <button class="debug-btn" onclick="showNetworkStats()">Network Stats</button>
+                <button class="debug-btn" onclick="showWebSocketStats()">WebSocket Stats</button>
+                <button class="debug-btn" onclick="testConnection()">Test Connection</button>
             </div>
-            <div class="debug-log" id="debugLog">Debug mode enabled. Detailed logs will appear here...</div>
+            <div class="debug-log" id="debugLog">Debug mode enabled. WebSocket logs will appear here...</div>
         </div>
 
         <!-- Findings Panel -->
@@ -744,24 +756,194 @@
     <div id="toast-container"></div>
 
     <script>
-        let analysisInProgress = false;
-        let eventSource = null;
-        let debugMode = false;
-        let debugMessages = [];
-        let networkStats = { requests: 0, errors: 0, totalBytes: 0 };
+        // Global variables using traditional JavaScript
+        var analysisInProgress = false;
+        var websocket = null;
+        var debugMode = false;
+        var debugMessages = [];
+        var wsStats = { connected: false, messages_sent: 0, messages_received: 0, reconnects: 0 };
+        var reconnectAttempts = 0;
+        var maxReconnectAttempts = 5;
+
+        // WebSocket Management with ES5 syntax
+        function initWebSocket() {
+            var protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:';
+            var wsUrl = protocol + '//' + window.location.host + '/ws/analysis';
+            
+            debugLog('Connecting to WebSocket: ' + wsUrl);
+            updateConnectionStatus('connecting');
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function(event) {
+                debugLog('WebSocket connection established');
+                updateConnectionStatus('connected');
+                wsStats.connected = true;
+                reconnectAttempts = 0;
+                showStatus('Connected to SOC Analysis WebSocket', 'success');
+            };
+            
+            websocket.onmessage = function(event) {
+                wsStats.messages_received++;
+                var data = JSON.parse(event.data);
+                debugLog('WebSocket message received: ' + data.type);
+                handleWebSocketMessage(data);
+            };
+            
+            websocket.onclose = function(event) {
+                debugLog('WebSocket connection closed: ' + event.code + ' - ' + event.reason);
+                updateConnectionStatus('disconnected');
+                wsStats.connected = false;
+                
+                if (!event.wasClean && reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    showStatus('Connection lost. Reconnecting... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')', 'warning');
+                    setTimeout(function() {
+                        initWebSocket();
+                        wsStats.reconnects++;
+                    }, 2000 * reconnectAttempts);
+                } else if (reconnectAttempts >= maxReconnectAttempts) {
+                    showStatus('Connection failed. Please refresh the page.', 'error');
+                }
+            };
+            
+            websocket.onerror = function(error) {
+                debugLog('WebSocket error: ' + error, 'ERROR');
+                updateConnectionStatus('error');
+                showStatus('WebSocket connection error', 'error');
+            };
+        }
+
+        function sendWebSocketMessage(message) {
+            if (websocket && websocket.readyState == WebSocket.OPEN) {
+                websocket.send(JSON.stringify(message));
+                wsStats.messages_sent++;
+                debugLog('WebSocket message sent: ' + message.type);
+                return true;
+            } else {
+                debugLog('WebSocket not connected, cannot send message', 'ERROR');
+                showStatus('Not connected to server', 'error');
+                return false;
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'connection_established':
+                    debugLog('Connected with session ID: ' + data.session_id);
+                    break;
+                    
+                case 'progress_update':
+                    handleProgressUpdate(data);
+                    break;
+                    
+                case 'logs_retrieved':
+                    handleLogsRetrieved(data);
+                    break;
+                    
+                case 'error':
+                    showStatus('Error: ' + data.message, 'error');
+                    debugLog('Server error: ' + data.message, 'ERROR');
+                    break;
+                    
+                case 'pong':
+                    debugLog('Received pong from server');
+                    break;
+                    
+                default:
+                    debugLog('Unknown message type: ' + data.type, 'WARNING');
+            }
+        }
+
+        function handleProgressUpdate(data) {
+            debugLog('Progress update: ' + data.status + ' - ' + data.progress_percent + '%');
+            
+            // Update progress bar
+            updateProgress(data.progress_percent, data.status.replace('_', ' '));
+            
+            // Update agent statuses and outputs
+            updateAgentFromProgress(data, 'triage');
+            updateAgentFromProgress(data, 'context');
+            updateAgentFromProgress(data, 'analyst');
+            
+            // Check if completed
+            if (data.completed) {
+                analysisInProgress = false;
+                document.getElementById('analyzeBtn').disabled = false;
+                
+                if (data.results) {
+                    displayFinalResults({
+                        structured_findings: data.results.structured_findings,
+                        chroma_context: data.results.chroma_context
+                    });
+                }
+                
+                if (data.error) {
+                    showStatus('Analysis completed with errors: ' + data.error, 'error');
+                } else {
+                    showStatus('Multi-agent analysis completed successfully!', 'success');
+                }
+                
+                updateProgress(0, 'Ready');
+            }
+        }
+
+        function handleLogsRetrieved(data) {
+            var logs = data.logs;
+            var logCount = Array.isArray(logs) ? logs.length : 'unknown';
+            debugLog('Received ' + logCount + ' logs from server');
+            
+            // Convert logs to flattened JSON format
+            var logText = '';
+            if (Array.isArray(logs)) {
+                logText = logs.map(function(record) {
+                    return JSON.stringify(record);
+                }).join('\n');
+            } else {
+                logText = JSON.stringify(logs);
+            }
+            
+            document.getElementById('logInput').value = logText;
+            updateLogCounter(logText);
+            showStatus(data.message || 'Logs retrieved successfully!', 'success');
+        }
+
+        function updateConnectionStatus(status) {
+            var indicator = document.getElementById('connectionIndicator');
+            var statusText = document.getElementById('connectionStatus');
+            
+            indicator.className = 'status-indicator';
+            
+            switch (status) {
+                case 'connected':
+                    indicator.classList.add('connected');
+                    statusText.textContent = 'Connected';
+                    break;
+                case 'connecting':
+                    indicator.classList.add('connecting');
+                    statusText.textContent = 'Connecting...';
+                    break;
+                case 'disconnected':
+                    statusText.textContent = 'Disconnected';
+                    break;
+                case 'error':
+                    statusText.textContent = 'Error';
+                    break;
+            }
+        }
 
         // Debug Mode Functions
         function toggleDebugMode() {
             debugMode = !debugMode;
-            const toggle = document.getElementById('debugToggle');
-            const panel = document.getElementById('debugPanel');
+            var toggle = document.getElementById('debugToggle');
+            var panel = document.getElementById('debugPanel');
             
             if (debugMode) {
                 toggle.textContent = '🔧 Debug ON';
                 toggle.classList.add('debug-mode');
                 panel.style.display = 'block';
                 debugLog('Debug mode enabled');
-                showStatus('Debug mode enabled - detailed logging active', 'info');
+                showStatus('Debug mode enabled - detailed WebSocket logging active', 'info');
             } else {
                 toggle.textContent = '🔧 Debug Mode';
                 toggle.classList.remove('debug-mode');
@@ -770,15 +952,16 @@
             }
         }
 
-        function debugLog(message, level = 'INFO') {
+        function debugLog(message, level) {
+            if (typeof level == 'undefined') level = 'INFO';
             if (!debugMode) return;
             
-            const timestamp = new Date().toISOString();
-            const logEntry = `[${timestamp}] [${level}] ${message}`;
+            var timestamp = new Date().toISOString();
+            var logEntry = '[' + timestamp + '] [' + level + '] ' + message;
             debugMessages.push(logEntry);
             
-            const debugLogElement = document.getElementById('debugLog');
-            debugLogElement.textContent = debugMessages.slice(-100).join('\n'); // Keep last 100 messages
+            var debugLogElement = document.getElementById('debugLog');
+            debugLogElement.textContent = debugMessages.slice(-100).join('\n');
             debugLogElement.scrollTop = debugLogElement.scrollHeight;
             
             console.log(logEntry);
@@ -790,121 +973,78 @@
         }
 
         function exportDebugLog() {
-            const blob = new Blob([debugMessages.join('\n')], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            var blob = new Blob([debugMessages.join('\n')], { type: 'text/plain' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
-            a.download = `soc-debug-${new Date().toISOString().slice(0, 19)}.log`;
+            a.download = 'soc-websocket-debug-' + new Date().toISOString().slice(0, 19) + '.log';
             a.click();
             URL.revokeObjectURL(url);
             debugLog('Debug log exported');
         }
 
-        function showNetworkStats() {
-            const stats = `Network Statistics:
-Requests Made: ${networkStats.requests}
-Errors: ${networkStats.errors}
-Total Data: ${(networkStats.totalBytes / 1024).toFixed(2)} KB
-Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.requests * 100).toFixed(1)}%`;
+        function showWebSocketStats() {
+            var stats = 'WebSocket Statistics:\n' +
+                'Connected: ' + wsStats.connected + '\n' +
+                'Messages Sent: ' + wsStats.messages_sent + '\n' +
+                'Messages Received: ' + wsStats.messages_received + '\n' +
+                'Reconnects: ' + wsStats.reconnects + '\n' +
+                'Connection State: ' + (websocket ? websocket.readyState : 'No connection');
             
             debugLog(stats);
-            showStatus('Network stats logged to debug console', 'info');
+            showStatus('WebSocket stats logged to debug console', 'info');
         }
 
-        // Enhanced network request wrapper
-        async function makeRequest(url, options = {}) {
-            networkStats.requests++;
-            debugLog(`Making request to: ${url}`);
-            
-            try {
-                const response = await fetch(url, options);
-                const responseSize = response.headers.get('content-length');
-                if (responseSize) {
-                    networkStats.totalBytes += parseInt(responseSize);
-                }
-                
-                debugLog(`Request completed: ${response.status} ${response.statusText}`);
-                return response;
-            } catch (error) {
-                networkStats.errors++;
-                debugLog(`Request failed: ${error.message}`, 'ERROR');
-                throw error;
+        function testConnection() {
+            if (sendWebSocketMessage({ type: 'ping' })) {
+                showStatus('Ping sent to server', 'info');
             }
         }
 
         // Enhanced log counter
         function updateLogCounter(logData) {
-            let eventCount = 0;
+            var eventCount = 0;
             try {
-                if (typeof logData === 'string') {
-                    // Handle single-line JSON format - count non-empty lines that start with {
-                    const lines = logData.split('\n').filter(line => line.trim());
-                    eventCount = lines.filter(line => {
-                        const trimmed = line.trim();
-                        return trimmed.startsWith('{') && trimmed.endsWith('}');
+                if (typeof logData == 'string') {
+                    var lines = logData.split('\n').filter(function(line) {
+                        return line.trim();
+                    });
+                    eventCount = lines.filter(function(line) {
+                        var trimmed = line.trim();
+                        return trimmed.charAt(0) == '{' && trimmed.charAt(trimmed.length - 1) == '}';
                     }).length;
                     
-                    // Fallback: if no JSON objects found, count all non-empty lines
-                    if (eventCount === 0 && lines.length > 0) {
+                    if (eventCount == 0 && lines.length > 0) {
                         eventCount = lines.length;
                     }
                 } else if (Array.isArray(logData)) {
                     eventCount = logData.length;
                 }
             } catch (e) {
-                // If parsing fails, count lines as rough estimate
-                eventCount = logData.split('\n').filter(line => line.trim()).length;
+                eventCount = logData.split('\n').filter(function(line) {
+                    return line.trim();
+                }).length;
             }
             
-            document.getElementById('logCounter').textContent = `${eventCount} events`;
-            debugLog(`Log counter updated: ${eventCount} events`);
+            document.getElementById('logCounter').textContent = eventCount + ' events';
+            debugLog('Log counter updated: ' + eventCount + ' events');
         }
 
-        async function retrieveLogs() {
-            showStatus('Retrieving logs from Vast...', 'info');
+        function retrieveLogs() {
+            showStatus('Retrieving logs via WebSocket...', 'info');
             updateProgress(10, 'Fetching logs...');
-            debugLog('Starting log retrieval');
+            debugLog('Requesting log retrieval via WebSocket');
 
-            try {
-                // Make actual API call to retrieve logs
-                const response = await makeRequest('/retrieve_logs');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const logs = await response.json();
-                debugLog(`Received ${Array.isArray(logs) ? logs.length : 'unknown'} logs from API`);
-                
-                // Handle error response
-                if (logs.error_retrieving_logs) {
-                    throw new Error(logs.error_retrieving_logs);
-                }
-                
-                // Convert logs to flattened JSON format - one record per line
-                let logText = '';
-                if (Array.isArray(logs)) {
-                    logText = logs.map(record => JSON.stringify(record)).join('\n');
-                } else {
-                    // If single log object, just stringify it
-                    logText = JSON.stringify(logs);
-                }
-                
-                document.getElementById('logInput').value = logText;
-                
-                updateLogCounter(logText);
-                showStatus('Logs retrieved successfully!', 'success');
-                updateProgress(0, 'Ready');
-                debugLog(`Retrieved ${Array.isArray(logs) ? logs.length : 1} log entries`);
-            } catch (error) {
-                showStatus(`Error retrieving logs: ${error.message}`, 'error');
+            if (sendWebSocketMessage({ type: 'retrieve_logs' })) {
+                // Response will be handled by WebSocket message handler
+            } else {
+                showStatus('Failed to send log retrieval request', 'error');
                 updateProgress(0, 'Error');
-                debugLog(`Log retrieval failed: ${error.message}`, 'ERROR');
             }
         }
 
-        async function startAnalysis() {
-            const logInput = document.getElementById('logInput').value.trim();
+        function startAnalysis() {
+            var logInput = document.getElementById('logInput').value.trim();
             if (!logInput) {
                 showStatus('Please provide security logs before starting analysis.', 'error');
                 return;
@@ -915,212 +1055,122 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
                 return;
             }
 
-            debugLog('Starting analysis workflow');
+            if (!websocket || websocket.readyState != WebSocket.OPEN) {
+                showStatus('Not connected to server. Please refresh the page.', 'error');
+                return;
+            }
+
+            debugLog('Starting WebSocket analysis workflow');
             analysisInProgress = true;
             document.getElementById('analyzeBtn').disabled = true;
             resetAgentStates();
             hideFindings();
 
-            try {
-                showStatus('Starting multi-agent analysis...', 'info');
-                updateProgress(5, 'Initializing agents...');
-                
-                // Run the real analysis workflow
-                await runRealAnalysisWorkflow();
+            showStatus('Starting multi-agent analysis via WebSocket...', 'info');
+            updateProgress(5, 'Initializing agents...');
 
-            } catch (error) {
-                showStatus(`Analysis failed: ${error.message}`, 'error');
-                updateAgentStatus('triage', 'error');
-                showAgentOutput('triage', `Error: ${error.message}`);
+            if (sendWebSocketMessage({ 
+                type: 'start_analysis', 
+                logs: logInput 
+            })) {
+                debugLog('Analysis request sent via WebSocket');
+            } else {
                 analysisInProgress = false;
                 document.getElementById('analyzeBtn').disabled = false;
                 updateProgress(0, 'Error');
-                debugLog(`Analysis failed: ${error.message}`, 'ERROR');
             }
         }
 
-        async function runRealAnalysisWorkflow() {
-            const logInput = document.getElementById('logInput').value.trim();
-            
-            try {
-                // Start the analysis by calling the real API
-                updateProgress(10, 'Starting analysis...');
-                debugLog('Calling real triage API');
-                
-                const response = await makeRequest('/triage', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ logs: logInput })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                debugLog(`Analysis started with session ID: ${result.session_id}`);
-                
-                if (result.session_id) {
-                    // Start polling for progress
-                    await pollAnalysisProgress(result.session_id);
-                } else {
-                    throw new Error('No session ID returned from analysis start');
-                }
-                
-            } catch (error) {
-                debugLog(`Analysis workflow error: ${error.message}`, 'ERROR');
-                throw error;
-            }
-        }
-        
-        async function pollAnalysisProgress(sessionId) {
-            const maxPolls = 120; // 2 minutes max (120 * 1 second)
-            let pollCount = 0;
-            
-            while (pollCount < maxPolls) {
-                try {
-                    const response = await makeRequest(`/progress/${sessionId}`);
-                    
-                    if (!response.ok) {
-                        throw new Error(`Progress check failed: ${response.status}`);
-                    }
-                    
-                    const progress = await response.json();
-                    debugLog(`Progress update: ${progress.status} - ${progress.progress_percent}%`);
-                    
-                    // Update UI based on progress
-                    updateProgress(progress.progress_percent, progress.status.replace('_', ' '));
-                    
-                    // Update agent statuses and outputs
-                    updateAgentFromProgress(progress, 'triage');
-                    updateAgentFromProgress(progress, 'context');
-                    updateAgentFromProgress(progress, 'analyst');
-                    
-                    // Check if completed
-                    if (progress.completed) {
-                        debugLog('Analysis completed successfully');
-                        
-                        if (progress.results) {
-                            displayFinalResults({
-                                structured_findings: progress.results.structured_findings,
-                                chroma_context: progress.results.chroma_context
-                            });
-                        }
-                        
-                        analysisInProgress = false;
-                        document.getElementById('analyzeBtn').disabled = false;
-                        updateProgress(0, 'Ready');
-                        showStatus('Multi-agent analysis completed successfully!', 'success');
-                        return;
-                    }
-                    
-                    // Check for errors
-                    if (progress.error) {
-                        throw new Error(progress.error);
-                    }
-                    
-                    // Wait before next poll
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    pollCount++;
-                    
-                } catch (error) {
-                    debugLog(`Progress polling error: ${error.message}`, 'ERROR');
-                    throw error;
-                }
-            }
-            
-            throw new Error('Analysis timed out - maximum polling time exceeded');
-        }
-        
         function updateAgentFromProgress(progress, agentType) {
-            const agentOutputs = progress.agent_outputs[agentType] || [];
-            const currentAgent = progress.current_agent;
+            var agentOutputs = progress.agent_outputs[agentType] || [];
+            var currentAgent = progress.current_agent;
             
             // Update agent status based on progress
-            if (currentAgent === agentType && !progress.completed) {
+            if (currentAgent == agentType && !progress.completed) {
                 updateAgentStatus(agentType, 'active');
                 showAgentSpinner(agentType, true);
-                document.getElementById(`${agentType}Card`).classList.add('active');
+                document.getElementById(agentType + 'Card').classList.add('active');
             } else if (agentOutputs.length > 0 || progress.completed) {
                 updateAgentStatus(agentType, 'complete');
                 showAgentSpinner(agentType, false);
-                document.getElementById(`${agentType}Card`).classList.remove('active');
+                document.getElementById(agentType + 'Card').classList.remove('active');
             }
             
             // Update agent output with latest messages
             if (agentOutputs.length > 0) {
-                const latestOutput = agentOutputs[agentOutputs.length - 1];
-                const timestamp = new Date(latestOutput.timestamp).toLocaleTimeString();
-                showAgentOutput(agentType, `[${timestamp}] ${latestOutput.message}`);
+                var latestOutput = agentOutputs[agentOutputs.length - 1];
+                var timestamp = new Date(latestOutput.timestamp).toLocaleTimeString();
+                showAgentOutput(agentType, '[' + timestamp + '] ' + latestOutput.message);
             }
         }
 
         function displayFinalResults(results) {
             debugLog('Displaying final analysis results');
-            const panel = document.getElementById('findingsPanel');
-            const content = document.getElementById('findingsContent');
+            var panel = document.getElementById('findingsPanel');
+            var content = document.getElementById('findingsContent');
             
             // Extract priority from structured findings
-            let priority = 'medium';
+            var priority = 'medium';
             if (results.structured_findings && results.structured_findings.priority_threat) {
-                const threatPriority = results.structured_findings.priority_threat.priority;
+                var threatPriority = results.structured_findings.priority_threat.priority;
                 if (threatPriority) {
                     priority = threatPriority.toLowerCase();
                 }
             }
             
             // Set priority indicator
-            const priorityElement = document.getElementById('priorityIndicator');
+            var priorityElement = document.getElementById('priorityIndicator');
             priorityElement.textContent = priority.toUpperCase();
-            priorityElement.className = `priority-indicator priority-${priority}`;
+            priorityElement.className = 'priority-indicator priority-' + priority;
             
             // Create findings cards from structured data
-            const findings = [];
+            var findings = [];
             
             if (results.structured_findings.priority_threat) {
-                const threat = results.structured_findings.priority_threat;
+                var threat = results.structured_findings.priority_threat;
                 findings.push({
                     title: '🚨 Priority Threat',
-                    content: `${threat.threat_type || 'Unknown threat'} detected from ${threat.source_ip || 'unknown source'}. ${threat.brief_summary || 'No summary available.'}`
+                    content: (threat.threat_type || 'Unknown threat') + ' detected from ' + 
+                            (threat.source_ip || 'unknown source') + '. ' + 
+                            (threat.brief_summary || 'No summary available.')
                 });
-                debugLog(`Priority threat identified: ${threat.threat_type} from ${threat.source_ip}`);
+                debugLog('Priority threat identified: ' + threat.threat_type + ' from ' + threat.source_ip);
             }
             
             if (results.chroma_context && !results.chroma_context.error) {
-                const contextCount = results.chroma_context.documents ? results.chroma_context.documents.length : 0;
+                var contextCount = results.chroma_context.documents ? results.chroma_context.documents.length : 0;
                 findings.push({
                     title: '📚 Historical Context',
-                    content: `Found ${contextCount} related historical incidents to provide context for this analysis.`
+                    content: 'Found ' + contextCount + ' related historical incidents to provide context for this analysis.'
                 });
-                debugLog(`Historical context found: ${contextCount} related incidents`);
+                debugLog('Historical context found: ' + contextCount + ' related incidents');
             }
             
             if (results.structured_findings.detailed_analysis) {
-                const analysis = results.structured_findings.detailed_analysis;
-                const actionCount = analysis.recommended_actions ? analysis.recommended_actions.length : 0;
+                var analysis = results.structured_findings.detailed_analysis;
+                var actionCount = analysis.recommended_actions ? analysis.recommended_actions.length : 0;
                 findings.push({
                     title: '🎯 Analysis Complete',
-                    content: `Deep analysis completed with ${actionCount} recommended actions. Business impact: ${analysis.business_impact || 'Under assessment'}.`
+                    content: 'Deep analysis completed with ' + actionCount + ' recommended actions. Business impact: ' + 
+                            (analysis.business_impact || 'Under assessment') + '.'
                 });
-                debugLog(`Detailed analysis completed: ${actionCount} recommendations`);
+                debugLog('Detailed analysis completed: ' + actionCount + ' recommendations');
             }
             
             // Fallback if no structured findings
-            if (findings.length === 0) {
+            if (findings.length == 0) {
                 findings.push({
                     title: '✅ Analysis Complete',
                     content: 'Multi-agent analysis completed successfully. Check individual agent outputs above for detailed findings and recommendations.'
                 });
             }
             
-            content.innerHTML = findings.map(finding => `
-                <div class="finding-card">
-                    <h4>${finding.title}</h4>
-                    <p>${finding.content}</p>
-                </div>
-            `).join('');
+            content.innerHTML = findings.map(function(finding) {
+                return '<div class="finding-card">' +
+                    '<h4>' + finding.title + '</h4>' +
+                    '<p>' + finding.content + '</p>' +
+                    '</div>';
+            }).join('');
             
             panel.style.display = 'block';
             panel.scrollIntoView({ behavior: 'smooth' });
@@ -1128,64 +1178,52 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
         }
 
         function showStatus(message, type) {
-            // Create and show a toast notification
-            const toastContainer = getOrCreateToastContainer();
-            const toast = createToast(message, type);
+            var toastContainer = getOrCreateToastContainer();
+            var toast = createToast(message, type);
             toastContainer.appendChild(toast);
             
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
+            setTimeout(function() {
                 if (toast.parentNode) {
                     toast.remove();
                 }
             }, 5000);
             
-            // Log to debug console
-            debugLog(`Status: ${message}`, type.toUpperCase());
-            console.log(`[${type.toUpperCase()}] ${message}`);
+            debugLog('Status: ' + message, type.toUpperCase());
+            console.log('[' + type.toUpperCase() + '] ' + message);
         }
         
         function getOrCreateToastContainer() {
-            let container = document.getElementById('toast-container');
+            var container = document.getElementById('toast-container');
             if (!container) {
                 container = document.createElement('div');
                 container.id = 'toast-container';
-                container.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    z-index: 9999;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
-                `;
                 document.body.appendChild(container);
             }
             return container;
         }
         
         function createToast(message, type) {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            var toast = document.createElement('div');
+            toast.className = 'toast ' + type;
             toast.textContent = message;
             return toast;
         }
 
         function updateAgentStatus(agent, status) {
-            const element = document.getElementById(`${agent}Status`);
-            element.className = `status-badge status-${status}`;
+            var element = document.getElementById(agent + 'Status');
+            element.className = 'status-badge status-' + status;
             element.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-            debugLog(`Agent ${agent} status updated to: ${status}`);
+            debugLog('Agent ' + agent + ' status updated to: ' + status);
         }
 
         function showAgentOutput(agent, text) {
-            document.getElementById(`${agent}Output`).textContent = text;
-            debugLog(`Agent ${agent} output updated`);
+            document.getElementById(agent + 'Output').textContent = text;
+            debugLog('Agent ' + agent + ' output updated');
         }
 
         function showAgentSpinner(agent, show) {
-            const spinner = document.getElementById(`${agent}Spinner`);
-            const output = document.getElementById(`${agent}Output`);
+            var spinner = document.getElementById(agent + 'Spinner');
+            var output = document.getElementById(agent + 'Output');
             
             if (show) {
                 spinner.style.display = 'flex';
@@ -1196,29 +1234,32 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
             }
         }
 
-        function updateProgress(percent, statusText = '') {
-            document.getElementById('progressBar').style.width = `${percent}%`;
-            const progressTextElement = document.getElementById('progressText');
+        function updateProgress(percent, statusText) {
+            document.getElementById('progressBar').style.width = percent + '%';
+            var progressTextElement = document.getElementById('progressText');
             if (statusText) {
                 progressTextElement.textContent = statusText;
             } else {
-                progressTextElement.textContent = percent > 0 ? `${percent}%` : 'Ready';
+                progressTextElement.textContent = percent > 0 ? percent + '%' : 'Ready';
             }
         }
 
         function resetAgentStates() {
             debugLog('Resetting all agent states');
-            ['triage', 'context', 'analyst'].forEach(agent => {
+            var agents = ['triage', 'context', 'analyst'];
+            var outputTexts = {
+                triage: 'Waiting for analysis to begin...',
+                context: 'Waiting for triage completion...',
+                analyst: 'Waiting for context research...'
+            };
+            
+            for (var i = 0; i < agents.length; i++) {
+                var agent = agents[i];
                 updateAgentStatus(agent, 'pending');
                 showAgentSpinner(agent, false);
-                document.getElementById(`${agent}Card`).classList.remove('active');
-                const outputTexts = {
-                    triage: 'Waiting for analysis to begin...',
-                    context: 'Waiting for triage completion...',
-                    analyst: 'Waiting for context research...'
-                };
+                document.getElementById(agent + 'Card').classList.remove('active');
                 showAgentOutput(agent, outputTexts[agent]);
-            });
+            }
         }
 
         function hideFindings() {
@@ -1235,27 +1276,25 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
             analysisInProgress = false;
             document.getElementById('analyzeBtn').disabled = false;
             
-            // Clear network stats
-            networkStats = { requests: 0, errors: 0, totalBytes: 0 };
+            // Clear WebSocket stats
+            wsStats.messages_sent = 0;
+            wsStats.messages_received = 0;
             showStatus('Dashboard cleared and reset', 'info');
         }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
-            // Ctrl+Shift+D for debug mode
-            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+            if (e.ctrlKey && e.shiftKey && e.key == 'D') {
                 e.preventDefault();
                 toggleDebugMode();
             }
             
-            // Ctrl+Shift+C for clear
-            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            if (e.ctrlKey && e.shiftKey && e.key == 'C') {
                 e.preventDefault();
                 clearResults();
             }
             
-            // Ctrl+Shift+A for analyze
-            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+            if (e.ctrlKey && e.shiftKey && e.key == 'A') {
                 e.preventDefault();
                 if (!analysisInProgress) {
                     startAnalysis();
@@ -1269,20 +1308,28 @@ Success Rate: ${((networkStats.requests - networkStats.errors) / networkStats.re
         });
 
         // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', function() {
             resetAgentStates();
+            initWebSocket();
             
             // Welcome message
-            showStatus('Welcome to SOC Agent Dashboard! Retrieve logs or paste your own to begin analysis.', 'info');
+            showStatus('Welcome to SOC Agent WebSocket Dashboard! Connecting to server...', 'info');
             
             // Show keyboard shortcuts in console
-            setTimeout(() => {
+            setTimeout(function() {
                 console.log('💡 SOC Dashboard Shortcuts:');
                 console.log('  • Ctrl+Shift+D → Toggle debug mode');
                 console.log('  • Ctrl+Shift+A → Start analysis');
                 console.log('  • Ctrl+Shift+C → Clear results');
-                debugLog('Dashboard initialized successfully with keyboard shortcuts enabled');
+                debugLog('WebSocket dashboard initialized successfully');
             }, 2000);
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', function() {
+            if (websocket) {
+                websocket.close(1000, 'Page unloading');
+            }
         });
     </script>
 </body>

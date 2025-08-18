@@ -37,7 +37,7 @@ def get_logs():
             for row in rows:
                 try:
                     json_row = json.loads(row[0])
-                    json_row['time_dt'] = row[1]
+                    json_row['time_dt'] = row[1].isoformat() if hasattr(row[1], 'isoformat') else row[1]
                     # Assuming raw_data is a JSON string
                     logs.append(json_row)
                 except json.JSONDecodeError:

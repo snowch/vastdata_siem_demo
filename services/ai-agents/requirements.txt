@@ -1,9 +1,31 @@
+# SOC Analysis with WebSocket Support - Updated Requirements
+
+# AutoGen dependencies
 autogen_agentchat>=0.7.0
 autogen_ext>=0.7.0
+
+# AI/ML dependencies  
 openai
 tiktoken
-Flask[async]
-markdown
+sentence-transformers
+
+# Database dependencies
 trino
 chromadb
-sentence-transformers
+
+# Document processing
+markdown
+
+# FastAPI and WebSocket support
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+
+# Additional FastAPI utilities
+python-multipart>=0.0.6
+jinja2>=3.1.2
+
+# Data processing
+numpy
+pydantic>=2.0.0
+
