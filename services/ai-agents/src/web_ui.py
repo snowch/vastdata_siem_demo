@@ -34,8 +34,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+
 # Serve static files and dashboard
-app.mount("/static", StaticFiles(directory="."), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+
+# Note: dashboard.html and dashboard.js are now in the static directory (services/ai-agents/src/static)
+# They will be accessible via /static/dashboard.html and /static/dashboard.js
+# Root endpoint redirects to /static/dashboard.html
 
 # Store active WebSocket connections
 active_connections: Dict[str, WebSocket] = {}
@@ -351,14 +357,12 @@ async def run_analysis_with_websocket(log_batch: str, progress: AnalysisProgress
         progress.completed = True
         await progress.send_update("error", progress=100)
 
+from fastapi.responses import RedirectResponse
+
 @app.get("/")
 async def root():
-    """Serve the dashboard HTML directly"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), 'dashboard.html')
-    if os.path.exists(dashboard_path):
-        return FileResponse(dashboard_path)
-    else:
-        raise HTTPException(status_code=404, detail="Dashboard file not found")
+    """Redirect to the static dashboard HTML"""
+    return RedirectResponse(url="/static/dashboard.html")
 
 @app.get("/retrieve_logs")
 async def retrieve_logs():
