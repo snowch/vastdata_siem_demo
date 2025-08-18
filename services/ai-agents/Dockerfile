@@ -13,10 +13,9 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 
 # Copy the source code
 COPY src/ ./src/
-# COPY templates/ ./templates/
 
 # Expose the port Flask runs on
 EXPOSE 5000
 
 # Command to run the Flask application
-CMD ["python", "src/web_ui.py"]
+CMD ["python", "src/web.py"]
