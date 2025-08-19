@@ -1,45 +1,10 @@
 from typing import List, Dict, Any, Literal
 import json
 import logging
-from core.models.analysis import Timeline, PriorityFindings, DetailedAnalysis, AttackEvent, ThreatAssessment, SOCAnalysisResult
+from core.models.analysis import Timeline, DetailedAnalysis, AttackEvent, ThreatAssessment, SOCAnalysisResult
 from infrastructure.vectordb_utils import search_chroma
 
 agent_logger = logging.getLogger("agent_diagnostics")
-
-def report_priority_findings(
-    priority: Literal["critical", "high", "medium", "low"],
-    threat_type: str,
-    source_ip: str,
-    target_hosts: List[str],
-    attack_pattern: str,
-    timeline_start: str,
-    timeline_end: str,
-    indicators: List[str],
-    confidence_score: float,
-    event_count: int,
-    affected_services: List[str],
-    brief_summary: str
-) -> Dict[str, Any]:
-    try:
-        timeline = Timeline(start=timeline_start, end=timeline_end)
-        validated_findings = PriorityFindings(
-            priority=priority,
-            threat_type=threat_type,
-            source_ip=source_ip,
-            target_hosts=target_hosts,
-            attack_pattern=attack_pattern,
-            timeline=timeline,
-            indicators=indicators,
-            confidence_score=confidence_score,
-            event_count=event_count,
-            affected_services=affected_services,
-            brief_summary=brief_summary
-        )
-        agent_logger.info(f"Priority findings validated: {validated_findings.threat_type} from {validated_findings.source_ip}")
-        return {"status": "priority_identified", "data": validated_findings.model_dump()}
-    except Exception as e:
-        agent_logger.error(f"Priority findings validation error: {e}")
-        return {"status": "validation_error", "error": str(e)}
 
 def search_historical_incidents(search_query: str, max_results: int) -> Dict[str, Any]:
     try:

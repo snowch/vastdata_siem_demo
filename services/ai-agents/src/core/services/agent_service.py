@@ -20,7 +20,7 @@ from autogen_agentchat.conditions import (
 )
 from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
-from core.services.analysis_service import report_priority_findings, search_historical_incidents, report_detailed_analysis
+from core.services.analysis_service import search_historical_incidents, report_detailed_analysis
 from core.models.analysis import SOCAnalysisResult
 
 agent_logger = logging.getLogger("agent_diagnostics")
