@@ -14,19 +14,19 @@
                 <span class="status-indicator" id="connectionIndicator"></span>
                 <span id="connectionStatus">Connecting...</span>
             </div>
-            <button class="debug-toggle" onclick="toggleDebugMode()" id="debugToggle">
+            <button class="debug-toggle" id="debugToggle">
                 🔧 Debug Mode
             </button>
             <h1>🛡️ SOC Agent Analysis Dashboard - Compatible</h1>
             <p>Real-time multi-agent security log analysis with cross-browser WebSocket support</p>
             <div class="controls">
-                <button class="btn btn-secondary" onclick="retrieveLogs()" id="retrieveBtn">
+                <button class="btn btn-secondary" id="retrieveBtn">
                     📥 Retrieve Logs
                 </button>
-                <button class="btn btn-primary" onclick="startAnalysis()" id="analyzeBtn">
+                <button class="btn btn-primary" id="analyzeBtn">
                     🚀 Start Analysis
                 </button>
-                <button class="btn" onclick="clearResults()" style="background: linear-gradient(45deg, #95a5a6, #7f8c8d); color: white;">
+                <button class="btn" id="clearBtn" style="background: linear-gradient(45deg, #95a5a6, #7f8c8d); color: white;">
                     🧹 Clear Results
                 </button>
             </div>
@@ -108,13 +108,13 @@
         </div>
 
         <!-- Debug Panel -->
-        <div class="debug-panel" id="debugPanel">
+        <div class="debug-panel" id="debugPanel" style="display: none;">
             <h3>🔧 Debug Console</h3>
             <div class="debug-controls">
-                <button class="debug-btn" onclick="clearDebugLog()">Clear Log</button>
-                <button class="debug-btn" onclick="exportDebugLog()">Export Log</button>
-                <button class="debug-btn" onclick="showWebSocketStats()">WebSocket Stats</button>
-                <button class="debug-btn" onclick="testConnection()">Test Connection</button>
+                <button class="debug-btn" data-action="clearDebugLog">Clear Log</button>
+                <button class="debug-btn" data-action="exportDebugLog">Export Log</button>
+                <button class="debug-btn" data-action="showWebSocketStats">WebSocket Stats</button>
+                <button class="debug-btn" data-action="testConnection">Test Connection</button>
             </div>
             <div class="debug-log" id="debugLog">Debug mode enabled. WebSocket logs will appear here...</div>
         </div>
@@ -133,6 +133,15 @@
 
     <div id="toast-container"></div>
 
-    <script src="dashboard.js"></script>
+    <!-- Load all modules first -->
+    <script src="js/debugLogger.js" type="module"></script>
+    <script src="js/progressManager.js" type="module"></script>
+    <script src="js/eventHandlers.js" type="module"></script>
+    <script src="js/websocket.js" type="module"></script>
+    <script src="js/approvalWorkflow.js" type="module"></script>
+    <script src="js/ui.js" type="module"></script>
+    
+    <!-- Main script that sets up event listeners - load last -->
+    <script src="js/main.js" type="module"></script>
 </body>
 </html>
