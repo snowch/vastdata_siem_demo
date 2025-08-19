@@ -25,7 +25,6 @@ agent_logger = logging.getLogger("agent_diagnostics")
 
 async def _create_soc_team(
     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
-    use_structured_output: bool = False
 ):
     """Create SOC team with single multi-stage approval agent"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
@@ -140,10 +139,7 @@ async def get_prioritized_task_with_streaming(
             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
     
     try:
-        team, model_client = await _create_soc_team(
-            user_input_func=_user_input_func,
-            use_structured_output=False
-        )
+        team, model_client = await _create_soc_team(user_input_func=_user_input_func)
         
         # Create the analysis task
         task = f"""ENHANCED SECURITY LOG ANALYSIS WITH MULTI-STAGE APPROVAL WORKFLOW
