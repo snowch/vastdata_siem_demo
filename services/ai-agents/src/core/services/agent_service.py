@@ -170,53 +170,53 @@ async def _process_streaming_message(
                 progress.final_results['structured_result'] = message.content.model_dump()
             
             # Parse tool outputs for context and analyst agents
-            elif hasattr(message, 'content') and isinstance(message.content, str):
-                await _parse_tool_outputs(message, progress, message_callback, session_id)
+            # elif hasattr(message, 'content') and isinstance(message.content, str):
+            #     await _parse_tool_outputs(message, progress, message_callback, session_id)
                 
     except Exception as e:
         agent_logger.error(f"Error processing streaming message: {e}")
 
-async def _parse_tool_outputs(message, progress: AnalysisProgress, message_callback: Optional[Callable], session_id: str):
-    """Parse and handle tool outputs from agent messages"""
-    content = message.content
+# async def _parse_tool_outputs(message, progress: AnalysisProgress, message_callback: Optional[Callable], session_id: str):
+#     """Parse and handle tool outputs from agent messages"""
+#     content = message.content
     
-    try:
-        # Extract context search results
-        if "status" in content and "search_complete" in content:
-            import re
-            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
-            if json_match:
-                tool_result = json.loads(json_match.group())
-                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
-                    progress.final_results['chroma_context'] = sanitize_chroma_results(tool_result['results'])
+#     try:
+#         # Extract context search results
+#         if "status" in content and "search_complete" in content:
+#             import re
+#             json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+#             if json_match:
+#                 tool_result = json.loads(json_match.group())
+#                 if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
+#                     progress.final_results['chroma_context'] = sanitize_chroma_results(tool_result['results'])
                     
-                    # Send context update
-                    if message_callback:
-                        await message_callback({
-                            'type': 'context_results',
-                            'data': tool_result['results'],
-                            'session_id': session_id
-                        })
+#                     # Send context update
+#                     if message_callback:
+#                         await message_callback({
+#                             'type': 'context_results',
+#                             'data': tool_result['results'],
+#                             'session_id': session_id
+#                         })
         
-        # Extract detailed analysis from analyst agent tools
-        elif "status" in content and "analysis_complete" in content:
-            import re
-            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
-            if json_match:
-                tool_result = json.loads(json_match.group())
-                if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
-                    progress.final_results['structured_findings']['detailed_analysis'] = tool_result['data']
+#         # Extract detailed analysis from analyst agent tools
+#         elif "status" in content and "analysis_complete" in content:
+#             import re
+#             json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+#             if json_match:
+#                 tool_result = json.loads(json_match.group())
+#                 if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
+#                     progress.final_results['structured_findings']['detailed_analysis'] = tool_result['data']
                     
-                    # Send analysis complete update
-                    if message_callback:
-                        await message_callback({
-                            'type': 'analysis_complete',
-                            'data': tool_result['data'],
-                            'session_id': session_id
-                        })
+#                     # Send analysis complete update
+#                     if message_callback:
+#                         await message_callback({
+#                             'type': 'analysis_complete',
+#                             'data': tool_result['data'],
+#                             'session_id': session_id
+#                         })
                         
-    except Exception as e:
-        agent_logger.error(f"Error parsing tool outputs: {e}")
+#     except Exception as e:
+#         agent_logger.error(f"Error parsing tool outputs: {e}")
 
 async def run_analysis_workflow(
     log_batch: str,
