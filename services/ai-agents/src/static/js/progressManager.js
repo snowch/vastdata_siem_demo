@@ -1,78 +1,15 @@
-// Import other modules
+// services/ai-agents/src/static/js/progressManager.js - FIRST UPDATE
+// Remove complex handleProgressUpdate function - keep everything else the same
+
 import * as debugLogger from './debugLogger.js';
 import * as ui from './ui.js';
 import * as websocket from './websocket.js';
-import * as approvalWorkflow from './approvalWorkflow.js';
 
-// Progress and Agent Status Updates
+// Simple analysis state tracking
 var analysisInProgress = false;
 
-function handleProgressUpdate(data) {
-    debugLogger.debugLog('Progress update received - Status: ' + data.status + ', Progress: ' + data.progress_percent + '%');
-    
-    // Add detailed logging for debugging
-    console.log('Full progress update data:', data);
-    
-    // Handle approval-specific statuses
-    if (data.status === 'awaiting_approval') {
-        debugLogger.debugLog('Status is awaiting_approval - should be handled by approval_request message');
-        return;
-    } else if (data.status === 'approved') {
-        debugLogger.debugLog('Status is approved - updating triage to complete');
-        ui.updateAgentStatus('triage', 'complete');
-        ui.showAgentOutput('triage', 'Analysis approved. Continuing to context research...');
-    } else if (data.status === 'rejected') {
-        debugLogger.debugLog('Status is rejected - stopping analysis');
-        analysisInProgress = false;
-        document.getElementById('analyzeBtn').disabled = false;
-        ui.updateAgentStatus('triage', 'rejected');
-        ui.showStatus('Analysis rejected by user', 'warning');
-        return;
-    } else {
-        debugLogger.debugLog('Status is: ' + data.status + ' - processing normally');
-    }
-    
-    // Update progress bar
-    ui.updateProgress(data.progress_percent, data.status.replace('_', ' '));
-    
-    // Update agent statuses and outputs
-    updateAgentFromProgress(data, 'triage');
-    updateAgentFromProgress(data, 'context');
-    updateAgentFromProgress(data, 'analyst');
-    
-    // Check if completed
-    if (data.completed) {
-        debugLogger.debugLog('Analysis completed - cleaning up');
-        analysisInProgress = false;
-        approvalWorkflow.setAwaitingApproval(false);
-        document.getElementById('analyzeBtn').disabled = false;
-        approvalWorkflow.hideApprovalButtons();
-        
-        if (data.results) {
-            if (data.results.was_rejected) {
-                debugLogger.debugLog('Results indicate analysis was rejected');
-                ui.showStatus('Analysis was rejected by user', 'warning');
-                ui.updateProgress(100, 'Rejected');
-            } else {
-                debugLogger.debugLog('Analysis completed successfully - displaying results');
-                ui.displayFinalResults({
-                    structured_findings: data.results.structured_findings,
-                    chroma_context: data.results.chroma_context
-                });
-                ui.showStatus('Multi-agent analysis completed successfully!', 'success');
-            }
-        }
-        
-        if (data.error) {
-            debugLogger.debugLog('Analysis completed with error: ' + data.error);
-            ui.showStatus('Analysis completed with errors: ' + data.error, 'error');
-        }
-        
-        if (!data.results || !data.results.was_rejected) {
-            ui.updateProgress(0, 'Ready');
-        }
-    }
-}
+// REMOVED: handleProgressUpdate function - no longer needed
+// The specific real-time messages in websocket.js will handle updates instead
 
 function handleLogsRetrieved(data) {
     var logs = data.logs;
@@ -196,15 +133,18 @@ function startAnalysis() {
     
     // Set initial state
     analysisInProgress = true;
-    approvalWorkflow.setAwaitingApproval(false);
     
     // Update UI
     document.getElementById('analyzeBtn').disabled = true;
     ui.resetAgentStates();
     ui.hideFindings();
-    approvalWorkflow.hideApprovalButtons();
+    
+    // KEEP: Dynamic import to avoid circular dependency
+    import('./approvalWorkflow.js').then(approvalWorkflow => {
+        approvalWorkflow.hideApprovalButtons();
+    });
 
-    ui.showStatus('Starting multi-agent analysis with approval workflow...', 'info');
+    ui.showStatus('Starting multi-agent analysis workflow...', 'info');
     ui.updateProgress(5, 'Initializing agents...');
 
     var message = { 
@@ -224,42 +164,7 @@ function startAnalysis() {
     }
 }
 
-function updateAgentFromProgress(progress, agentType) {
-    var agentOutputs = progress.agent_outputs[agentType] || [];
-    var currentAgent = progress.current_agent;
-    
-    debugLogger.debugLog('Updating agent ' + agentType + ' - Current: ' + currentAgent + ', Outputs: ' + agentOutputs.length);
-    
-    // Update agent status based on progress
-    if (currentAgent == agentType && !progress.completed) {
-        debugLogger.debugLog('Setting agent ' + agentType + ' to active');
-        ui.updateAgentStatus(agentType, 'active');
-        ui.showAgentSpinner(agentType, true);
-        var card = document.getElementById(agentType + 'Card');
-        if (card) {
-            card.classList.add('active');
-        }
-    } else if (agentOutputs.length > 0 || progress.completed) {
-        if (agentType !== 'triage' || !approvalWorkflow.getAwaitingApproval()) {
-            debugLogger.debugLog('Setting agent ' + agentType + ' to complete');
-            ui.updateAgentStatus(agentType, 'complete');
-            ui.showAgentSpinner(agentType, false);
-            var card = document.getElementById(agentType + 'Card');
-            if (card) {
-                card.classList.remove('active');
-            }
-        }
-    }
-    
-    // Update agent output with latest messages
-    if (agentOutputs.length > 0) {
-        var latestOutput = agentOutputs[agentOutputs.length - 1];
-        var timestamp = new Date(latestOutput.timestamp).toLocaleTimeString();
-        if (agentType !== 'triage' || !approvalWorkflow.getAwaitingApproval()) {
-            ui.showAgentOutput(agentType, '[' + timestamp + '] ' + latestOutput.message);
-        }
-    }
-}
+// REMOVED: updateAgentFromProgress function - no longer needed
 
 function getAnalysisInProgress() {
     return analysisInProgress;
@@ -271,13 +176,12 @@ function setAnalysisInProgress(value) {
 }
 
 export { 
-    handleProgressUpdate, 
     handleLogsRetrieved, 
     updateConnectionStatus, 
     updateLogCounter, 
     retrieveLogs, 
-    startAnalysis, 
-    updateAgentFromProgress,
+    startAnalysis,
     getAnalysisInProgress,
     setAnalysisInProgress
+    // REMOVED: handleProgressUpdate, updateAgentFromProgress exports
 };
