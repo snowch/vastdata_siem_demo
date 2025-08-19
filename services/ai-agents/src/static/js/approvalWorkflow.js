@@ -1,4 +1,4 @@
-// Enhanced approvalWorkflow.js with multi-stage approval support
+// Enhanced approvalWorkflow.js with improved layout - buttons at bottom
 
 import * as debugLogger from './debugLogger.js';
 import * as ui from './ui.js';
@@ -110,10 +110,10 @@ function showAgentApprovalButtons(agentType, requestData) {
         return;
     }
 
-    // Create approval buttons container
-    var buttonsContainer = document.createElement('div');
-    buttonsContainer.id = agentType + 'ApprovalButtons';
-    buttonsContainer.className = 'approval-buttons';
+    // Create approval section container
+    var approvalSection = document.createElement('div');
+    approvalSection.id = agentType + 'ApprovalSection';
+    approvalSection.className = 'approval-section';
     
     var buttonsHtml = '<div class="approval-prompt">' + 
         '<h4>' + stageConfig.title + '</h4>' +
@@ -144,9 +144,9 @@ function showAgentApprovalButtons(agentType, requestData) {
             '</div>';
     }
     
-    buttonsContainer.innerHTML = buttonsHtml;
+    approvalSection.innerHTML = buttonsHtml;
 
-    // Add to agent card content
+    // Add to agent card - AFTER the agent-content, not inside it
     var agentCard = document.getElementById(agentType + 'Card');
     if (!agentCard) {
         debugLogger.debugLog('Agent card not found: ' + agentType, 'ERROR');
@@ -159,15 +159,16 @@ function showAgentApprovalButtons(agentType, requestData) {
         return;
     }
     
-    agentContent.appendChild(buttonsContainer);
+    // Insert approval section AFTER the agent-content
+    agentContent.parentNode.insertBefore(approvalSection, agentContent.nextSibling);
 
     // Add event listeners
-    attachApprovalEventListeners(agentType, buttonsContainer, stageConfig);
+    attachApprovalEventListeners(agentType, approvalSection, stageConfig);
 
-    // Add pulsing effect
-    buttonsContainer.classList.add('pulse-animation');
+    // Add visual feedback
+    agentCard.classList.add('approval-active');
     
-    debugLogger.debugLog('Approval buttons created for agent: ' + agentType);
+    debugLogger.debugLog('Approval section created for agent: ' + agentType);
 }
 
 function attachApprovalEventListeners(agentType, container, stageConfig) {
@@ -191,7 +192,7 @@ function attachApprovalEventListeners(agentType, container, stageConfig) {
 }
 
 function showCustomInput(agentType) {
-    var customSection = document.querySelector('#' + agentType + 'ApprovalButtons .custom-input-section');
+    var customSection = document.querySelector('#' + agentType + 'ApprovalSection .custom-input-section');
     if (customSection) {
         customSection.style.display = 'block';
         var textarea = document.getElementById(agentType + 'CustomInput');
@@ -202,7 +203,7 @@ function showCustomInput(agentType) {
 }
 
 function hideCustomInput(agentType) {
-    var customSection = document.querySelector('#' + agentType + 'ApprovalButtons .custom-input-section');
+    var customSection = document.querySelector('#' + agentType + 'ApprovalSection .custom-input-section');
     if (customSection) {
         customSection.style.display = 'none';
         var textarea = document.getElementById(agentType + 'CustomInput');
@@ -279,10 +280,16 @@ function sendApprovalResponse(agentType, response) {
 }
 
 function hideAgentApprovalButtons(agentType) {
-    var buttons = document.getElementById(agentType + 'ApprovalButtons');
-    if (buttons) {
-        debugLogger.debugLog('Hiding approval buttons for: ' + agentType);
-        buttons.remove();
+    var approvalSection = document.getElementById(agentType + 'ApprovalSection');
+    if (approvalSection) {
+        debugLogger.debugLog('Hiding approval section for: ' + agentType);
+        approvalSection.remove();
+    }
+    
+    // Also remove the approval-active class from the agent card
+    var agentCard = document.getElementById(agentType + 'Card');
+    if (agentCard) {
+        agentCard.classList.remove('approval-active');
     }
 }
 

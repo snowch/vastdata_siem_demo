@@ -137,9 +137,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle clicks outside approval buttons (for accessibility)
     document.addEventListener('click', function(e) {
-        // If user clicks outside approval buttons while awaiting approval, show hint
+        // If user clicks outside approval section while awaiting approval, show hint
         if (approvalWorkflow.getAwaitingApproval() && 
-            !e.target.closest('.approval-buttons') && 
+            !e.target.closest('.approval-section') && 
             !e.target.closest('.debug-btn')) {
             
             const currentStage = approvalWorkflow.getCurrentApprovalStage();
@@ -188,8 +188,8 @@ function handleKeyboardApproval(stage, action) {
     
     debugLogger.debugLog(`Keyboard approval: ${stage} - ${action}`);
     
-    // Find the appropriate button and click it
-    const buttonSelector = `#${stage}ApprovalButtons .btn[data-value="${action}"]`;
+    // Find the appropriate button and click it - UPDATED SELECTOR
+    const buttonSelector = `#${stage}ApprovalSection .btn[data-value="${action}"]`;
     const button = document.querySelector(buttonSelector);
     
     if (button) {
