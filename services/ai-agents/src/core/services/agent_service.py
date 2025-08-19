@@ -19,7 +19,7 @@ from autogen_agentchat.conditions import (
     FunctionCallTermination
 )
 from autogen_core import CancellationToken
-from core.models.analysis import SOCAnalysisResult
+from core.models.analysis import SOCAnalysisResult, PriorityFindings
 
 agent_logger = logging.getLogger("agent_diagnostics")
 
@@ -28,7 +28,7 @@ async def _create_soc_team(
     use_structured_output: bool = False
 ):
     """Create SOC team with single multi-stage approval agent"""
-    model_client = OpenAIChatCompletionClient(model="gpt-4o", parallel_tool_calls=False)
+    model_client = OpenAIChatCompletionClient(model="gpt-4o")
     
     # Create agents
     triage_agent = TriageAgent(model_client)
@@ -74,10 +74,11 @@ async def _create_soc_team(
     # Create team
     team = RoundRobinGroupChat(
         [triage_agent, approval_agent, context_agent, analyst_agent],
-        termination_condition=termination
+        termination_condition=termination,
+        custom_message_types=[StructuredMessage[PriorityFindings]],
     )
     
-    agent_logger.info("SOC team created for real-time streaming")
+    agent_logger.info("SOC team created for real-time streaming with structured output support")
     
     return team, model_client
 
@@ -172,7 +173,7 @@ APPROVAL POINTS:
 - Wait for explicit approval before continuing
 - Handle custom instructions and modifications
 
-TriageSpecialist: Begin initial triage analysis. After completing your analysis and calling your function, request approval to proceed with the investigation."""
+TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, request approval to proceed with the investigation."""
         
         # Real-time streaming variables
         full_conversation = ""
@@ -212,8 +213,25 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                     except Exception as e:
                         agent_logger.error(f"Error in message callback: {e}")
                 
+                # Handle structured output from triage agent
+                if (message.source == "TriageSpecialist" and 
+                    isinstance(message, StructuredMessage) and
+                    isinstance(message.content, PriorityFindings)):
+                    
+                    # Extract structured findings directly from message content
+                    priority_findings = message.content.model_dump()
+                    agent_logger.info(f"Structured priority findings received: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
+                    
+                    # Send priority findings update via callback
+                    if message_callback:
+                        await message_callback({
+                            'type': 'priority_findings',
+                            'data': priority_findings,
+                            'session_id': session_id
+                        })
+                
                 # Check for approval request
-                if isinstance(message, UserInputRequestedEvent):
+                elif isinstance(message, UserInputRequestedEvent):
                     approval_requested = True
                     agent_logger.info(f"User input requested for session {session_id}")
                     
@@ -255,31 +273,12 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                     isinstance(message.content, SOCAnalysisResult)):
                     structured_result = message.content
                 
-                # Parse tool outputs in real-time
+                # Parse tool outputs in real-time (for context and analyst agents that still use tools)
                 if hasattr(message, 'content') and isinstance(message.content, str):
-                    # Extract priority findings
-                    if "status" in message.content and "priority_identified" in message.content:
+                    # Extract context search results
+                    if "status" in message.content and "search_complete" in message.content:
                         try:
                             import re
-                            json_match = re.search(r'\{.*"status".*\}', message.content, re.DOTALL)
-                            if json_match:
-                                tool_result = json.loads(json_match.group())
-                                if tool_result.get('status') == 'priority_identified' and 'data' in tool_result:
-                                    priority_findings = tool_result['data']
-                                    
-                                    # Send priority findings update
-                                    if message_callback:
-                                        await message_callback({
-                                            'type': 'priority_findings',
-                                            'data': priority_findings,
-                                            'session_id': session_id
-                                        })
-                        except Exception as e:
-                            agent_logger.error(f"Error parsing priority findings: {e}")
-                    
-                    # Extract context search results
-                    elif "status" in message.content and "search_complete" in message.content:
-                        try:
                             json_match = re.search(r'\{.*"status".*\}', message.content, re.DOTALL)
                             if json_match:
                                 tool_result = json.loads(json_match.group())
@@ -296,7 +295,7 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                         except Exception as e:
                             agent_logger.error(f"Error parsing context results: {e}")
                     
-                    # Extract detailed analysis
+                    # Extract detailed analysis (from analyst agent tools)
                     elif "status" in message.content and "analysis_complete" in message.content:
                         try:
                             json_match = re.search(r'\{.*"status".*\}', message.content, re.DOTALL)
@@ -361,18 +360,3 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         error_msg = f"Real-time analysis error: {str(e)}"
         return error_msg, {"error": str(e)}, {"error": str(e)}
 
-# Keep the original function for backward compatibility
-async def get_prioritized_task_with_approval(
-    log_batch: str,
-    session_id: str,
-    user_input_callback: Optional[Callable] = None
-) -> tuple[str, dict, dict]:
-    """
-    Legacy function - redirects to the new streaming version without message callback.
-    """
-    return await get_prioritized_task_with_streaming(
-        log_batch=log_batch,
-        session_id=session_id,
-        user_input_callback=user_input_callback,
-        message_callback=None  # No real-time streaming for legacy calls
-    )

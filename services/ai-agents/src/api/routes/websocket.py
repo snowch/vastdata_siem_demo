@@ -142,8 +142,7 @@ def get_stage_progress(stage: str) -> int:
 
 async def real_time_message_callback(message_data: dict):
     """
-    Callback function to handle real-time agent messages and send them via WebSocket.
-    This is called for every message from the agents as it becomes available.
+    Enhanced callback function to handle real-time agent messages with better function call detection.
     """
     session_id = message_data.get('session_id')
     if not session_id or session_id not in active_sessions:
@@ -157,9 +156,37 @@ async def real_time_message_callback(message_data: dict):
         ws_logger.debug(f"Real-time message callback: {message_type} for session {session_id}")
         
         if message_type == 'agent_message':
-            # Send real-time agent output update
+            # Enhanced function call detection and handling
             agent_source = message_data.get('source', '').lower()
             content = message_data.get('content', '')
+            
+            # DEBUG: Log all agent messages for troubleshooting
+            ws_logger.info(f"🔍 Agent message from {agent_source}: {content[:200]}...")
+            
+            # Enhanced function call detection
+            if ('FunctionCall(' in content or 
+                'report_priority_findings' in content or 
+                'report_detailed_analysis' in content or
+                'status' in content and ('priority_identified' in content or 'analysis_complete' in content)):
+                
+                ws_logger.info(f"🔧 FUNCTION CALL DETECTED from {agent_source}")
+                print(f"🔧 FUNCTION CALL CONTENT: {content}")
+                
+                # Determine which function was called
+                if 'report_priority_findings' in content or 'priority_identified' in content:
+                    await handle_priority_function_call(session, content, agent_source)
+                elif 'report_detailed_analysis' in content or 'analysis_complete' in content:
+                    await handle_analysis_function_call(session, content, agent_source)
+                
+                # Send function call detection to frontend
+                await session.websocket.send_json({
+                    "type": "function_call_detected",
+                    "agent": determine_agent_type(agent_source),
+                    "function": "priority_findings" if 'priority' in content else "detailed_analysis",
+                    "content": content,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session_id
+                })
             
             # Filter out initial task messages and system messages
             if (agent_source in ['user', 'system'] or 
@@ -169,18 +196,12 @@ async def real_time_message_callback(message_data: dict):
                 ws_logger.debug(f"Skipping initial/system message from {agent_source}")
                 return
             
-            # Determine which agent this is from
-            if 'triage' in agent_source:
-                agent_type = 'triage'
-            elif 'context' in agent_source:
-                agent_type = 'context'
-            elif 'analyst' in agent_source or 'senior' in agent_source:
-                agent_type = 'analyst'
-            elif 'approval' in agent_source or 'multistage' in agent_source:
-                agent_type = 'approval'
-            else:
+            # Determine which agent this is from with enhanced mapping
+            agent_type = determine_agent_type(agent_source)
+            
+            if not agent_type:
                 ws_logger.debug(f"Unknown agent source: {agent_source}, skipping")
-                return  # Skip unknown sources instead of marking as 'unknown'
+                return
             
             # Send immediate update to frontend
             await session.websocket.send_json({
@@ -309,9 +330,115 @@ async def real_time_message_callback(message_data: dict):
     except Exception as e:
         ws_logger.error(f"Error in real-time message callback for session {session_id}: {e}")
 
+def determine_agent_type(agent_source: str) -> str:
+    """Enhanced agent type determination"""
+    agent_source_lower = agent_source.lower()
+    
+    # Enhanced mapping with more variations
+    agent_mappings = {
+        'triagespecialist': 'triage',
+        'triage': 'triage',
+        'contextAgent': 'context',
+        'context': 'context', 
+        'senioranalystspecialist': 'analyst',
+        'senioranalyst': 'analyst',
+        'analyst': 'analyst',
+        'multistageapprovalagent': 'approval',
+        'approval': 'approval'
+    }
+    
+    for source_key, agent_type in agent_mappings.items():
+        if source_key in agent_source_lower:
+            return agent_type
+    
+    return None
+
+async def handle_priority_function_call(session, content: str, agent_source: str):
+    """Handle priority findings function call results"""
+    try:
+        ws_logger.info("🎯 Processing priority findings function call")
+        
+        # Try to extract JSON result from the content
+        json_patterns = [
+            r'\{[^}]*"status"[^}]*"priority_identified"[^}]*\}',
+            r'\{.*?"status".*?"priority_identified".*?\}',
+            r'"status":\s*"priority_identified"[^}]*\}'
+        ]
+        
+        result_data = None
+        for pattern in json_patterns:
+            json_match = re.search(pattern, content, re.DOTALL)
+            if json_match:
+                try:
+                    result_data = json.loads(json_match.group())
+                    break
+                except json.JSONDecodeError:
+                    continue
+        
+        if result_data and result_data.get('status') == 'priority_identified':
+            findings = result_data.get('data', {})
+            ws_logger.info(f"✅ Priority findings extracted: {findings.get('threat_type')} from {findings.get('source_ip')}")
+            
+            # Send priority findings update
+            await session.websocket.send_json({
+                "type": "priority_findings_update",
+                "data": findings,
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session.session_id
+            })
+            
+            # Update progress
+            if session.progress:
+                await session.progress.send_update(
+                    "triage_complete",
+                    "triage",
+                    "✅ Priority threat identified - findings available",
+                    40
+                )
+        else:
+            ws_logger.warning("Could not extract priority findings from function call result")
+            
+    except Exception as e:
+        ws_logger.error(f"Error handling priority function call: {e}")
+
+async def handle_analysis_function_call(session, content: str, agent_source: str):
+    """Handle detailed analysis function call results"""
+    try:
+        ws_logger.info("🎯 Processing detailed analysis function call")
+        
+        # Try to extract JSON result
+        json_match = re.search(r'\{.*?"status".*?"analysis_complete".*?\}', content, re.DOTALL)
+        if json_match:
+            result_data = json.loads(json_match.group())
+            
+            if result_data.get('status') == 'analysis_complete':
+                analysis = result_data.get('data', {})
+                ws_logger.info(f"✅ Detailed analysis extracted: {len(analysis.get('recommended_actions', []))} recommendations")
+                
+                # Send analysis update
+                await session.websocket.send_json({
+                    "type": "detailed_analysis_update",
+                    "data": analysis,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session.session_id
+                })
+                
+                # Update progress
+                if session.progress:
+                    await session.progress.send_update(
+                        "analysis_complete",
+                        "analyst",
+                        "👨‍💼 Deep analysis completed with recommendations",
+                        95
+                    )
+    except Exception as e:
+        ws_logger.error(f"Error handling analysis function call: {e}")
+
+# ... [Rest of the existing websocket.py file remains the same - all the other functions like run_analysis_with_realtime_websocket, handle_user_input_response, etc.]
+
 async def run_analysis_with_realtime_websocket(log_batch: str, progress: AnalysisProgress, session_id: str):
     """
-    Enhanced analysis workflow with real-time agent output streaming.
+    Enhanced analysis workflow with real-time streaming of agent outputs via WebSocket.
     """
     try:
         await progress.send_update("starting", progress=10)
@@ -324,7 +451,7 @@ async def run_analysis_with_realtime_websocket(log_batch: str, progress: Analysi
             log_batch=log_batch,
             session_id=session_id,
             user_input_callback=request_user_approval,
-            message_callback=real_time_message_callback  # NEW: Real-time callback
+            message_callback=real_time_message_callback  # Enhanced callback
         )
 
         ws_logger.info(f"Real-time analysis completed for session {session_id}")
@@ -384,10 +511,10 @@ async def run_analysis_with_realtime_websocket(log_batch: str, progress: Analysi
         progress.completed = True
         await progress.send_update("error", progress=100)
 
+# ... [Include all other existing functions from the original websocket.py file]
+
 async def handle_user_input_response(data: dict, session_id: str):
-    """
-    Enhanced user input response handler for multi-stage approval.
-    """
+    """Enhanced user input response handler for multi-stage approval."""
     content = data.get("content", "")
     target_agent = data.get("target_agent", "")
     
@@ -408,9 +535,7 @@ async def handle_user_input_response(data: dict, session_id: str):
         ws_logger.warning(f"No pending user input request for session {session_id}")
 
 def process_approval_response(content: str, target_agent: str, approval_stage: str) -> str:
-    """
-    Process approval response based on the stage and content.
-    """
+    """Process approval response based on the stage and content."""
     content_lower = content.lower().strip()
     
     # Handle standard responses
