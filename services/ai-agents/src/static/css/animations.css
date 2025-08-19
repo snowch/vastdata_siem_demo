@@ -1,4 +1,4 @@
-/* animations.css - All keyframe animations and transitions */
+/* animations.css - All keyframe animations and transitions - FIXED VERSION */
 
 /* Core Animations */
 @keyframes spin {
@@ -248,7 +248,7 @@
 
 @keyframes wiggle {
     0%, 7% {
-        transform: rotateZ(0);
+        transform: rotateZ(0deg);
     }
     15% {
         transform: rotateZ(-15deg);
@@ -266,7 +266,7 @@
         transform: rotateZ(-4deg);
     }
     40%, 100% {
-        transform: rotateZ(0);
+        transform: rotateZ(0deg);
     }
 }
 
@@ -347,7 +347,7 @@
 
 @keyframes approvalSuccess {
     0% {
-        background: var(--success-gradient);
+        background: linear-gradient(45deg, #56ab2f, #a8e6cf);
         transform: scale(1);
     }
     50% {
@@ -355,14 +355,14 @@
         transform: scale(1.05);
     }
     100% {
-        background: var(--success-gradient);
+        background: linear-gradient(45deg, #56ab2f, #a8e6cf);
         transform: scale(1);
     }
 }
 
 @keyframes approvalReject {
     0% {
-        background: var(--error-gradient);
+        background: linear-gradient(45deg, #ff416c, #ff4757);
         transform: scale(1);
     }
     50% {
@@ -370,7 +370,7 @@
         transform: scale(1.05);
     }
     100% {
-        background: var(--error-gradient);
+        background: linear-gradient(45deg, #ff416c, #ff4757);
         transform: scale(1);
     }
 }

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.models.websocket import AnalysisProgress
-from core.services.agent_service import get_prioritized_task_with_approval
+from core.services.agent_service import get_prioritized_task_with_streaming
 from core.services.analysis_helpers import parse_agent_conversation, extract_structured_findings
 from utils.serialization import sanitize_chroma_results
 from infrastructure.trino_db_reader import get_logs
@@ -30,10 +30,7 @@ class WebSocketSession:
         self.approval_history = []
 
 async def request_user_approval(prompt: str, session_id: str) -> str:
-    """
-    Enhanced user approval function that handles multi-stage approvals.
-    Determines the approval stage based on the prompt content.
-    """
+    """Enhanced user approval function that handles multi-stage approvals."""
     ws_logger.info(f"Requesting user approval for session {session_id}")
     
     if session_id not in active_sessions:
@@ -108,9 +105,7 @@ async def request_user_approval(prompt: str, session_id: str) -> str:
         return "approve"
 
 def determine_approval_stage(prompt: str) -> str:
-    """
-    Determine which approval stage based on the prompt content.
-    """
+    """Determine which approval stage based on the prompt content."""
     prompt_lower = prompt.lower()
     
     # Triage stage indicators
@@ -145,70 +140,194 @@ def get_stage_progress(stage: str) -> int:
     }
     return stage_progress.get(stage, 50)
 
-async def send_agent_outputs(progress: AnalysisProgress, agent_outputs: dict, findings_summary: dict):
-    """Enhanced agent output handling for multi-stage approval"""
-    current_progress = 40
-
-    # Triage outputs 
-    if agent_outputs['triage'] or findings_summary['priority_found']:
-        await progress.send_update("completed_triage", "triage",
-            f"✅ Triage completed - {findings_summary['priority_level']} priority {findings_summary['threat_type']} detected",
-            current_progress)
-        for output in agent_outputs['triage']:
-            progress.agent_outputs['triage'].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': output
+async def real_time_message_callback(message_data: dict):
+    """
+    Callback function to handle real-time agent messages and send them via WebSocket.
+    This is called for every message from the agents as it becomes available.
+    """
+    session_id = message_data.get('session_id')
+    if not session_id or session_id not in active_sessions:
+        ws_logger.error(f"Invalid session ID in real-time callback: {session_id}")
+        return
+    
+    session = active_sessions[session_id]
+    message_type = message_data.get('type')
+    
+    try:
+        ws_logger.debug(f"Real-time message callback: {message_type} for session {session_id}")
+        
+        if message_type == 'agent_message':
+            # Send real-time agent output update
+            agent_source = message_data.get('source', '').lower()
+            content = message_data.get('content', '')
+            
+            # Filter out initial task messages and system messages
+            if (agent_source in ['user', 'system'] or 
+                'ENHANCED SECURITY LOG ANALYSIS' in content or 
+                'MULTI-STAGE WORKFLOW' in content or
+                len(content) > 2000):  # Skip very long initial messages
+                ws_logger.debug(f"Skipping initial/system message from {agent_source}")
+                return
+            
+            # Determine which agent this is from
+            if 'triage' in agent_source:
+                agent_type = 'triage'
+            elif 'context' in agent_source:
+                agent_type = 'context'
+            elif 'analyst' in agent_source or 'senior' in agent_source:
+                agent_type = 'analyst'
+            elif 'approval' in agent_source or 'multistage' in agent_source:
+                agent_type = 'approval'
+            else:
+                ws_logger.debug(f"Unknown agent source: {agent_source}, skipping")
+                return  # Skip unknown sources instead of marking as 'unknown'
+            
+            # Send immediate update to frontend
+            await session.websocket.send_json({
+                "type": "real_time_agent_output",
+                "agent": agent_type,
+                "content": content,
+                "source": message_data.get('source'),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
             })
-        current_progress = 50
-
-    # Context outputs
-    if agent_outputs['context'] or findings_summary['context_searched']:
-        await progress.send_update("completed_context", "context",
-            "🔎 Historical context research completed and validated", current_progress + 20)
-        for output in agent_outputs['context']:
-            progress.agent_outputs['context'].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': output
+            
+            # Update progress if we have it
+            if session.progress and agent_type not in ['approval', 'unknown']:
+                # Add to agent outputs for progress tracking
+                session.progress.agent_outputs[agent_type].append({
+                    'timestamp': datetime.now().isoformat(),
+                    'message': content
+                })
+                
+                # Send progress update
+                await session.progress.send_update(
+                    f"processing_{agent_type}",
+                    agent_type,
+                    f"🔄 {agent_type.title()} is processing...",
+                    get_stage_progress(agent_type)
+                )
+        
+        elif message_type == 'UserInputRequestedEvent':
+            # This is handled by the approval system, just log it
+            ws_logger.info(f"Approval request relayed for session {session_id}")
+        
+        elif message_type == 'priority_findings':
+            # Send priority findings update immediately
+            await session.websocket.send_json({
+                "type": "priority_findings_update",
+                "data": message_data.get('data'),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
             })
-        current_progress += 20
-
-    # Analyst outputs
-    if agent_outputs['analyst'] or findings_summary['analysis_completed']:
-        await progress.send_update("completed_analyst", "analyst",
-            "👨‍💼 Deep analysis and recommendations authorized", current_progress + 20)
-        for output in agent_outputs['analyst']:
-            progress.agent_outputs['analyst'].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': output
+            
+            if session.progress:
+                await session.progress.send_update(
+                    "triage_complete",
+                    "triage",
+                    "✅ Priority threat identified - findings available",
+                    40
+                )
+        
+        elif message_type == 'context_results':
+            # Send context results update immediately
+            await session.websocket.send_json({
+                "type": "context_results_update",
+                "data": sanitize_chroma_results(message_data.get('data', {})),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
             })
-        current_progress += 20
-
-    # Ensure all agents have outputs
-    for agent_type in ['triage', 'context', 'analyst']:
-        if not progress.agent_outputs[agent_type]:
-            progress.agent_outputs[agent_type].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': f"{agent_type.title()} stage completed successfully with user approval."
+            
+            if session.progress:
+                await session.progress.send_update(
+                    "context_complete",
+                    "context",
+                    "🔎 Historical context research completed",
+                    70
+                )
+        
+        elif message_type == 'analysis_complete':
+            # Send detailed analysis update immediately
+            await session.websocket.send_json({
+                "type": "detailed_analysis_update",
+                "data": message_data.get('data'),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
             })
+            
+            if session.progress:
+                await session.progress.send_update(
+                    "analysis_complete",
+                    "analyst",
+                    "👨‍💼 Deep analysis completed with recommendations",
+                    95
+                )
+        
+        elif message_type == 'workflow_rejected':
+            # Handle workflow rejection
+            await session.websocket.send_json({
+                "type": "workflow_rejected",
+                "content": message_data.get('content'),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
+            })
+            
+            if session.progress:
+                await session.progress.send_update(
+                    "rejected",
+                    "workflow",
+                    "❌ Analysis workflow rejected by user",
+                    100
+                )
+        
+        elif message_type == 'analysis_complete_final':
+            # Final completion notification
+            await session.websocket.send_json({
+                "type": "analysis_workflow_complete",
+                "was_rejected": message_data.get('was_rejected', False),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
+            })
+            
+            if session.progress and not message_data.get('was_rejected', False):
+                await session.progress.send_update(
+                    "completed",
+                    "workflow",
+                    "🎉 Multi-agent analysis completed successfully",
+                    100
+                )
+        
+        elif message_type == 'error':
+            # Handle errors in real-time
+            await session.websocket.send_json({
+                "type": "real_time_error",
+                "content": message_data.get('content'),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
+            })
+    
+    except Exception as e:
+        ws_logger.error(f"Error in real-time message callback for session {session_id}: {e}")
 
-    return current_progress
-
-async def run_analysis_with_websocket(log_batch: str, progress: AnalysisProgress, session_id: str):
-    """Enhanced analysis workflow with multi-stage approval support"""
+async def run_analysis_with_realtime_websocket(log_batch: str, progress: AnalysisProgress, session_id: str):
+    """
+    Enhanced analysis workflow with real-time agent output streaming.
+    """
     try:
         await progress.send_update("starting", progress=10)
-        ws_logger.info(f"Starting multi-stage analysis for session {session_id}")
+        ws_logger.info(f"Starting real-time analysis for session {session_id}")
 
         await progress.send_update("running_triage", "triage", "🔍 Starting triage analysis...", 20)
 
-        # Run analysis with multi-stage approval workflow
-        full_conversation, structured_findings, chroma_context = await get_prioritized_task_with_approval(
+        # Run analysis with real-time streaming
+        full_conversation, structured_findings, chroma_context = await get_prioritized_task_with_streaming(
             log_batch=log_batch,
             session_id=session_id,
-            user_input_callback=request_user_approval
+            user_input_callback=request_user_approval,
+            message_callback=real_time_message_callback  # NEW: Real-time callback
         )
 
-        ws_logger.info(f"Multi-stage analysis completed for session {session_id}")
+        ws_logger.info(f"Real-time analysis completed for session {session_id}")
         ws_logger.debug(f"Structured findings: {structured_findings}")
 
         # Check if analysis was rejected at any stage
@@ -227,7 +346,7 @@ async def run_analysis_with_websocket(log_batch: str, progress: AnalysisProgress
             await progress.send_update()
             return
 
-        # Process successful completion with approval history
+        # Process successful completion
         session = active_sessions.get(session_id)
         approval_history = session.approval_history if session else []
         
@@ -239,31 +358,26 @@ async def run_analysis_with_websocket(log_batch: str, progress: AnalysisProgress
                     "confidence": 0.0
                 }
 
-        # Parse agent outputs and update progress
-        agent_outputs = parse_agent_conversation(full_conversation)
-        findings_summary = extract_structured_findings(full_conversation, structured_findings)
-        current_progress = await send_agent_outputs(progress, agent_outputs, findings_summary)
-
         # Set enhanced final results
         progress.final_results = {
             'conversation': full_conversation,
             'structured_findings': structured_findings,
             'chroma_context': sanitize_chroma_results(chroma_context),
-            'findings_summary': findings_summary,
             'approval_history': approval_history,
-            'stages_completed': len(approval_history)
+            'stages_completed': len(approval_history),
+            'real_time_streaming': True
         }
 
         progress.completed = True
         await progress.send_update("completed", progress=100)
 
-        ws_logger.info(f"Multi-stage analysis workflow completed successfully for session {session_id}")
+        ws_logger.info(f"Real-time analysis workflow completed successfully for session {session_id}")
 
     except WebSocketDisconnect:
         ws_logger.info(f"WebSocket disconnected during analysis for session {session_id}")
         raise
     except Exception as e:
-        ws_logger.error(f"Multi-stage analysis failed for session {session_id}: {str(e)}")
+        ws_logger.error(f"Real-time analysis failed for session {session_id}: {str(e)}")
         ws_logger.error(f"Full traceback: {traceback.format_exc()}")
         
         progress.error = str(e)
@@ -311,23 +425,96 @@ def process_approval_response(content: str, target_agent: str, approval_stage: s
         # Treat as custom instructions
         return f"CUSTOM - User response for {approval_stage} stage: {content}"
 
-# Rest of the WebSocket handling remains similar but with enhanced logging and stage tracking
+async def handle_start_analysis(data: dict, session_id: str, websocket: WebSocket):
+    """Enhanced start analysis handler with real-time streaming"""
+    log_batch = data.get("logs")
+    if not log_batch:
+        await websocket.send_json({
+            "type": "error",
+            "message": "No logs provided for analysis"
+        })
+        return
+
+    ws_logger.info(f"Starting enhanced real-time analysis workflow for session {session_id}")
+
+    # Create session and progress
+    progress = AnalysisProgress(session_id, websocket)
+    session = WebSocketSession(session_id, websocket)
+    session.progress = progress
+    active_sessions[session_id] = session
+
+    # Start analysis task with real-time streaming
+    asyncio.create_task(run_analysis_with_realtime_websocket(log_batch, progress, session_id))
+
+async def handle_retrieve_logs(session_id: str, websocket: WebSocket):
+    """Handle log retrieval request"""
+    ws_logger.info(f"Log retrieval requested via WebSocket: {session_id}")
+    try:
+        logs = get_logs()
+        await websocket.send_json({
+            "type": "logs_retrieved",
+            "logs": logs,
+            "message": f"Retrieved {len(logs)} log entries successfully"
+        })
+        ws_logger.info(f"Successfully sent {len(logs)} logs to session {session_id}")
+    except Exception as e:
+        ws_logger.error(f"Error retrieving logs for session {session_id}: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Server error: {str(e)}"
+        })
+
+async def handle_ping(websocket: WebSocket):
+    """Handle ping request"""
+    try:
+        await websocket.send_json({
+            "type": "pong",
+            "timestamp": datetime.now().isoformat()
+        })
+        ws_logger.debug("Sent pong response")
+    except Exception as e:
+        ws_logger.error(f"Error sending pong response: {e}")
+
+async def handle_get_approval_history(session_id: str, websocket: WebSocket):
+    """Get approval history for the session"""
+    try:
+        session = active_sessions.get(session_id)
+        if session:
+            await websocket.send_json({
+                "type": "approval_history",
+                "history": session.approval_history,
+                "current_stage": session.current_approval_stage
+            })
+            ws_logger.info(f"Sent approval history for session {session_id}: {len(session.approval_history)} entries")
+        else:
+            await websocket.send_json({
+                "type": "approval_history",
+                "history": [],
+                "current_stage": None
+            })
+            ws_logger.warning(f"No session found for approval history request: {session_id}")
+    except Exception as e:
+        ws_logger.error(f"Error getting approval history for session {session_id}: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Error retrieving approval history: {str(e)}"
+        })
+
+# Main WebSocket endpoint
 @router.websocket("/ws/analysis")
 async def websocket_analysis(websocket: WebSocket):
-    """
-    Enhanced WebSocket endpoint for multi-stage analysis workflow.
-    """
+    """Enhanced WebSocket endpoint for real-time analysis workflow."""
     await websocket.accept()
     session_id = str(uuid.uuid4())
 
-    ws_logger.info(f"Multi-stage WebSocket connection established: {session_id}")
+    ws_logger.info(f"Real-time WebSocket connection established: {session_id}")
 
     # Send connection confirmation
     await websocket.send_json({
         "type": "connection_established",
         "session_id": session_id,
-        "message": "Connected to Enhanced SOC Analysis with Multi-Stage Approval",
-        "features": ["multi_stage_approval", "custom_instructions", "approval_history"]
+        "message": "Connected to Enhanced SOC Analysis with Real-time Streaming",
+        "features": ["real_time_streaming", "multi_stage_approval", "custom_instructions", "approval_history"]
     })
 
     try:
@@ -381,73 +568,11 @@ async def websocket_analysis(websocket: WebSocket):
                     break
 
     except WebSocketDisconnect:
-        ws_logger.info(f"Multi-stage WebSocket disconnected: {session_id}")
+        ws_logger.info(f"Real-time WebSocket disconnected: {session_id}")
     except Exception as e:
         ws_logger.error(f"Unexpected WebSocket error for session {session_id}: {str(e)}")
     finally:
         # Clean up session
         if session_id in active_sessions:
             del active_sessions[session_id]
-            ws_logger.info(f"Cleaned up multi-stage session {session_id}")
-
-# Additional helper functions for the enhanced workflow
-async def handle_start_analysis(data: dict, session_id: str, websocket: WebSocket):
-    """Enhanced start analysis handler"""
-    log_batch = data.get("logs")
-    if not log_batch:
-        await websocket.send_json({
-            "type": "error",
-            "message": "No logs provided for analysis"
-        })
-        return
-
-    ws_logger.info(f"Starting enhanced multi-stage analysis workflow for session {session_id}")
-
-    # Create session and progress
-    progress = AnalysisProgress(session_id, websocket)
-    session = WebSocketSession(session_id, websocket)
-    session.progress = progress
-    active_sessions[session_id] = session
-
-    # Start analysis task
-    asyncio.create_task(run_analysis_with_websocket(log_batch, progress, session_id))
-
-async def handle_get_approval_history(session_id: str, websocket: WebSocket):
-    """Get approval history for the session"""
-    session = active_sessions.get(session_id)
-    if session:
-        await websocket.send_json({
-            "type": "approval_history",
-            "history": session.approval_history,
-            "current_stage": session.current_approval_stage
-        })
-    else:
-        await websocket.send_json({
-            "type": "approval_history",
-            "history": [],
-            "current_stage": None
-        })
-
-async def handle_retrieve_logs(session_id: str, websocket: WebSocket):
-    """Handle log retrieval request"""
-    ws_logger.info(f"Log retrieval requested via WebSocket: {session_id}")
-    try:
-        logs = get_logs()
-        await websocket.send_json({
-            "type": "logs_retrieved",
-            "logs": logs,
-            "message": f"Retrieved {len(logs)} log entries successfully"
-        })
-    except Exception as e:
-        ws_logger.error(f"Error retrieving logs: {e}")
-        await websocket.send_json({
-            "type": "error",
-            "message": f"Server error: {str(e)}"
-        })
-
-async def handle_ping(websocket: WebSocket):
-    """Handle ping request"""
-    await websocket.send_json({
-        "type": "pong",
-        "timestamp": datetime.now().isoformat()
-    })
+            ws_logger.info(f"Cleaned up real-time session {session_id}")

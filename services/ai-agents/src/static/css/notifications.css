@@ -1,4 +1,4 @@
-/* notifications.css - Toast messages and notification system */
+/* notifications.css - Toast messages and notification system - FIXED VERSION */
 
 /* Toast Container */
 #toast-container {
@@ -33,19 +33,19 @@
 
 /* Toast Types */
 .toast.success {
-    background: var(--success-gradient);
+    background: linear-gradient(45deg, #56ab2f, #a8e6cf);
 }
 
 .toast.error {
-    background: var(--error-gradient);
+    background: linear-gradient(45deg, #ff416c, #ff4757);
 }
 
 .toast.warning {
-    background: var(--warning-gradient);
+    background: linear-gradient(45deg, #ffa726, #fb8c00);
 }
 
 .toast.info {
-    background: var(--info-gradient);
+    background: linear-gradient(45deg, #667eea, #764ba2);
 }
 
 /* Toast Progress Bar */
@@ -116,7 +116,7 @@
     padding: var(--spacing-xs);
     line-height: 1;
     border-radius: var(--radius-sm);
-    transition: var(--transition-fast);
+    transition: all 0.3s ease;
 }
 
 .toast-close:hover {
@@ -175,7 +175,7 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     animation: slideInRight 0.3s ease;
 }
 
@@ -184,7 +184,7 @@
     height: 20px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top: 2px solid white;
-    border-radius: var(--radius-round);
+    border-radius: 50%;
     animation: spin 1s linear infinite;
 }
 
@@ -195,7 +195,7 @@
 
 /* Approval Notifications */
 .approval-notification {
-    background: var(--warning-gradient);
+    background: linear-gradient(45deg, #ffa726, #fb8c00);
     color: white;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
@@ -253,7 +253,7 @@
 
 /* Progress Notifications */
 .progress-notification {
-    background: var(--info-gradient);
+    background: linear-gradient(45deg, #667eea, #764ba2);
     color: white;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
@@ -307,7 +307,7 @@
     right: -8px;
     background: #e74c3c;
     color: white;
-    border-radius: var(--radius-round);
+    border-radius: 50%;
     width: 20px;
     height: 20px;
     display: flex;
@@ -324,7 +324,7 @@
 }
 
 /* Mobile Notifications */
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
     #toast-container {
         left: var(--spacing-lg);
         right: var(--spacing-lg);
