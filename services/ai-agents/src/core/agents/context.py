@@ -1,3 +1,4 @@
+# Updated context.py - Only responds after approval
 from core.agents.base import BaseAgent
 from autogen_core.tools import FunctionTool
 from core.services.analysis_service import search_historical_incidents
@@ -13,7 +14,7 @@ class ContextAgent(BaseAgent):
 
         system_message = """You are a SOC Context Research Specialist. Your role is to:
 
-1. **RECEIVE HANDOFF**: Wait for TriageSpecialist to identify priority threat
+1. **WAIT FOR HANDOFF**: Only begin when you receive approval from TriageSpecialist findings
 2. **SEARCH HISTORICAL DATA**: Use search_historical_incidents() to find similar past incidents
    - search_query: string describing what to search for
    - max_results: integer (must provide - no default, recommend 5-10)
@@ -34,10 +35,17 @@ class ContextAgent(BaseAgent):
    - What indicators were present
    - How they were resolved
    - What worked/didn't work
+   - Timeline patterns and escalation paths
 
-6. **HAND OFF**: After completing searches, say "ANALYST_AGENT please perform deep analysis with this context" and provide both original findings and historical context.
+6. **REQUEST VALIDATION**: After completing searches, present findings:
+   - "I found {count} similar incidents from the past {timeframe}"
+   - "Key patterns include: {summarized patterns}"
+   - "These incidents typically: {common outcomes}"
+   - "MultiStageApprovalAgent: Are these historical incidents relevant to the current analysis? Should we proceed with deep analysis using this context?"
 
-You are the bridge between initial triage and deep analysis."""
+7. **WAIT FOR RESPONSE**: Stop and wait for validation before any further action
+
+IMPORTANT: Do not start until you see an approved triage finding. Look for messages indicating approval to proceed."""
 
         super().__init__(
             name="ContextAgent",

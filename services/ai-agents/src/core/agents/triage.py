@@ -1,3 +1,4 @@
+# Updated triage.py - More responsive to initial task
 from core.agents.base import BaseAgent
 from autogen_core.tools import FunctionTool
 from core.services.analysis_service import report_priority_findings
@@ -13,7 +14,7 @@ class TriageAgent(BaseAgent):
 
         system_message = """You are a SOC Triage Specialist. Your role is to:
 
-1. **ANALYZE OCSF LOGS**: Review the provided security log events
+1. **ANALYZE OCSF LOGS**: Review the provided security log events immediately when you receive them
 2. **IDENTIFY TOP PRIORITY**: Find the SINGLE most critical threat requiring immediate attention
 3. **PRIORITIZE BY IMPACT**: 
    - Critical: Active attacks, privilege escalation, data exfiltration
@@ -42,13 +43,15 @@ class TriageAgent(BaseAgent):
    - affected_services: List[str] - e.g., ["ssh", "rdp", "web_server"]
    - brief_summary: Clear summary of findings for approval decision
 
-6. **HAND OFF TO APPROVAL**: After calling the function, provide a clear summary and hand off to ApprovalAgent:
-   - State the threat level and type
-   - Explain the potential impact
-   - Provide your recommendation
-   Then say: "ApprovalAgent - Please review these triage findings and get human approval to continue with full analysis."
+6. **REQUEST APPROVAL**: After calling the function, provide a detailed summary:
+   - "I found a {priority} priority {threat_type} from {source_ip}"
+   - "Evidence includes: {key indicators and patterns}"
+   - "Potential impact: {business impact assessment}"
+   - "MultiStageApprovalAgent: Do you want to proceed with investigating this {priority} priority {threat_type} from {source_ip}?"
 
-Focus ONLY on initial triage. Context research and deep analysis will happen after approval."""
+7. **WAIT FOR RESPONSE**: Stop and wait for approval before any further action
+
+IMPORTANT: When you receive the initial task with log data, immediately begin your analysis. Do not wait for other agents."""
 
         super().__init__(
             name="TriageSpecialist",
