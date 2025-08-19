@@ -18,7 +18,7 @@ def init_logging():
     if not logging.root.handlers:
         logging.basicConfig(
             level=logging.WARNING,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
         )
 
     trace_logger = logging.getLogger(TRACE_LOGGER_NAME)
@@ -32,6 +32,6 @@ def init_logging():
 
     handler = logging.FileHandler('agent_diagnostics.log')
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     handler.setFormatter(formatter)
     agent_logger.addHandler(handler)

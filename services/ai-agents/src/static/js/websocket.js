@@ -1,4 +1,5 @@
-// services/ai-agents/src/static/js/websocket.js - COMPLETE ENHANCED VERSION
+// services/ai-agents/src/static/js/websocket.js - SECOND UPDATE
+// Remove progress_update handling, add smart progress calculation from specific events
 
 // Import other modules
 import * as debugLogger from './debugLogger.js';
@@ -25,6 +26,14 @@ var functionCallsDetected = {
     triage: false,
     context: false,
     analyst: false
+};
+
+// NEW: Simple progress tracking based on specific events
+var workflowProgress = {
+    triage: 0,     // 0 = pending, 1 = active, 2 = complete
+    context: 0,    
+    analyst: 0,
+    overall: 0     // Calculated from stages: 0-100%
 };
 
 function initWebSocket() {
@@ -77,6 +86,53 @@ function initWebSocket() {
     };
 }
 
+// NEW: Smart progress calculation based on completed stages
+function updateOverallProgress() {
+    var progress = 0;
+    var statusText = 'Initializing';
+    
+    // Each stage contributes to overall progress
+    if (workflowProgress.triage >= 1) {
+        progress += 30;  // Triage active/complete
+        statusText = 'Analyzing Threats';
+    }
+    if (workflowProgress.triage >= 2) {
+        progress += 10;  // Triage complete
+        statusText = 'Triage Complete';
+    }
+    if (workflowProgress.context >= 1) {
+        progress += 20; // Context active  
+        statusText = 'Researching Historical Context';
+    }
+    if (workflowProgress.context >= 2) {
+        progress += 10; // Context complete
+        statusText = 'Context Research Complete';
+    }
+    if (workflowProgress.analyst >= 1) {
+        progress += 20; // Analysis active
+        statusText = 'Deep Analysis in Progress';
+    }
+    if (workflowProgress.analyst >= 2) {
+        progress += 10; // Analysis complete
+        statusText = 'Analysis Complete';
+    }
+    
+    workflowProgress.overall = progress;
+    
+    // Update UI with calculated progress
+    ui.updateProgress(progress, statusText);
+    
+    debugLogger.debugLog('Smart progress calculated: ' + progress + '% - ' + statusText);
+}
+
+// NEW: Reset workflow progress for new analysis
+function resetWorkflowProgress() {
+    workflowProgress = { triage: 0, context: 0, analyst: 0, overall: 0 };
+    functionCallsDetected = { triage: false, context: false, analyst: false };
+    agentOutputBuffers = { triage: [], context: [], analyst: [] };
+    debugLogger.debugLog('Workflow progress reset');
+}
+
 function handleEnhancedRealtimeWebSocketMessage(data) {
     debugLogger.debugLog('Handling enhanced real-time WebSocket message type: ' + data.type);
     
@@ -85,12 +141,15 @@ function handleEnhancedRealtimeWebSocketMessage(data) {
             currentSessionId = data.session_id;
             debugLogger.debugLog('Connected with session ID: ' + data.session_id);
             
+            // Reset progress for new session
+            resetWorkflowProgress();
+            
             // Show enhanced real-time features notification
             ui.showStatus('Real-time streaming enabled - agent outputs will appear live', 'info');
             break;
 
         case 'function_call_detected':
-            // NEW: Handle detected function calls
+            // Handle detected function calls
             handleFunctionCallDetected(data);
             break;
 
@@ -137,12 +196,8 @@ function handleEnhancedRealtimeWebSocketMessage(data) {
             approvalWorkflow.handleApprovalRequest(data);
             break;
 
-        case 'progress_update':
-            // Handle traditional progress updates (still needed for overall progress)
-            debugLogger.debugLog('Progress update received - Status: ' + data.status);
-            console.log('Progress update data:', data);
-            progressManager.handleProgressUpdate(data);
-            break;
+        // REMOVED: case 'progress_update' - no longer needed!
+        // Smart progress calculation happens automatically from specific events
 
         case 'logs_retrieved':
             debugLogger.debugLog('Logs retrieved message received');
@@ -233,6 +288,14 @@ function handleEnhancedRealtimeAgentOutput(data) {
         return;
     }
     
+    // NEW: Mark agent as active when receiving output
+    if (workflowProgress[agent] === 0) {
+        workflowProgress[agent] = 1;
+        ui.updateAgentStatus(agent, 'active');
+        ui.showAgentSpinner(agent, true);
+        updateOverallProgress();
+    }
+    
     // Enhanced function call result detection
     if ((content.includes('status') && content.includes('priority_identified')) ||
         (content.includes('status') && content.includes('analysis_complete')) ||
@@ -261,6 +324,119 @@ function handleEnhancedRealtimeAgentOutput(data) {
     updateEnhancedAgentOutput(agent, content, timestamp);
 }
 
+function handleEnhancedPriorityFindingsUpdate(data) {
+    debugLogger.debugLog('Enhanced priority findings update received in real-time');
+    var findings = data.data;
+    
+    if (findings && findings.threat_type && findings.source_ip) {
+        var priority = findings.priority || 'medium';
+        var threatType = findings.threat_type;
+        var sourceIp = findings.source_ip;
+        
+        // Show enhanced immediate notification
+        ui.showStatus('🚨 Priority ' + priority.toUpperCase() + ' threat: ' + threatType + ' from ' + sourceIp, 'warning');
+        
+        // NEW: Update progress tracking
+        workflowProgress.triage = 2; // Complete
+        ui.updateAgentStatus('triage', 'complete');
+        ui.showAgentSpinner('triage', false);
+        updateOverallProgress();
+        
+        debugLogger.debugLog('Enhanced priority findings processed: ' + threatType + ' from ' + sourceIp);
+    }
+}
+
+function handleEnhancedContextResultsUpdate(data) {
+    debugLogger.debugLog('Enhanced context results update received in real-time');
+    var results = data.data;
+    
+    if (results && results.documents) {
+        var documentCount = results.documents.length;
+        
+        // Show immediate notification
+        ui.showStatus('🔎 Found ' + documentCount + ' related historical incidents', 'info');
+        
+        // NEW: Update progress tracking
+        workflowProgress.context = 2; // Complete
+        ui.updateAgentStatus('context', 'complete');
+        ui.showAgentSpinner('context', false);
+        updateOverallProgress();
+        
+        debugLogger.debugLog('Enhanced context results processed: ' + documentCount + ' documents');
+    }
+}
+
+function handleEnhancedDetailedAnalysisUpdate(data) {
+    debugLogger.debugLog('Enhanced detailed analysis update received in real-time');
+    var analysis = data.data;
+    
+    if (analysis && analysis.recommended_actions) {
+        var actionCount = analysis.recommended_actions.length;
+        
+        // Show immediate notification
+        ui.showStatus('👨‍💼 Analysis complete with ' + actionCount + ' recommendations', 'success');
+        
+        // NEW: Update progress tracking
+        workflowProgress.analyst = 2; // Complete
+        ui.updateAgentStatus('analyst', 'complete');
+        ui.showAgentSpinner('analyst', false);
+        updateOverallProgress();
+        
+        debugLogger.debugLog('Enhanced detailed analysis processed: ' + actionCount + ' recommendations');
+    }
+}
+
+function handleEnhancedWorkflowComplete(data) {
+    debugLogger.debugLog('Enhanced real-time workflow completion received');
+    
+    if (data.was_rejected) {
+        ui.showStatus('❌ Analysis workflow was rejected by user', 'warning');
+        ui.updateProgress(100, 'Workflow rejected');
+    } else {
+        ui.showStatus('🎉 Multi-agent analysis completed successfully!', 'success');
+        ui.updateProgress(100, 'Analysis complete');
+        
+        // Show enhanced final results if available
+        setTimeout(function() {
+            showEnhancedRealtimeResultsSummary();
+        }, 1000);
+    }
+    
+    // Reset analysis state
+    progressManager.setAnalysisInProgress(false);
+    approvalWorkflow.setAwaitingApproval(false);
+    
+    // Enable the analyze button again
+    var analyzeBtn = document.getElementById('analyzeBtn');
+    if (analyzeBtn) {
+        analyzeBtn.disabled = false;
+    }
+    
+    // Reset for next analysis
+    setTimeout(resetWorkflowProgress, 2000);
+}
+
+function handleEnhancedWorkflowRejected(data) {
+    debugLogger.debugLog('Enhanced real-time workflow rejection received');
+    
+    ui.showStatus('❌ ' + (data.content || 'Analysis workflow rejected'), 'error');
+    ui.updateProgress(100, 'Rejected');
+    
+    // Reset analysis state
+    progressManager.setAnalysisInProgress(false);
+    approvalWorkflow.setAwaitingApproval(false);
+    
+    // Enable the analyze button again
+    var analyzeBtn = document.getElementById('analyzeBtn');
+    if (analyzeBtn) {
+        analyzeBtn.disabled = false;
+    }
+    
+    // Reset for next analysis
+    setTimeout(resetWorkflowProgress, 2000);
+}
+
+// Keep all the other existing functions unchanged...
 function handleEnhancedFunctionCallResult(agent, content, timestamp) {
     debugLogger.debugLog('🎯 Processing enhanced function call result for: ' + agent);
     
@@ -418,169 +594,6 @@ function updateEnhancedAgentOutput(agent, content, timestamp) {
     }
 }
 
-function handleEnhancedPriorityFindingsUpdate(data) {
-    debugLogger.debugLog('Enhanced priority findings update received in real-time');
-    var findings = data.data;
-    
-    if (findings && findings.threat_type && findings.source_ip) {
-        var priority = findings.priority || 'medium';
-        var threatType = findings.threat_type;
-        var sourceIp = findings.source_ip;
-        
-        // Show enhanced immediate notification
-        ui.showStatus('🚨 Priority ' + priority.toUpperCase() + ' threat: ' + threatType + ' from ' + sourceIp, 'warning');
-        
-        // Update triage agent to complete
-        ui.updateAgentStatus('triage', 'complete');
-        ui.showAgentSpinner('triage', false);
-        
-        // Enhanced findings preview in triage output
-        var triageOutput = document.getElementById('triageOutput');
-        if (triageOutput) {
-            var timestamp = new Date().toLocaleTimeString();
-            var enhancedFindingsText = '[' + timestamp + '] 🎯 STRUCTURED FINDINGS AVAILABLE:\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-                '🚨 Threat: ' + threatType + '\n' +
-                '📍 Source: ' + sourceIp + '\n' +
-                '⚠️ Priority: ' + priority.toUpperCase() + '\n' +
-                '📊 Confidence: ' + (findings.confidence_score || 0.8) + '\n' +
-                '📈 Events: ' + (findings.event_count || 'unknown') + '\n' +
-                '🎯 Pattern: ' + (findings.attack_pattern || 'Not specified') + '\n' +
-                '🎲 Services: ' + (findings.affected_services ? findings.affected_services.join(', ') : 'Unknown') + '\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-            
-            triageOutput.textContent += '\n\n' + enhancedFindingsText;
-            triageOutput.scrollTop = triageOutput.scrollHeight;
-        }
-        
-        // Update progress
-        ui.updateProgress(40, 'Priority threat identified');
-        
-        debugLogger.debugLog('Enhanced priority findings processed: ' + threatType + ' from ' + sourceIp);
-    }
-}
-
-function handleEnhancedContextResultsUpdate(data) {
-    debugLogger.debugLog('Enhanced context results update received in real-time');
-    var results = data.data;
-    
-    if (results && results.documents) {
-        var documentCount = results.documents.length;
-        
-        // Show immediate notification
-        ui.showStatus('🔎 Found ' + documentCount + ' related historical incidents', 'info');
-        
-        // Update context agent to complete
-        ui.updateAgentStatus('context', 'complete');
-        ui.showAgentSpinner('context', false);
-        
-        // Enhanced context preview
-        var contextOutput = document.getElementById('contextOutput');
-        if (contextOutput) {
-            var timestamp = new Date().toLocaleTimeString();
-            var enhancedContextText = '[' + timestamp + '] 📚 HISTORICAL CONTEXT RESEARCH:\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-                '📊 Documents Found: ' + documentCount + '\n' +
-                '🔍 Source: ChromaDB historical analysis\n' +
-                '📈 Similarity: High pattern matching\n' +
-                '🎯 Relevance: Related incident patterns\n' +
-                '✅ Status: Ready for deep analysis\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-            
-            contextOutput.textContent += '\n\n' + enhancedContextText;
-            contextOutput.scrollTop = contextOutput.scrollHeight;
-        }
-        
-        // Update progress
-        ui.updateProgress(70, 'Historical context analyzed');
-        
-        debugLogger.debugLog('Enhanced context results processed: ' + documentCount + ' documents');
-    }
-}
-
-function handleEnhancedDetailedAnalysisUpdate(data) {
-    debugLogger.debugLog('Enhanced detailed analysis update received in real-time');
-    var analysis = data.data;
-    
-    if (analysis && analysis.recommended_actions) {
-        var actionCount = analysis.recommended_actions.length;
-        
-        // Show immediate notification
-        ui.showStatus('👨‍💼 Analysis complete with ' + actionCount + ' recommendations', 'success');
-        
-        // Update analyst agent to complete
-        ui.updateAgentStatus('analyst', 'complete');
-        ui.showAgentSpinner('analyst', false);
-        
-        // Enhanced analysis preview
-        var analystOutput = document.getElementById('analystOutput');
-        if (analystOutput) {
-            var timestamp = new Date().toLocaleTimeString();
-            var enhancedAnalysisText = '[' + timestamp + '] 🎯 COMPREHENSIVE ANALYSIS COMPLETE:\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-                '🎯 Threat Assessment: ' + (analysis.threat_assessment?.severity || 'unknown') + '\n' +
-                '📊 Confidence Level: ' + (analysis.threat_assessment?.confidence || 'unknown') + '\n' +
-                '📋 Recommendations: ' + actionCount + ' actionable items\n' +
-                '💼 Business Impact: ' + (analysis.business_impact || 'Under review') + '\n' +
-                '🔒 Status: Awaiting authorization\n' +
-                '📝 Investigation Notes: ' + (analysis.investigation_notes ? 'Available' : 'None') + '\n' +
-                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-            
-            analystOutput.textContent += '\n\n' + enhancedAnalysisText;
-            analystOutput.scrollTop = analystOutput.scrollHeight;
-        }
-        
-        // Update progress
-        ui.updateProgress(95, 'Analysis complete - awaiting authorization');
-        
-        debugLogger.debugLog('Enhanced detailed analysis processed: ' + actionCount + ' recommendations');
-    }
-}
-
-function handleEnhancedWorkflowComplete(data) {
-    debugLogger.debugLog('Enhanced real-time workflow completion received');
-    
-    if (data.was_rejected) {
-        ui.showStatus('❌ Analysis workflow was rejected by user', 'warning');
-        ui.updateProgress(100, 'Workflow rejected');
-    } else {
-        ui.showStatus('🎉 Multi-agent analysis completed successfully!', 'success');
-        ui.updateProgress(100, 'Analysis complete');
-        
-        // Enable the analyze button again
-        var analyzeBtn = document.getElementById('analyzeBtn');
-        if (analyzeBtn) {
-            analyzeBtn.disabled = false;
-        }
-        
-        // Show enhanced final results if available
-        setTimeout(function() {
-            showEnhancedRealtimeResultsSummary();
-        }, 1000);
-    }
-    
-    // Reset analysis state
-    progressManager.setAnalysisInProgress(false);
-    approvalWorkflow.setAwaitingApproval(false);
-}
-
-function handleEnhancedWorkflowRejected(data) {
-    debugLogger.debugLog('Enhanced real-time workflow rejection received');
-    
-    ui.showStatus('❌ ' + (data.content || 'Analysis workflow rejected'), 'error');
-    ui.updateProgress(100, 'Rejected');
-    
-    // Reset analysis state
-    progressManager.setAnalysisInProgress(false);
-    approvalWorkflow.setAwaitingApproval(false);
-    
-    // Enable the analyze button again
-    var analyzeBtn = document.getElementById('analyzeBtn');
-    if (analyzeBtn) {
-        analyzeBtn.disabled = false;
-    }
-}
-
 function showEnhancedRealtimeResultsSummary() {
     debugLogger.debugLog('Showing enhanced real-time results summary');
     
@@ -620,26 +633,12 @@ function showEnhancedRealtimeResultsSummary() {
                 priority_threat: {
                     priority: 'high',
                     threat_type: 'Enhanced Multi-stage Analysis',
-                    brief_summary: 'Real-time analysis completed successfully with function call verification'
+                    brief_summary: 'Real-time analysis completed successfully with smart progress tracking'
                 }
             },
             chroma_context: {}
         });
     }
-}
-
-function clearEnhancedRealtimeBuffers() {
-    debugLogger.debugLog('Clearing enhanced real-time agent output buffers');
-    agentOutputBuffers = {
-        triage: [],
-        context: [],
-        analyst: []
-    };
-    functionCallsDetected = {
-        triage: false,
-        context: false,
-        analyst: false
-    };
 }
 
 // Enhanced WebSocket message sending with retry logic
@@ -667,6 +666,10 @@ function showWebSocketStats() {
         return agent + ': ' + (functionCallsDetected[agent] ? 'DETECTED' : 'none');
     }).join(', ');
     
+    var progressStatus = Object.keys(workflowProgress).map(function(stage) {
+        return stage + ': ' + workflowProgress[stage];
+    }).join(', ');
+    
     var stats = 'Enhanced Real-time WebSocket Statistics:\n' +
         'Connected: ' + wsStats.connected + '\n' +
         'Messages Sent: ' + wsStats.messages_sent + '\n' +
@@ -674,6 +677,7 @@ function showWebSocketStats() {
         'Reconnects: ' + wsStats.reconnects + '\n' +
         'Connection State: ' + (websocket ? websocket.readyState : 'No connection') + '\n' +
         'Session ID: ' + (currentSessionId || 'None') + '\n' +
+        'Smart Progress: ' + progressStatus + '\n' +
         'Real-time Buffers: ' + bufferSizes + '\n' +
         'Function Calls: ' + functionCallStatus;
 
@@ -685,6 +689,7 @@ function showWebSocketStats() {
         reconnects: wsStats.reconnects,
         connection_state: websocket ? websocket.readyState : 'No connection',
         session_id: currentSessionId,
+        smart_progress: workflowProgress,
         agent_buffers: agentOutputBuffers,
         function_calls_detected: functionCallsDetected
     });
@@ -723,58 +728,17 @@ function getFunctionCallsDetected() {
     return functionCallsDetected;
 }
 
+// NEW: Export workflow progress for debugging
+function getWorkflowProgress() {
+    return workflowProgress;
+}
+
 // Handle page unload
 window.addEventListener('beforeunload', function() {
     if (websocket) {
         websocket.close(1000, 'Page unloading');
     }
 });
-
-// Add enhanced CSS for function calling states
-const enhancedFunctionCallStyle = `
-.agent-card.function-calling {
-    border-left: 4px solid #f39c12 !important;
-    animation: enhancedFunctionCallPulse 2s infinite;
-}
-
-@keyframes enhancedFunctionCallPulse {
-    0%, 100% { 
-        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-        transform: scale(1);
-    }
-    50% { 
-        box-shadow: 0 12px 40px rgba(243, 156, 18, 0.4);
-        transform: scale(1.01);
-    }
-}
-
-.agent-card.new-content {
-    animation: enhancedContentFlash 1.5s ease;
-}
-
-@keyframes enhancedContentFlash {
-    0% {
-        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
-        transform: scale(1);
-    }
-    50% {
-        box-shadow: 0 0 20px 5px rgba(102, 126, 234, 0.3);
-        transform: scale(1.02);
-    }
-    100% {
-        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-        transform: scale(1);
-    }
-}
-`;
-
-// Add the enhanced styles to the page
-if (!document.getElementById('enhanced-function-call-styles')) {
-    const styleElement = document.createElement('style');
-    styleElement.id = 'enhanced-function-call-styles';
-    styleElement.textContent = enhancedFunctionCallStyle;
-    document.head.appendChild(styleElement);
-}
 
 export { 
     initWebSocket, 
@@ -784,7 +748,7 @@ export {
     getCurrentSessionId, 
     getWebSocket, 
     getConnectionStats,
-    clearEnhancedRealtimeBuffers,
     getAgentOutputBuffers,
-    getFunctionCallsDetected
+    getFunctionCallsDetected,
+    getWorkflowProgress
 };
