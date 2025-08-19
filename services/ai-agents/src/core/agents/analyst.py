@@ -1,10 +1,68 @@
 # Updated analyst.py - Only responds after context approval
 from core.agents.base import BaseAgent
-from core.services.analysis_service import report_detailed_analysis
+from core.models.analysis import SOCAnalysisResult
+from autogen_core.tools import FunctionTool
+from core.models.analysis import Timeline, DetailedAnalysis, AttackEvent, ThreatAssessment
+from typing import List, Dict, Any, Literal
+import logging
+
+agent_logger = logging.getLogger("agent_diagnostics")
+
+def report_detailed_analysis(
+    threat_severity: Literal["critical", "high", "medium", "low"],
+    threat_confidence: float,
+    threat_type_detailed: str,
+    attack_timeline: List[Dict[str, str]],
+    attribution_indicators: List[str],
+    lateral_movement_evidence: List[str],
+    data_at_risk: List[str],
+    business_impact: str,
+    recommended_actions: List[str],
+    investigation_notes: str
+) -> Dict[str, Any]:
+    try:
+        timeline_events = []
+        for event in attack_timeline:
+            if isinstance(event, dict):
+                timeline_event = AttackEvent(
+                    timestamp=event.get("timestamp", "unknown"),
+                    event_type=event.get("event_type", "unknown"),
+                    description=event.get("description", "No description"),
+                    severity=event.get("severity", "medium")
+                )
+                timeline_events.append(timeline_event)
+        threat_assessment = ThreatAssessment(
+            severity=threat_severity,
+            confidence=float(threat_confidence),
+            threat_type=threat_type_detailed
+        )
+        validated_analysis = DetailedAnalysis(
+            threat_assessment=threat_assessment,
+            attack_timeline=timeline_events,
+            attribution_indicators=attribution_indicators,
+            lateral_movement_evidence=lateral_movement_evidence,
+            data_at_risk=data_at_risk,
+            business_impact=business_impact,
+            recommended_actions=recommended_actions,
+            investigation_notes=investigation_notes
+        )
+        agent_logger.info(f"Detailed analysis validated: {len(recommended_actions)} recommendations generated")
+        return {"status": "analysis_complete", "data": validated_analysis.model_dump()}
+    except Exception as e:
+        agent_logger.error(f"Detailed analysis validation error: {e}")
+        return {"status": "validation_error", "error": str(e)}
+
 
 class AnalystAgent(BaseAgent):
-    def __init__(self, model_client, tools=None, analyst_output_type=None):
-        system_message = """You are a Senior SOC Analyst. Your role is to:
+    def __init__(self, model_client):
+        
+         analysis_tool = FunctionTool(
+            report_detailed_analysis,
+            description="Report detailed analysis results",
+            strict=True
+         )
+
+         system_message = """You are a Senior SOC Analyst. Your role is to:
 
 1. **WAIT FOR CONTEXT**: Only begin when you receive approved context from ContextAgent
 2. **DEEP ANALYSIS**: Perform comprehensive investigation:
@@ -53,16 +111,10 @@ IMPORTANT: Do not start until you see approved context research. Look for messag
 
 CRITICAL: You must call report_detailed_analysis() and request authorization before concluding."""
 
-        kwargs = {
-            "name": "SeniorAnalyst",
-            "model_client": model_client,
-            "system_message": system_message,
-        }
-
-        if tools:
-            kwargs["tools"] = tools
-
-        if analyst_output_type:
-            kwargs["output_content_type"] = analyst_output_type
-
-        super().__init__(**kwargs)
+         super().__init__(
+            name="SeniorAnalystSpecialist",
+            model_client=model_client,
+            system_message=system_message,
+            tools=[analysis_tool],
+            output_content_type=SOCAnalysisResult
+         )

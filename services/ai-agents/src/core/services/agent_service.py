@@ -19,8 +19,6 @@ from autogen_agentchat.conditions import (
     FunctionCallTermination
 )
 from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool
-from core.services.analysis_service import search_historical_incidents, report_detailed_analysis
 from core.models.analysis import SOCAnalysisResult
 
 agent_logger = logging.getLogger("agent_diagnostics")
@@ -31,25 +29,6 @@ async def _create_soc_team(
 ):
     """Create SOC team with single multi-stage approval agent - FIXED termination conditions"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o", parallel_tool_calls=False)
-    
-    if use_structured_output:
-        search_tool = FunctionTool(
-            search_historical_incidents,
-            description="Search historical incidents in ChromaDB",
-            strict=True
-        )
-        analysis_tool = FunctionTool(
-            report_detailed_analysis,
-            description="Report detailed analysis results",
-            strict=True
-        )
-        context_tools = [search_tool] 
-        analysis_tools = [analysis_tool]
-        analyst_output_type = SOCAnalysisResult
-    else:
-        context_tools = [search_historical_incidents]
-        analysis_tools = [report_detailed_analysis]
-        analyst_output_type = None
     
     # Create agents
     triage_agent = TriageAgent(model_client)
@@ -62,13 +41,8 @@ async def _create_soc_team(
     
     context_agent = ContextAgent(model_client)
     
-    analyst_kwargs = {
-        "tools": analysis_tools,
-        "model_client": model_client,
-        "analyst_output_type": analyst_output_type
-    }
-    
-    analyst_agent = AnalystAgent(**analyst_kwargs)
+ 
+    analyst_agent = AnalystAgent(model_client)
     
     # FIXED: Enhanced termination conditions that don't trigger on instructions
     # Use more specific patterns that only match actual completion messages

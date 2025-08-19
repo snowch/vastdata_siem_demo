@@ -2,7 +2,6 @@
 from core.agents.base import BaseAgent
 from autogen_core.tools import FunctionTool
 from typing import List, Dict, Any, Literal
-import json
 import logging
 from core.models.analysis import Timeline, PriorityFindings
 
