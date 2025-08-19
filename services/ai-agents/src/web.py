@@ -11,7 +11,7 @@ init_logging()
 
 # Create a dedicated logger for websocket server
 ws_logger = logging.getLogger("websocket_server")
-ws_logger.setLevel(logging.INFO)
+ws_logger.setLevel(logging.WARNING)
 
 app = FastAPI(title="SOC Agent Analysis WebSocket Server")
 

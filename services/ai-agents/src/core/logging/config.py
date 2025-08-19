@@ -17,18 +17,18 @@ def init_logging():
 
     if not logging.root.handlers:
         logging.basicConfig(
-            level=logging.INFO,
+            level=logging.WARNING,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
 
     trace_logger = logging.getLogger(TRACE_LOGGER_NAME)
-    trace_logger.setLevel(logging.DEBUG)
+    trace_logger.setLevel(logging.WARNING)
 
     event_logger = logging.getLogger(EVENT_LOGGER_NAME)
-    event_logger.setLevel(logging.DEBUG)
+    event_logger.setLevel(logging.WARNING)
 
     agent_logger = logging.getLogger("agent_diagnostics")
-    agent_logger.setLevel(logging.DEBUG)
+    agent_logger.setLevel(logging.WARNING)
 
     handler = logging.FileHandler('agent_diagnostics.log')
     handler.setLevel(logging.DEBUG)

@@ -1,4 +1,4 @@
-# Updated triage.py - Uses structured output instead of tools
+# Updated triage.py - Fixed system message to match PriorityFindings model
 from core.agents.base import BaseAgent
 from core.models.analysis import PriorityFindings
 import logging
@@ -24,38 +24,38 @@ class TriageAgent(BaseAgent):
    - File access anomalies
    - Privilege escalation attempts
 
-5. **PROVIDE STRUCTURED FINDINGS**: You must output your findings in this exact JSON structure:
+5. **PROVIDE STRUCTURED FINDINGS**: You must respond with structured data matching this format:
 
-```json
-{
-  "priority": "critical|high|medium|low",
-  "threat_type": "Clear description of the threat (e.g., brute_force_attack, privilege_escalation)",
-  "source_ip": "The source IP address",
-  "target_hosts": ["192.168.1.100", "server01"],
-  "attack_pattern": "Description of the attack pattern observed",
-  "timeline_start": "Start time of the attack",
-  "timeline_end": "End time or 'ongoing'",
-  "indicators": ["failed_logins", "privilege_escalation"],
-  "confidence_score": 0.85,
-  "event_count": 15,
-  "affected_services": ["ssh", "rdp", "web_server"],
-  "brief_summary": "Clear summary of findings for approval decision"
-}
-```
-
-6. **FIELD REQUIREMENTS**:
-   - priority: MUST be exactly one of: "critical", "high", "medium", "low"
+   - priority: Must be exactly one of "critical", "high", "medium", "low"
    - threat_type: Clear, specific threat description
-   - source_ip: The attacking/suspicious IP address
-   - target_hosts: Array of strings with hostnames/IPs
+   - source_ip: The attacking/suspicious IP address  
+   - target_hosts: Array of hostnames/IPs being targeted
    - attack_pattern: What attack behavior was observed
-   - timeline_start: When the attack/activity began
-   - timeline_end: When it ended or "ongoing"
-   - indicators: Array of strings with key evidence
+   - timeline: Object with "start" and "end" times (not timeline_start/timeline_end)
+   - indicators: Array of key evidence found
    - confidence_score: Float between 0.0 and 1.0
    - event_count: Integer number of related events
-   - affected_services: Array of strings with service names
+   - affected_services: Array of service names
    - brief_summary: Summary suitable for human approval
+
+6. **EXAMPLE STRUCTURE**:
+   When you analyze logs, respond with findings like:
+   {
+     "priority": "high",
+     "threat_type": "SSH brute force attack", 
+     "source_ip": "192.168.1.100",
+     "target_hosts": ["server01", "server02"],
+     "attack_pattern": "Multiple failed SSH login attempts followed by successful authentication",
+     "timeline": {
+       "start": "2024-01-15T10:30:00Z",
+       "end": "2024-01-15T10:45:00Z"
+     },
+     "indicators": ["failed_logins", "successful_login", "unusual_timing"],
+     "confidence_score": 0.85,
+     "event_count": 15,
+     "affected_services": ["ssh"],
+     "brief_summary": "High-confidence SSH brute force attack from 192.168.1.100 targeting multiple servers"
+   }
 
 7. **REQUEST APPROVAL**: After providing your structured findings, present a clear summary:
    - "I found a {priority} priority {threat_type} from {source_ip}"
@@ -67,12 +67,12 @@ class TriageAgent(BaseAgent):
 
 CRITICAL REQUIREMENTS:
 - When you receive the initial task with log data, immediately begin your analysis
-- Output the structured JSON findings first, then provide the summary and approval request
+- Provide structured findings first, then the summary and approval request
 - Do not wait for other agents - you are the first step in the workflow
-- Ensure all JSON fields are properly formatted and typed
+- Ensure the timeline field is an object with "start" and "end" properties
 - The confidence_score must be a decimal number between 0.0 and 1.0
 - The event_count must be an integer
-- Arrays must contain strings only"""
+- All arrays must contain strings only"""
 
         super().__init__(
             name="TriageSpecialist",
@@ -82,4 +82,4 @@ CRITICAL REQUIREMENTS:
             reflect_on_tool_use=False, # No tools to reflect
         )
         
-        agent_logger.info("TriageAgent initialized with structured output")
+        agent_logger.info("TriageAgent initialized with fixed structured output")
