@@ -1,0 +1,385 @@
+/* debug.css - Debug panel and development tools styling */
+
+/* Debug Panel */
+.debug-panel {
+    background: var(--bg-dark);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl);
+    margin-top: var(--spacing-2xl);
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ecf0f1;
+    display: none;
+}
+
+.debug-panel.active {
+    display: block;
+}
+
+.debug-panel h3 {
+    color: #e74c3c;
+    margin-bottom: var(--spacing-lg);
+    font-size: 1.3em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Debug Controls */
+.debug-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.debug-btn {
+    padding: 6px var(--spacing-md);
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+}
+
+.debug-btn:hover {
+    background: #c0392b;
+}
+
+.debug-btn:focus {
+    outline: 2px solid #ecf0f1;
+    outline-offset: 2px;
+}
+
+.debug-btn.active {
+    background: #27ae60;
+}
+
+.debug-btn.active:hover {
+    background: #219a52;
+}
+
+/* Debug Log */
+.debug-log {
+    background: #34495e;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border: 1px solid #4a5f7a;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.debug-log:empty::before {
+    content: "Debug log is empty. Enable debug mode to see WebSocket messages and system events.";
+    color: #95a5a6;
+    font-style: italic;
+}
+
+/* Debug Log Entry Types */
+.debug-log .log-entry {
+    margin-bottom: var(--spacing-xs);
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid rgba(149, 165, 166, 0.2);
+}
+
+.debug-log .log-entry:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.debug-log .log-timestamp {
+    color: #95a5a6;
+    font-size: 0.9em;
+}
+
+.debug-log .log-level {
+    font-weight: 600;
+    margin: 0 var(--spacing-sm);
+}
+
+.debug-log .log-level.INFO {
+    color: #3498db;
+}
+
+.debug-log .log-level.WARNING {
+    color: #f39c12;
+}
+
+.debug-log .log-level.ERROR {
+    color: #e74c3c;
+}
+
+.debug-log .log-level.DEBUG {
+    color: #9b59b6;
+}
+
+.debug-log .log-message {
+    color: #ecf0f1;
+}
+
+/* Debug Statistics */
+.debug-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: rgba(52, 73, 94, 0.5);
+    border-radius: var(--radius-md);
+}
+
+.debug-stat {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: rgba(44, 62, 80, 0.8);
+    border-radius: var(--radius-md);
+}
+
+.debug-stat-value {
+    font-size: 1.5em;
+    font-weight: 600;
+    color: #3498db;
+    margin-bottom: var(--spacing-xs);
+    font-family: 'Courier New', monospace;
+}
+
+.debug-stat-label {
+    font-size: 0.8em;
+    color: #95a5a6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* WebSocket Connection Status in Debug */
+.debug-connection-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: rgba(52, 73, 94, 0.5);
+    border-radius: var(--radius-md);
+}
+
+.debug-connection-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-round);
+    background: #e74c3c;
+}
+
+.debug-connection-indicator.connected {
+    background: #27ae60;
+    animation: pulseGreen 2s infinite;
+}
+
+.debug-connection-indicator.connecting {
+    background: #f39c12;
+    animation: pulseOrange 1s infinite;
+}
+
+.debug-connection-text {
+    color: #ecf0f1;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+/* Debug Message Inspector */
+.debug-message-inspector {
+    margin-top: var(--spacing-lg);
+    background: rgba(52, 73, 94, 0.5);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.debug-message-header {
+    background: #2c3e50;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid #4a5f7a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.debug-message-title {
+    color: #ecf0f1;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.debug-message-count {
+    background: #3498db;
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.7em;
+    font-weight: 600;
+}
+
+.debug-message-body {
+    padding: var(--spacing-lg);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.debug-message-item {
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm);
+    background: rgba(44, 62, 80, 0.8);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid #3498db;
+}
+
+.debug-message-item.sent {
+    border-left-color: #27ae60;
+}
+
+.debug-message-item.received {
+    border-left-color: #e74c3c;
+}
+
+.debug-message-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.8em;
+}
+
+.debug-message-type {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.debug-message-timestamp {
+    color: #95a5a6;
+    font-family: 'Courier New', monospace;
+}
+
+.debug-message-content {
+    color: #ecf0f1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.3;
+    word-break: break-word;
+    background: rgba(0, 0, 0, 0.2);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+/* Debug Performance Monitor */
+.debug-performance {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+}
+
+.debug-performance-chart {
+    background: rgba(52, 73, 94, 0.5);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    text-align: center;
+}
+
+.debug-performance-title {
+    color: #ecf0f1;
+    font-size: 0.9em;
+    margin-bottom: var(--spacing-md);
+    font-weight: 600;
+}
+
+.debug-performance-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #3498db;
+    margin-bottom: var(--spacing-xs);
+    font-family: 'Courier New', monospace;
+}
+
+.debug-performance-unit {
+    color: #95a5a6;
+    font-size: 0.8em;
+}
+
+/* Debug Export Functions */
+.debug-export {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid #4a5f7a;
+}
+
+.debug-export-info {
+    color: #95a5a6;
+    font-size: 0.85em;
+    margin-bottom: var(--spacing-md);
+    line-height: 1.4;
+}
+
+/* Debug Error Display */
+.debug-error {
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid #e74c3c;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin: var(--spacing-lg) 0;
+}
+
+.debug-error-title {
+    color: #e74c3c;
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.debug-error-message {
+    color: #ecf0f1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+/* Mobile Debug Panel */
+@media (max-width: 768px) {
+    .debug-panel {
+        padding: var(--spacing-lg);
+    }
+    
+    .debug-controls {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .debug-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .debug-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-md);
+    }
+    
+    .debug-performance {
+        grid-template-columns: 1fr;
+    }
+    
+    .debug-message-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+}

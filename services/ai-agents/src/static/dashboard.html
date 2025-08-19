@@ -4,7 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOC Agent Analysis Dashboard - WebSocket</title>
-    <link rel="stylesheet" href="dashboard.css">
+    
+    <!-- Refactored CSS Files - Load in Order -->
+    <!-- Base styles first -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    
+    <!-- Core components -->
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/agents.css">
+    
+    <!-- Feature-specific styles -->
+    <link rel="stylesheet" href="css/approval.css">
+    <link rel="stylesheet" href="css/findings.css">
+    <link rel="stylesheet" href="css/debug.css">
+    <link rel="stylesheet" href="css/notifications.css">
+    
+    <!-- Effects and responsive - load last -->
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    
     <link rel="icon" type="image/x-icon" href="favicon.ico">
 </head>
 <body>
@@ -17,8 +36,8 @@
             <button class="debug-toggle" id="debugToggle">
                 🔧 Debug Mode
             </button>
-            <h1>🛡️ SOC Agent Analysis Dashboard - Compatible</h1>
-            <p>Real-time multi-agent security log analysis with cross-browser WebSocket support</p>
+            <h1>🛡️ SOC Agent Analysis Dashboard - Refactored</h1>
+            <p>Real-time multi-agent security log analysis with modular CSS architecture</p>
             <div class="controls">
                 <button class="btn btn-secondary" id="retrieveBtn">
                     📥 Retrieve Logs
@@ -26,7 +45,7 @@
                 <button class="btn btn-primary" id="analyzeBtn">
                     🚀 Start Analysis
                 </button>
-                <button class="btn" id="clearBtn" style="background: linear-gradient(45deg, #95a5a6, #7f8c8d); color: white;">
+                <button class="btn" id="clearBtn" style="background: var(--neutral-gradient); color: white;">
                     🧹 Clear Results
                 </button>
             </div>

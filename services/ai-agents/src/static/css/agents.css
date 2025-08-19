@@ -1,0 +1,311 @@
+/* agents.css - Agent cards, icons, and workflow styling */
+
+/* Agent Card Base */
+.agent-card {
+    background: var(--bg-primary);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl);
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.agent-card.active {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-lg);
+}
+
+.agent-card.approval-active {
+    border: 2px solid #667eea;
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    transform: scale(1.02);
+}
+
+.agent-card.approval-active .agent-icon {
+    animation: bounce 2s infinite;
+}
+
+/* Agent Header Layout */
+.agent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-xl);
+    flex-wrap: wrap;
+    gap: var(--spacing-lg);
+}
+
+.agent-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+    flex: 1;
+    min-width: 200px;
+}
+
+.agent-details h3 {
+    color: var(--text-primary);
+    font-size: 1.4em;
+    margin-bottom: 5px;
+    line-height: 1.2;
+}
+
+.agent-details p {
+    color: var(--text-muted);
+    font-size: 0.95em;
+    line-height: 1.3;
+}
+
+/* Agent Icons */
+.agent-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    flex-shrink: 0;
+}
+
+.triage-icon {
+    background: var(--triage-gradient);
+}
+
+.context-icon {
+    background: var(--context-gradient);
+}
+
+.analyst-icon {
+    background: var(--analyst-gradient);
+}
+
+/* Agent Content Area */
+.agent-content {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    min-height: 150px;
+    position: relative;
+}
+
+.agent-output {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Agent Loading States */
+.agent-card .loading-spinner {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.agent-card .loading-spinner.active {
+    display: flex;
+}
+
+/* Agent State Indicators */
+.agent-card[data-status="pending"] {
+    opacity: 0.7;
+}
+
+.agent-card[data-status="active"] {
+    border-left: 4px solid #667eea;
+}
+
+.agent-card[data-status="complete"] {
+    border-left: 4px solid #56ab2f;
+}
+
+.agent-card[data-status="error"] {
+    border-left: 4px solid #ff416c;
+}
+
+.agent-card[data-status="awaiting-approval"] {
+    border-left: 4px solid #ffa726;
+    animation: pulseCard 2s infinite;
+}
+
+/* Triage Agent Specific */
+#triageCard {
+    order: 1;
+}
+
+#triageCard.active {
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(238, 90, 36, 0.1));
+}
+
+/* Context Agent Specific */
+#contextCard {
+    order: 2;
+}
+
+#contextCard.active {
+    background: linear-gradient(135deg, rgba(78, 205, 196, 0.1), rgba(68, 160, 141, 0.1));
+}
+
+/* Analyst Agent Specific */
+#analystCard {
+    order: 3;
+}
+
+#analystCard.active {
+    background: linear-gradient(135deg, rgba(168, 230, 207, 0.1), rgba(61, 139, 55, 0.1));
+}
+
+/* Agent Workflow Progress */
+.agent-workflow-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: var(--spacing-xl) 0;
+    padding: var(--spacing-lg);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-lg);
+}
+
+.workflow-step {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: 1;
+    position: relative;
+}
+
+.workflow-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -50%;
+    top: 50%;
+    width: 100%;
+    height: 2px;
+    background: #e1e8ed;
+    transform: translateY(-50%);
+}
+
+.workflow-step.completed::after {
+    background: #56ab2f;
+}
+
+.workflow-step-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-round);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: #e1e8ed;
+    color: #6c757d;
+}
+
+.workflow-step.active .workflow-step-icon {
+    background: var(--primary-gradient);
+    color: white;
+}
+
+.workflow-step.completed .workflow-step-icon {
+    background: var(--success-gradient);
+    color: white;
+}
+
+/* Agent Output Formatting */
+.agent-output .timestamp {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin-right: var(--spacing-sm);
+}
+
+.agent-output .error {
+    color: #ff416c;
+    font-weight: 600;
+}
+
+.agent-output .success {
+    color: #56ab2f;
+    font-weight: 600;
+}
+
+.agent-output .warning {
+    color: #ffa726;
+    font-weight: 600;
+}
+
+.agent-output .info {
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* Agent Performance Metrics */
+.agent-metrics {
+    display: flex;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-md);
+    font-size: 0.85em;
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.metric-value {
+    font-weight: 600;
+    font-size: 1.2em;
+    color: var(--text-primary);
+}
+
+.metric-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.8em;
+}
+
+/* Responsive Agent Layout */
+@media (max-width: 768px) {
+    .agent-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .agent-info {
+        min-width: auto;
+        width: 100%;
+    }
+
+    .agent-metrics {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+
+    .workflow-step {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .workflow-step:not(:last-child)::after {
+        display: none;
+    }
+}

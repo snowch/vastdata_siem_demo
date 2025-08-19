@@ -1,0 +1,318 @@
+/* components.css - Reusable UI components */
+
+/* Button System */
+.btn {
+    padding: var(--spacing-md) var(--spacing-2xl);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    white-space: nowrap;
+    text-decoration: none;
+    min-width: fit-content;
+}
+
+.btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--secondary-gradient);
+    color: white;
+}
+
+.btn-success {
+    background: var(--success-gradient);
+    color: white;
+}
+
+.btn-error {
+    background: var(--error-gradient);
+    color: white;
+}
+
+.btn-warning {
+    background: var(--warning-gradient);
+    color: white;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn:focus-visible {
+    outline: 3px solid #667eea !important;
+    outline-offset: 2px !important;
+}
+
+/* Form Elements */
+textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: var(--spacing-lg);
+    border: 2px solid #e1e8ed;
+    border-radius: var(--radius-md);
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 6px var(--spacing-lg);
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 80px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.status-pending {
+    background: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.status-active {
+    background: var(--primary-gradient);
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.status-complete {
+    background: var(--success-gradient);
+    color: white;
+}
+
+.status-error {
+    background: var(--error-gradient);
+    color: white;
+}
+
+.status-awaiting-approval {
+    background: var(--warning-gradient);
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+
+.status-rejected {
+    background: linear-gradient(45deg, #c0392b, #e74c3c);
+    color: white;
+}
+
+.status-custom {
+    background: linear-gradient(45deg, #8e44ad, #9b59b6);
+    color: white;
+}
+
+/* Progress Bar */
+.progress-bar {
+    width: 100%;
+    height: 24px;
+    background: #e1e8ed;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: var(--spacing-xl) 0;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary-gradient);
+    width: 0%;
+    transition: width 0.5s ease;
+    border-radius: var(--radius-lg);
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a2e;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e1e8ed;
+    border-top: 4px solid #667eea;
+    border-radius: var(--radius-round);
+    animation: spin 1s linear infinite;
+}
+
+/* Counter Badge */
+.log-counter {
+    background: #667eea;
+    color: white;
+    padding: 4px var(--spacing-sm);
+    border-radius: var(--radius-lg);
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+/* Priority Indicators */
+.priority-indicator {
+    padding: 4px var(--spacing-md);
+    border-radius: var(--radius-lg);
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.priority-critical {
+    background: var(--error-gradient);
+    color: white;
+}
+
+.priority-high {
+    background: var(--warning-gradient);
+    color: white;
+}
+
+.priority-medium {
+    background: linear-gradient(45deg, #42a5f5, #1e88e5);
+    color: white;
+}
+
+.priority-low {
+    background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+    color: white;
+}
+
+/* Error Message */
+.error-message {
+    background: var(--error-gradient);
+    color: white;
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-md);
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Card Base */
+.card {
+    background: var(--bg-primary);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl);
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Content Areas */
+.content-area {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    min-height: 150px;
+    position: relative;
+}
+
+/* Keyboard Feedback */
+.keyboard-activated {
+    transform: scale(0.95) !important;
+    background: var(--success-gradient) !important;
+    box-shadow: 0 0 20px rgba(86, 171, 47, 0.6) !important;
+}
+
+/* Button Groups */
+.button-group {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-lg);
+}
+
+.button-group .btn {
+    min-width: 140px;
+    justify-content: center;
+}
+
+/* Custom Input Sections */
+.custom-input-section {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: var(--radius-md);
+    border: 1px solid #e1e8ed;
+}
+
+.custom-input-section label {
+    display: block;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+    font-size: 0.95em;
+}
+
+.custom-input-section textarea {
+    min-height: 80px;
+    font-family: inherit;
+}
+
+.custom-input-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: var(--spacing-md);
+    justify-content: flex-end;
+}
+
+.custom-input-buttons .btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: 13px;
+    min-width: auto;
+}
