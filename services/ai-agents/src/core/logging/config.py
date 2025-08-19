@@ -28,7 +28,7 @@ def init_logging():
     event_logger.setLevel(logging.WARNING)
 
     agent_logger = logging.getLogger("agent_diagnostics")
-    agent_logger.setLevel(logging.WARNING)
+    agent_logger.setLevel(logging.INFO)
 
     handler = logging.FileHandler('agent_diagnostics.log')
     handler.setLevel(logging.DEBUG)

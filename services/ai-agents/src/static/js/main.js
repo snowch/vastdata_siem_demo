@@ -1,4 +1,6 @@
-// Enhanced main.js with multi-stage approval support
+// services/ai-agents/src/static/js/main.js - FINAL UPDATE
+// Cleaned up main.js with simplified progress handling removed
+
 import * as debugLogger from './debugLogger.js';
 import * as ui from './ui.js';
 import * as websocket from './websocket.js';
@@ -7,7 +9,7 @@ import * as progressManager from './progressManager.js';
 
 // Set up event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    debugLogger.debugLog('Page loaded, setting up enhanced multi-stage event listeners...');
+    debugLogger.debugLog('Setting up simplified event listeners...');
     
     // Main control buttons
     document.getElementById('retrieveBtn').addEventListener('click', progressManager.retrieveLogs);
@@ -58,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
         progressManager.updateLogCounter(this.value);
     });
     
-    // Enhanced keyboard shortcuts for multi-stage approval
+    // Simplified keyboard shortcuts
     document.addEventListener('keydown', function(e) {
         // Debug mode toggle
         if (e.ctrlKey && e.shiftKey && e.key === 'D') {
@@ -81,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Multi-stage approval shortcuts
+        // Multi-stage approval shortcuts (same as before)
         if (approvalWorkflow.getAwaitingApproval()) {
             const currentStage = approvalWorkflow.getCurrentApprovalStage();
             
@@ -152,12 +154,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize UI
     ui.resetAgentStates();
     
-    // Enhanced welcome message
-    ui.showStatus('Welcome to Enhanced SOC Dashboard with Multi-Stage Approval!', 'info');
+    // Simplified welcome message
+    ui.showStatus('Welcome to Simplified SOC Dashboard!', 'info');
     
-    // Show enhanced keyboard shortcuts in console
+    // Show simplified keyboard shortcuts in console
     setTimeout(function() {
-        console.log('🚀 Enhanced SOC Dashboard Shortcuts:');
+        console.log('🚀 Simplified SOC Dashboard Shortcuts:');
         console.log('  Global Controls:');
         console.log('    • Ctrl+Shift+D → Toggle debug mode');
         console.log('    • Ctrl+Shift+A → Start analysis');
@@ -173,10 +175,10 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('    Context: 1=Relevant, 2=Not Relevant, 3=Custom');
         console.log('    Analyst: 1=Approve All, 2=Reject, 3=Modify');
         
-        debugLogger.debugLog('Enhanced WebSocket dashboard with multi-stage approval initialized');
-    }, 2000);
+        debugLogger.debugLog('Simplified WebSocket dashboard initialized');
+    }, 1000);
     
-    // Add visual feedback for keyboard shortcuts
+    // Create keyboard shortcut help button
     createKeyboardShortcutHelp();
 });
 
@@ -188,7 +190,7 @@ function handleKeyboardApproval(stage, action) {
     
     debugLogger.debugLog(`Keyboard approval: ${stage} - ${action}`);
     
-    // Find the appropriate button and click it - UPDATED SELECTOR
+    // Find the appropriate button and click it
     const buttonSelector = `#${stage}ApprovalSection .btn[data-value="${action}"]`;
     const button = document.querySelector(buttonSelector);
     
@@ -283,7 +285,7 @@ function showKeyboardShortcutModal() {
     `;
     
     modalContent.innerHTML = `
-        <h3 style="margin-bottom: 20px; color: #2c3e50;">⌨️ Keyboard Shortcuts</h3>
+        <h3 style="margin-bottom: 20px; color: #2c3e50;">⌨️ Simplified Dashboard Shortcuts</h3>
         
         <div style="margin-bottom: 20px;">
             <h4 style="color: #667eea; margin-bottom: 10px;">Global Controls</h4>
@@ -309,6 +311,13 @@ function showKeyboardShortcutModal() {
                 <div><strong>Triage:</strong> 1=Approve, 2=Reject</div>
                 <div><strong>Context:</strong> 1=Relevant, 2=Not Relevant, 3=Custom</div>
                 <div><strong>Analyst:</strong> 1=Approve All, 2=Reject, 3=Modify</div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h4 style="color: #28a745; margin-bottom: 10px;">✨ New: Smart Progress</h4>
+            <div style="font-size: 14px; line-height: 1.4; color: #6c757d;">
+                Progress is now calculated automatically based on actual agent activity instead of generic percentages. You'll see meaningful status updates like "Analyzing Threats" → "Triage Complete" → "Researching Historical Context".
             </div>
         </div>
         
