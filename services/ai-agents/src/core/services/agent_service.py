@@ -41,16 +41,14 @@ async def _create_soc_team(
     
     context_agent = ContextAgent(model_client)
     
- 
     analyst_agent = AnalystAgent(model_client)
     
-    # FIXED: Enhanced termination conditions that don't trigger on instructions
-    # Use more specific patterns that only match actual completion messages
+    # don't trigger on instructions, use more specific patterns that only match actual completion messages
     normal_completion = (
         SourceMatchTermination("SeniorAnalyst") & 
         TextMentionTermination("ANALYSIS_COMPLETE - Senior SOC investigation finished")
     )
-    
+
     rejection_termination = (
         SourceMatchTermination("MultiStageApprovalAgent") & 
         TextMentionTermination("WORKFLOW_REJECTED")
@@ -75,13 +73,13 @@ async def _create_soc_team(
         timeout
     )
     
-    # Create team with single instance of each agent (FIXED: no duplicate names)
+    # Create team with single instance of each agent
     team = RoundRobinGroupChat(
         [triage_agent, approval_agent, context_agent, analyst_agent],
         termination_condition=termination
     )
     
-    agent_logger.info("Enhanced SOC team created with fixed termination conditions (4 unique agents)")
+    agent_logger.info("SOC team created with fixed termination conditions (4 unique agents)")
     
     return team, model_client
 
@@ -290,16 +288,3 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         error_msg = f"Enhanced team analysis error: {str(e)}"
         return error_msg, {"error": str(e)}, {"error": str(e)}
 
-# Keep the original function for backward compatibility
-async def get_prioritized_task(log_batch: str) -> tuple[str, dict, dict]:
-    """
-    Original function without approval workflow for backward compatibility.
-    """
-    # Generate a dummy session ID and run without approval callback
-    import uuid
-    session_id = str(uuid.uuid4())
-    return await get_prioritized_task_with_approval(
-        log_batch=log_batch,
-        session_id=session_id,
-        user_input_callback=None
-    )
