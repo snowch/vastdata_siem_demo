@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.models.websocket import AnalysisProgress
-from core.services.agent_service import get_prioritized_task_with_streaming
+from core.services.agent_service import run_analysis_workflow
 from core.services.analysis_helpers import parse_agent_conversation, extract_structured_findings
 from utils.serialization import sanitize_chroma_results
 from infrastructure.trino_db_reader import get_logs
@@ -434,8 +434,6 @@ async def handle_analysis_function_call(session, content: str, agent_source: str
     except Exception as e:
         ws_logger.error(f"Error handling analysis function call: {e}")
 
-# ... [Rest of the existing websocket.py file remains the same - all the other functions like run_analysis_with_realtime_websocket, handle_user_input_response, etc.]
-
 async def run_analysis_with_realtime_websocket(log_batch: str, progress: AnalysisProgress, session_id: str):
     """
     Enhanced analysis workflow with real-time streaming of agent outputs via WebSocket.
@@ -446,59 +444,41 @@ async def run_analysis_with_realtime_websocket(log_batch: str, progress: Analysi
 
         await progress.send_update("running_triage", "triage", "🔍 Starting triage analysis...", 20)
 
-        # Run analysis with real-time streaming
-        full_conversation, structured_findings, chroma_context = await get_prioritized_task_with_streaming(
+        # Run analysis with real-time streaming using the new function
+        success = await run_analysis_workflow(
             log_batch=log_batch,
             session_id=session_id,
+            progress=progress,
             user_input_callback=request_user_approval,
-            message_callback=real_time_message_callback  # Enhanced callback
+            message_callback=real_time_message_callback
         )
 
-        ws_logger.info(f"Real-time analysis completed for session {session_id}")
-        ws_logger.debug(f"Structured findings: {structured_findings}")
+        ws_logger.info(f"Real-time analysis completed for session {session_id} - Success: {success}")
 
-        # Check if analysis was rejected at any stage
-        if structured_findings.get('was_rejected', False):
-            rejection_stage = structured_findings.get('rejection_stage', 'unknown')
+        # Check if analysis was rejected
+        if progress.final_results.get('was_rejected', False):
+            rejection_stage = progress.final_results.get('rejection_stage', 'unknown')
             await progress.send_update("rejected", rejection_stage, 
                 f"❌ Analysis rejected at {rejection_stage} stage", 100)
-            progress.completed = True
-            progress.final_results = {
-                'conversation': full_conversation,
-                'structured_findings': structured_findings,
-                'chroma_context': sanitize_chroma_results(chroma_context),
-                'was_rejected': True,
-                'rejection_stage': rejection_stage
-            }
-            await progress.send_update()
             return
 
         # Process successful completion
         session = active_sessions.get(session_id)
         approval_history = session.approval_history if session else []
         
-        if 'detailed_analysis' in structured_findings:
-            detailed = structured_findings['detailed_analysis']
-            if 'threat_assessment' not in detailed or not detailed['threat_assessment']:
-                detailed['threat_assessment'] = {
-                    "severity": "unknown",
-                    "confidence": 0.0
-                }
-
-        # Set enhanced final results
-        progress.final_results = {
-            'conversation': full_conversation,
-            'structured_findings': structured_findings,
-            'chroma_context': sanitize_chroma_results(chroma_context),
+        # Enhance final results with session data
+        progress.final_results.update({
             'approval_history': approval_history,
             'stages_completed': len(approval_history),
-            'real_time_streaming': True
-        }
+            'success': success
+        })
 
-        progress.completed = True
-        await progress.send_update("completed", progress=100)
+        if not success:
+            await progress.send_update("error", progress=100)
+        else:
+            await progress.send_update("completed", progress=100)
 
-        ws_logger.info(f"Real-time analysis workflow completed successfully for session {session_id}")
+        ws_logger.info(f"Real-time analysis workflow completed for session {session_id} - Success: {success}")
 
     except WebSocketDisconnect:
         ws_logger.info(f"WebSocket disconnected during analysis for session {session_id}")
@@ -510,8 +490,6 @@ async def run_analysis_with_realtime_websocket(log_batch: str, progress: Analysi
         progress.error = str(e)
         progress.completed = True
         await progress.send_update("error", progress=100)
-
-# ... [Include all other existing functions from the original websocket.py file]
 
 async def handle_user_input_response(data: dict, session_id: str):
     """Enhanced user input response handler for multi-stage approval."""

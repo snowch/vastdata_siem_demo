@@ -20,6 +20,8 @@ from autogen_agentchat.conditions import (
 )
 from autogen_core import CancellationToken
 from core.models.analysis import SOCAnalysisResult, PriorityFindings
+from core.models.websocket import AnalysisProgress
+from utils.serialization import sanitize_chroma_results
 
 agent_logger = logging.getLogger("agent_diagnostics")
 
@@ -81,23 +83,174 @@ async def _create_soc_team(
     
     return team, model_client
 
-async def get_prioritized_task_with_streaming(
+async def _process_streaming_message(
+    message, 
+    progress: AnalysisProgress, 
+    message_callback: Optional[Callable],
+    session_id: str
+):
+    """Process a streaming message and update progress incrementally"""
+    try:
+        if hasattr(message, 'source') and hasattr(message, 'content'):
+            # Add to conversation history
+            conversation_entry = f"[{message.source}]: {message.content}"
+            progress.final_results['conversation_parts'].append(conversation_entry)
+            
+            agent_logger.debug(f"Processing streaming message from {message.source}: Type={type(message).__name__}")
+            
+            # Send to real-time callback if available
+            if (message_callback and 
+                message.source not in ['user', 'system'] and 
+                not isinstance(message, UserInputRequestedEvent)):
+                try:
+                    await message_callback({
+                        'type': 'agent_message',
+                        'source': message.source,
+                        'content': str(message.content),
+                        'message_type': type(message).__name__,
+                        'session_id': session_id
+                    })
+                except Exception as e:
+                    agent_logger.error(f"Error in message callback: {e}")
+            
+            # Handle structured output from triage agent
+            if (message.source == "TriageSpecialist" and 
+                isinstance(message, StructuredMessage) and
+                isinstance(message.content, PriorityFindings)):
+                
+                # Store structured findings
+                priority_findings = message.content.model_dump()
+                progress.final_results['structured_findings']['priority_threat'] = priority_findings
+                agent_logger.info(f"Structured priority findings stored: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
+                
+                # Send priority findings update via callback
+                if message_callback:
+                    await message_callback({
+                        'type': 'priority_findings',
+                        'data': priority_findings,
+                        'session_id': session_id
+                    })
+            
+            # Handle approval requests
+            elif isinstance(message, UserInputRequestedEvent):
+                agent_logger.info(f"User input requested for session {session_id}")
+                
+                if message_callback:
+                    try:
+                        await message_callback({
+                            'type': 'UserInputRequestedEvent',
+                            'content': getattr(message, 'content', 'Approval required'),
+                            'source': message.source,
+                            'session_id': session_id
+                        })
+                    except Exception as e:
+                        agent_logger.error(f"Error sending approval request: {e}")
+            
+            # Check for workflow rejection
+            elif (message.source == "MultiStageApprovalAgent" and 
+                  ("WORKFLOW_REJECTED" in str(message.content) or 
+                   ("REJECTED" in str(message.content) and "human operator" in str(message.content)))):
+                
+                progress.final_results['was_rejected'] = True
+                progress.final_results['rejection_stage'] = 'unknown'  # Could be enhanced to track specific stage
+                agent_logger.info(f"Analysis rejected by user for session {session_id}")
+                
+                if message_callback:
+                    await message_callback({
+                        'type': 'workflow_rejected',
+                        'content': 'Analysis workflow was rejected by user',
+                        'session_id': session_id
+                    })
+            
+            # Handle structured results from analyst
+            elif (message.source == "SeniorAnalyst" and 
+                  isinstance(message, StructuredMessage) and
+                  isinstance(message.content, SOCAnalysisResult)):
+                
+                progress.final_results['structured_result'] = message.content.model_dump()
+            
+            # Parse tool outputs for context and analyst agents
+            elif hasattr(message, 'content') and isinstance(message.content, str):
+                await _parse_tool_outputs(message, progress, message_callback, session_id)
+                
+    except Exception as e:
+        agent_logger.error(f"Error processing streaming message: {e}")
+
+async def _parse_tool_outputs(message, progress: AnalysisProgress, message_callback: Optional[Callable], session_id: str):
+    """Parse and handle tool outputs from agent messages"""
+    content = message.content
+    
+    try:
+        # Extract context search results
+        if "status" in content and "search_complete" in content:
+            import re
+            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+            if json_match:
+                tool_result = json.loads(json_match.group())
+                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
+                    progress.final_results['chroma_context'] = sanitize_chroma_results(tool_result['results'])
+                    
+                    # Send context update
+                    if message_callback:
+                        await message_callback({
+                            'type': 'context_results',
+                            'data': tool_result['results'],
+                            'session_id': session_id
+                        })
+        
+        # Extract detailed analysis from analyst agent tools
+        elif "status" in content and "analysis_complete" in content:
+            import re
+            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+            if json_match:
+                tool_result = json.loads(json_match.group())
+                if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
+                    progress.final_results['structured_findings']['detailed_analysis'] = tool_result['data']
+                    
+                    # Send analysis complete update
+                    if message_callback:
+                        await message_callback({
+                            'type': 'analysis_complete',
+                            'data': tool_result['data'],
+                            'session_id': session_id
+                        })
+                        
+    except Exception as e:
+        agent_logger.error(f"Error parsing tool outputs: {e}")
+
+async def run_analysis_workflow(
     log_batch: str,
     session_id: str,
+    progress: AnalysisProgress,
     user_input_callback: Optional[Callable] = None,
-    message_callback: Optional[Callable] = None  # NEW: Real-time message callback
-) -> tuple[str, dict, dict]:
+    message_callback: Optional[Callable] = None
+) -> bool:
     """
-    Run SOC analysis with real-time streaming of agent outputs via WebSocket.
+    Execute SOC analysis workflow with real-time streaming.
     
     Args:
         log_batch: Security logs to analyze
         session_id: WebSocket session ID
+        progress: Progress tracking object to update
         user_input_callback: Function to handle user input requests
         message_callback: Function to handle real-time agent messages
+    
+    Returns:
+        bool: True if analysis completed successfully, False otherwise
     """
     if agent_logger:
-        agent_logger.info(f"Starting real-time SOC analysis for session {session_id}")
+        agent_logger.info(f"Starting SOC analysis workflow for session {session_id}")
+    
+    # Initialize progress.final_results
+    progress.final_results = {
+        'conversation_parts': [],
+        'structured_findings': {},
+        'chroma_context': {},
+        'structured_result': None,
+        'was_rejected': False,
+        'approval_requested': False,
+        'real_time_streaming': True
+    }
     
     # Define the user input function
     async def _user_input_func(prompt: str, cancellation_token: Optional[CancellationToken]) -> str:
@@ -139,6 +292,8 @@ async def get_prioritized_task_with_streaming(
             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
     
     try:
+        await progress.send_update("starting", progress=10)
+        
         team, model_client = await _create_soc_team(user_input_func=_user_input_func)
         
         # Create the analysis task
@@ -171,178 +326,45 @@ APPROVAL POINTS:
 
 TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, request approval to proceed with the investigation."""
         
-        # Real-time streaming variables
-        full_conversation = ""
-        priority_findings = {}
-        detailed_analysis = {}
-        chroma_context = {}
-        structured_result = None
-        was_rejected = False
-        approval_requested = False
-        
-        agent_logger.info(f"Starting real-time team execution for session {session_id}")
+        agent_logger.info(f"Starting team execution for session {session_id}")
         
         # Use run_stream for real-time message processing
-        conversation_parts = []
         stream = team.run_stream(task=task, cancellation_token=CancellationToken())
         
         # Process messages in real-time as they arrive
         async for message in stream:
-            if hasattr(message, 'source') and hasattr(message, 'content'):
-                # Add to conversation history
-                conversation_parts.append(f"[{message.source}]: {message.content}")
-                
-                agent_logger.debug(f"Real-time message from {message.source}: Type={type(message).__name__}")
-                
-                # Only send agent messages (not user/system messages) via real-time callback
-                if (message_callback and 
-                    message.source not in ['user', 'system'] and 
-                    not isinstance(message, UserInputRequestedEvent)):
-                    try:
-                        await message_callback({
-                            'type': 'agent_message',
-                            'source': message.source,
-                            'content': str(message.content),
-                            'message_type': type(message).__name__,
-                            'session_id': session_id
-                        })
-                    except Exception as e:
-                        agent_logger.error(f"Error in message callback: {e}")
-                
-                # Handle structured output from triage agent
-                if (message.source == "TriageSpecialist" and 
-                    isinstance(message, StructuredMessage) and
-                    isinstance(message.content, PriorityFindings)):
-                    
-                    # Extract structured findings directly from message content
-                    priority_findings = message.content.model_dump()
-                    agent_logger.info(f"Structured priority findings received: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
-                    
-                    # Send priority findings update via callback
-                    if message_callback:
-                        await message_callback({
-                            'type': 'priority_findings',
-                            'data': priority_findings,
-                            'session_id': session_id
-                        })
-                
-                # Check for approval request
-                elif isinstance(message, UserInputRequestedEvent):
-                    approval_requested = True
-                    agent_logger.info(f"User input requested for session {session_id}")
-                    
-                    # Send approval request via callback
-                    if message_callback:
-                        try:
-                            await message_callback({
-                                'type': 'UserInputRequestedEvent',
-                                'content': getattr(message, 'content', 'Approval required'),
-                                'source': message.source,
-                                'session_id': session_id
-                            })
-                        except Exception as e:
-                            agent_logger.error(f"Error sending approval request: {e}")
-                
-                elif message.source == "MultiStageApprovalAgent":
-                    if "review" in str(message.content).lower() or "decide" in str(message.content).lower():
-                        approval_requested = True
-                        agent_logger.info(f"Multi-stage approval workflow triggered for session {session_id}")
-                
-                # Check for rejection
-                if (message.source == "MultiStageApprovalAgent" and 
-                    ("WORKFLOW_REJECTED" in str(message.content) or 
-                     ("REJECTED" in str(message.content) and "human operator" in str(message.content)))):
-                    was_rejected = True
-                    agent_logger.info(f"Analysis rejected by user for session {session_id}")
-                    
-                    # Send rejection notification
-                    if message_callback:
-                        await message_callback({
-                            'type': 'workflow_rejected',
-                            'content': 'Analysis workflow was rejected by user',
-                            'session_id': session_id
-                        })
-                
-                # Check for structured results
-                if (message.source == "SeniorAnalyst" and 
-                    isinstance(message, StructuredMessage) and
-                    isinstance(message.content, SOCAnalysisResult)):
-                    structured_result = message.content
-                
-                # Parse tool outputs in real-time (for context and analyst agents that still use tools)
-                if hasattr(message, 'content') and isinstance(message.content, str):
-                    # Extract context search results
-                    if "status" in message.content and "search_complete" in message.content:
-                        try:
-                            import re
-                            json_match = re.search(r'\{.*"status".*\}', message.content, re.DOTALL)
-                            if json_match:
-                                tool_result = json.loads(json_match.group())
-                                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
-                                    chroma_context = tool_result['results']
-                                    
-                                    # Send context update
-                                    if message_callback:
-                                        await message_callback({
-                                            'type': 'context_results',
-                                            'data': chroma_context,
-                                            'session_id': session_id
-                                        })
-                        except Exception as e:
-                            agent_logger.error(f"Error parsing context results: {e}")
-                    
-                    # Extract detailed analysis (from analyst agent tools)
-                    elif "status" in message.content and "analysis_complete" in message.content:
-                        try:
-                            json_match = re.search(r'\{.*"status".*\}', message.content, re.DOTALL)
-                            if json_match:
-                                tool_result = json.loads(json_match.group())
-                                if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
-                                    detailed_analysis = tool_result['data']
-                                    
-                                    # Send analysis complete update
-                                    if message_callback:
-                                        await message_callback({
-                                            'type': 'analysis_complete',
-                                            'data': detailed_analysis,
-                                            'session_id': session_id
-                                        })
-                        except Exception as e:
-                            agent_logger.error(f"Error parsing detailed analysis: {e}")
-        
-        # Build final conversation
-        full_conversation = "\n\n".join(conversation_parts)
-        agent_logger.info(f"Real-time conversation completed for session {session_id}: {len(full_conversation)} characters")
+            await _process_streaming_message(message, progress, message_callback, session_id)
         
         await model_client.close()
+        
+        # Build final conversation from parts
+        progress.final_results['team_conversation'] = "\n\n".join(progress.final_results['conversation_parts'])
+        
+        # Set completion status
+        progress.completed = True
         
         # Send final completion update
         if message_callback:
             await message_callback({
                 'type': 'analysis_complete_final',
-                'was_rejected': was_rejected,
+                'was_rejected': progress.final_results.get('was_rejected', False),
                 'session_id': session_id
             })
         
+        if not progress.final_results.get('was_rejected', False):
+            await progress.send_update("completed", progress=100)
+        else:
+            await progress.send_update("rejected", progress=100)
+        
         if agent_logger:
-            agent_logger.info(f"Real-time SOC analysis completed for session {session_id}")
-            agent_logger.info(f"Final status - Was rejected: {was_rejected}, Approval requested: {approval_requested}")
+            agent_logger.info(f"SOC analysis workflow completed for session {session_id}")
+            agent_logger.info(f"Final status - Was rejected: {progress.final_results.get('was_rejected', False)}")
         
-        combined_findings = {
-            "priority_threat": priority_findings,
-            "detailed_analysis": detailed_analysis,
-            "team_conversation": full_conversation,
-            "structured_result": structured_result.model_dump() if structured_result else None,
-            "was_rejected": was_rejected,
-            "approval_requested": approval_requested,
-            "real_time_streaming": True
-        }
-        
-        return full_conversation, combined_findings, chroma_context
+        return not progress.final_results.get('was_rejected', False)
         
     except Exception as e:
         if agent_logger:
-            agent_logger.error(f"Real-time SOC analysis error for session {session_id}: {e}")
+            agent_logger.error(f"SOC analysis workflow error for session {session_id}: {e}")
             agent_logger.error(f"Full traceback: {traceback.format_exc()}")
         
         # Send error via callback
@@ -353,6 +375,8 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                 'session_id': session_id
             })
         
-        error_msg = f"Real-time analysis error: {str(e)}"
-        return error_msg, {"error": str(e)}, {"error": str(e)}
-
+        progress.error = str(e)
+        progress.completed = True
+        await progress.send_update("error", progress=100)
+        
+        return False
