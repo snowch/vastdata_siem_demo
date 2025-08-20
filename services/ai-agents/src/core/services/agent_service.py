@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/services/agent_service.py - CLEAN ARCHITECTURE VERSION
+# services/ai-agents/src/core/services/agent_service.py - COMPLETE FIXED VERSION
 """
 Agent Service with Clean Message Architecture
 Uses the new message registry for type-safe, structured messaging
@@ -56,6 +56,7 @@ class CleanMessageSender:
     def __init__(self, session_id: str, message_callback: Optional[Callable] = None):
         self.session_id = session_id
         self.message_callback = message_callback
+        self._awaiting_approval = False  # Track approval state to prevent duplicates
         
     async def send_message(self, message) -> bool:
         """Send a typed message through the callback"""
@@ -85,6 +86,11 @@ class CleanMessageSender:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send message: {e}")
             agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             return False
+    
+    def clear_approval_state(self):
+        """Clear the approval waiting state"""
+        self._awaiting_approval = False
+        agent_logger.debug(f"🔄 CLEAN ARCH: Cleared approval state for session {self.session_id}")
     
     # ========================================================================
     # STRUCTURED RESULTS
@@ -342,13 +348,37 @@ async def _process_clean_streaming_message(
         agent_logger.debug(f"🔍 CLEAN ARCH: Processing message from {source}: {type(message).__name__}")
         
         # ====================================================================
-        # STRUCTURED RESULTS PROCESSING
+        # CHECK FOR WORKFLOW COMPLETION SIGNALS
         # ====================================================================
         
-        # PRIORITY 1: Handle structured triage findings
+        # PRIORITY 0: Check for workflow completion signals
+        if "ANALYSIS_COMPLETE - Senior SOC investigation finished" in content:
+            agent_logger.info(f"✅ CLEAN ARCH: Workflow completion signal detected")
+            final_results['workflow_complete'] = True
+            await sender.send_analysis_complete(
+                success=True,
+                results_summary={
+                    "has_priority_findings": final_results.get('priority_findings') is not None,
+                    "has_context_data": bool(final_results.get('chroma_context')),
+                    "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
+                    "workflow_complete": True
+                }
+            )
+            return  # Stop processing further messages
+        
+        # ====================================================================
+        # PREVENT DUPLICATE STRUCTURED RESULTS
+        # ====================================================================
+        
+        # PRIORITY 1: Handle structured triage findings (but prevent duplicates)
         if (source == "TriageSpecialist" and 
             isinstance(message, StructuredMessage) and
             isinstance(message.content, PriorityFindings)):
+            
+            # Check if we already processed triage findings
+            if final_results.get('priority_findings') is not None:
+                agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate triage findings")
+                return  # Skip duplicate triage findings
             
             findings = message.content.model_dump()
             final_results['priority_findings'] = findings
@@ -362,10 +392,15 @@ async def _process_clean_streaming_message(
             
             return  # Don't send as output stream
         
-        # PRIORITY 2: Handle structured analyst results  
+        # PRIORITY 2: Handle structured analyst results (but prevent duplicates)
         elif (source == "SeniorAnalyst" and 
               isinstance(message, StructuredMessage) and
               isinstance(message.content, SOCAnalysisResult)):
+            
+            # Check if we already processed analyst results
+            if final_results.get('structured_result') is not None:
+                agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate analyst results")
+                return  # Skip duplicate analyst results
             
             result = message.content.model_dump()
             final_results['structured_result'] = result
@@ -382,11 +417,17 @@ async def _process_clean_streaming_message(
             return  # Don't send as output stream
         
         # ====================================================================
-        # APPROVAL REQUEST PROCESSING
+        # APPROVAL REQUEST PROCESSING (prevent duplicates)
         # ====================================================================
         
         elif isinstance(message, UserInputRequestedEvent):
+            # Check if we're already waiting for approval to prevent spam
+            if sender._awaiting_approval:
+                agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate approval request")
+                return
+            
             agent_logger.info(f"👤 CLEAN ARCH: Approval request from {source}")
+            sender._awaiting_approval = True  # Mark as awaiting approval
             
             # Determine stage from source
             stage = _determine_approval_stage_from_source(source)
@@ -584,13 +625,13 @@ async def _parse_clean_tool_outputs(message, final_results: Dict, sender: CleanM
         agent_logger.error(f"❌ CLEAN ARCH: Error parsing tool outputs: {e}")
 
 # ============================================================================
-# TEAM CREATION
+# TEAM CREATION WITH FIXED TERMINATION
 # ============================================================================
 
 async def _create_soc_team(
     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
 ):
-    """Create SOC team with single multi-stage approval agent"""
+    """Create SOC team with proper termination conditions"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
     
     # Create agents
@@ -605,30 +646,36 @@ async def _create_soc_team(
     context_agent = ContextAgent(model_client)
     analyst_agent = AnalystAgent(model_client)
     
-    # Termination conditions
+    # FIXED: More specific termination conditions
+    
+    # Normal completion when analyst finishes with specific phrase
     normal_completion = (
         SourceMatchTermination("SeniorAnalyst") & 
         TextMentionTermination("ANALYSIS_COMPLETE - Senior SOC investigation finished")
     )
 
+    # Rejection termination
     rejection_termination = (
         SourceMatchTermination("MultiStageApprovalAgent") & 
         TextMentionTermination("WORKFLOW_REJECTED")
     )
     
-    max_messages = MaxMessageTermination(50)
-    token_limit = TokenUsageTermination(max_total_token=80000)
-    timeout = TimeoutTermination(timeout_seconds=900)  # 15 minutes
-    
-    analyst_completion = (
+    # Function-based completion - when analyst calls report_detailed_analysis
+    function_completion = (
         SourceMatchTermination("SeniorAnalyst") & 
         FunctionCallTermination("report_detailed_analysis")
     )
     
+    # Backup termination conditions - REDUCED limits
+    max_messages = MaxMessageTermination(30)  # REDUCED from 50
+    token_limit = TokenUsageTermination(max_total_token=60000)  # REDUCED from 80000
+    timeout = TimeoutTermination(timeout_seconds=600)  # REDUCED from 900 (10 minutes)
+    
+    # FIXED: Combined termination - should stop after analyst function call OR normal completion
     termination = (
+        function_completion |
         normal_completion |
         rejection_termination |
-        analyst_completion |
         max_messages |
         token_limit |
         timeout
@@ -644,7 +691,7 @@ async def _create_soc_team(
         ],
     )
     
-    agent_logger.info("SOC team created for clean architecture workflow")
+    agent_logger.info("SOC team created with improved termination conditions")
     
     return team, model_client
 
@@ -673,7 +720,8 @@ async def run_analysis_workflow(
         'chroma_context': {},
         'detailed_analysis': None,
         'structured_result': None,
-        'was_rejected': False
+        'was_rejected': False,
+        'workflow_complete': False
     }
     
     # Start workflow progress
@@ -688,6 +736,9 @@ async def run_analysis_workflow(
                 user_response = await user_input_callback(prompt, session_id)
                 agent_logger.info(f"👤 CLEAN ARCH: User response for session {session_id}: {user_response}")
                 
+                # CLEAR APPROVAL STATE WHEN RESPONSE IS RECEIVED
+                sender.clear_approval_state()
+                
                 # Process response based on content
                 if user_response.lower() in ['approve', 'approved', 'yes', 'continue']:
                     if 'triage' in prompt.lower() or 'priority threat' in prompt.lower():
@@ -698,7 +749,7 @@ async def run_analysis_workflow(
                         return "APPROVED - Historical context validated as relevant. SeniorAnalyst, please perform deep analysis."
                     elif 'recommend' in prompt.lower() or 'action' in prompt.lower():
                         await progress_tracker.update_stage("finalizing")
-                        return "APPROVED - Recommended actions authorized. Please proceed with implementation."
+                        return "APPROVED - Recommended actions authorized. Please conclude with the completion phrase."
                     else:
                         return "APPROVED - Proceeding to next stage of analysis."
                         
@@ -714,9 +765,11 @@ async def run_analysis_workflow(
                     
             except asyncio.TimeoutError:
                 agent_logger.warning(f"User input timeout for session {session_id}")
+                sender.clear_approval_state()  # Clear state on timeout too
                 return "TIMEOUT - No user response received. Auto-approving to continue analysis."
             except Exception as e:
                 agent_logger.error(f"Error getting user input for session {session_id}: {e}")
+                sender.clear_approval_state()  # Clear state on error too
                 await sender.send_error(f"User input error: {str(e)}")
                 return "ERROR - Failed to get user input. Auto-approving to continue analysis."
         else:
@@ -765,30 +818,36 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         # Process messages in real-time as they arrive
         async for message in stream:
             await _process_clean_streaming_message(message, sender, progress_tracker, final_results)
+            
+            # Break early if workflow is complete
+            if final_results.get('workflow_complete'):
+                agent_logger.info(f"🎉 CLEAN ARCH: Workflow completed early for session {session_id}")
+                break
         
         await model_client.close()
         
         # Calculate duration
         duration = (datetime.now() - start_time).total_seconds()
         
-        # Send final completion update
-        success = not final_results.get('was_rejected', False)
-        
-        await sender.send_analysis_complete(
-            success=success,
-            results_summary={
-                "has_priority_findings": final_results.get('priority_findings') is not None,
-                "has_context_data": bool(final_results.get('chroma_context')),
-                "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
-                "was_rejected": final_results.get('was_rejected', False)
-            },
-            duration_seconds=duration
-        )
+        # Send final completion update if not already sent
+        if not final_results.get('workflow_complete'):
+            success = not final_results.get('was_rejected', False)
+            
+            await sender.send_analysis_complete(
+                success=success,
+                results_summary={
+                    "has_priority_findings": final_results.get('priority_findings') is not None,
+                    "has_context_data": bool(final_results.get('chroma_context')),
+                    "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
+                    "was_rejected": final_results.get('was_rejected', False)
+                },
+                duration_seconds=duration
+            )
         
         agent_logger.info(f"Clean architecture SOC analysis workflow completed for session {session_id}")
-        agent_logger.info(f"Final status - Success: {success}, Duration: {duration:.1f}s")
+        agent_logger.info(f"Final status - Duration: {duration:.1f}s")
         
-        return success
+        return not final_results.get('was_rejected', False)
         
     except Exception as e:
         agent_logger.error(f"Clean architecture SOC analysis workflow error for session {session_id}: {e}")
