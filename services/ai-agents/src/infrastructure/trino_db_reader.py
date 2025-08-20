@@ -2,38 +2,32 @@ import os
 import trino
 import json
 import logging
+from core.config import settings
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def get_logs():    
-    trino_host = 'trino'
-    trino_port = 8080
-    trino_user = 'admin'
-    trino_catalog = 'vast'
-    trino_db = os.getenv('VASTDB_FLUENTD_BUCKET', 'csnow-db')
-    trino_schema = os.getenv('VASTDB_FLUENTD_SCHEMA', 'siem')
-
+def get_logs():
     logs = []
     try:
         with trino.dbapi.connect(
-            host=trino_host,
-            port=trino_port,
-            user=trino_user,
-            catalog=trino_catalog,
-            schema=trino_schema
+            host=settings.trino_host,
+            port=settings.trino_port,
+            user=settings.trino_user,
+            catalog=settings.trino_catalog,
+            schema=settings.trino_schema
         ) as connection:
             cursor = connection.cursor()
             query = f"""
                 SELECT raw_data, time_dt
-                FROM "{trino_db}|{trino_schema}"."fluentd_detection_finding"
+                FROM "{settings.trino_db}|{settings.trino_schema}"."fluentd_detection_finding"
                 ORDER BY time_dt DESC
                 LIMIT 20
             """
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            logger.debug(f"Rows {len(rows)} | Query {query}")
+            logger.debug(f"Rows {{len(rows)}} | Query {{query}}")
             for row in rows:
                 try:
                     json_row = json.loads(row[0])

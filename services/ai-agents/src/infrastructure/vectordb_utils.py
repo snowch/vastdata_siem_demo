@@ -1,6 +1,7 @@
 import os
 import chromadb
 from sentence_transformers import SentenceTransformer
+from core.config import settings
 
 # Local CPU embedding model - same as bytewax-etl service
 # Using 'all-MiniLM-L6-v2' to match the embeddings stored in ChromaDB
@@ -8,9 +9,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # ChromaDB client setup
 # Connect to ChromaDB server running in Docker Compose (service name 'chroma', port 8000)
-chroma_client = chromadb.HttpClient(host="chroma", port=8000)
-
-COLLECTION_NAME = "security_events_dual"
+chroma_client = chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
 
 def embed_text(text):
     """
@@ -26,9 +25,9 @@ def get_or_create_collection():
     Get or create a ChromaDB collection.
     """
     try:
-        collection = chroma_client.get_collection(name=COLLECTION_NAME)
+        collection = chroma_client.get_collection(name=settings.collection_name)
     except Exception:
-        collection = chroma_client.create_collection(name=COLLECTION_NAME)
+        collection = chroma_client.create_collection(name=settings.collection_name)
     return collection
 
 def search_chroma(query_text, n_results=5):
