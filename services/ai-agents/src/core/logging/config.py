@@ -29,9 +29,3 @@ def init_logging():
 
     agent_logger = logging.getLogger("agent_diagnostics")
     agent_logger.setLevel(logging.INFO)
-
-    handler = logging.FileHandler('agent_diagnostics.log')
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    handler.setFormatter(formatter)
-    agent_logger.addHandler(handler)
