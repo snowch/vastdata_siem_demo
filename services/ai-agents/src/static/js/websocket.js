@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/websocket.js - DEBUG VERSION
-// Complete file with debug logging for priority_findings_update issue
+// services/ai-agents/src/static/js/websocket.js - CLEAN ARCHITECTURE VERSION
+// WebSocket client with message type validation and clean architecture support
 
 // Import other modules
 import * as debugLogger from './debugLogger.js';
@@ -7,75 +7,127 @@ import * as ui from './ui.js';
 import * as approvalWorkflow from './approvalWorkflow.js';
 import * as progressManager from './progressManager.js';
 
-// WebSocket Management and Real-time Streaming
+// ============================================================================
+// CLEAN MESSAGE ARCHITECTURE GLOBALS
+// ============================================================================
+
 var websocket = null;
-var wsStats = { connected: false, messages_sent: 0, messages_received: 0, reconnects: 0 };
+var wsStats = { connected: false, messages_sent: 0, messages_received: 0, reconnects: 0, type_validation_errors: 0 };
 var reconnectAttempts = 0;
 var maxReconnectAttempts = 5;
 var currentSessionId = null;
 
-// Real-time agent output buffers
-var agentOutputBuffers = {
-    triage: [],
-    context: [],
-    analyst: []
+// Clean Architecture State
+var supportedMessageTypes = {
+    results: [],
+    status: [],
+    interaction: [],
+    control: [],
+    all_types: []
+};
+var messageTypeValidationEnabled = false;
+var cleanArchitectureEnabled = false;
+
+// Agent state tracking
+var agentStates = {
+    triage: { status: 'pending', has_findings: false },
+    context: { status: 'pending', has_research: false },
+    analyst: { status: 'pending', has_recommendations: false }
 };
 
-// Function call tracking
-var functionCallsDetected = {
-    triage: false,
-    context: false,
-    analyst: false
-};
-
-// NEW: Simple progress tracking based on specific events
+// Workflow progress tracking
 var workflowProgress = {
-    triage: 0,     // 0 = pending, 1 = active, 2 = complete
-    context: 0,    
-    analyst: 0,
-    overall: 0     // Calculated from stages: 0-100%
+    current_stage: 'initializing',
+    progress_percentage: 0,
+    completed_stages: [],
+    estimated_time_remaining: null
 };
+
+// ============================================================================
+// MESSAGE TYPE VALIDATION
+// ============================================================================
+
+function validateMessageType(messageType) {
+    // Validate that a message type is supported by the server
+    if (!messageTypeValidationEnabled) {
+        debugLogger.debugLog('🔧 Message type validation disabled, accepting: ' + messageType);
+        return true;
+    }
+    
+    if (!supportedMessageTypes.all_types.includes(messageType)) {
+        debugLogger.debugLog('❌ CLEAN ARCH: Unsupported message type: ' + messageType, 'ERROR');
+        wsStats.type_validation_errors++;
+        
+        ui.showStatus('⚠️ Received unsupported message type: ' + messageType, 'warning');
+        return false;
+    }
+    
+    debugLogger.debugLog('✅ CLEAN ARCH: Valid message type: ' + messageType);
+    return true;
+}
+
+function getMessageCategory(messageType) {
+    // Get the category for a message type
+    for (const [category, types] of Object.entries(supportedMessageTypes)) {
+        if (category !== 'all_types' && types.includes(messageType)) {
+            return category;
+        }
+    }
+    return 'unknown';
+}
+
+function logMessageTypeStats() {
+    // Log statistics about message type validation
+    console.log('📊 CLEAN ARCH: Message Type Statistics:', {
+        validation_enabled: messageTypeValidationEnabled,
+        supported_types_count: supportedMessageTypes.all_types.length,
+        validation_errors: wsStats.type_validation_errors,
+        categories: {
+            results: supportedMessageTypes.results.length,
+            status: supportedMessageTypes.status.length,
+            interaction: supportedMessageTypes.interaction.length,
+            control: supportedMessageTypes.control.length
+        }
+    });
+}
+
+// ============================================================================
+// WEBSOCKET INITIALIZATION
+// ============================================================================
 
 function initWebSocket() {
-    console.log('initWebSocket called with enhanced real-time streaming support');
-    var protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:';
+    console.log('🚀 CLEAN ARCH: Initializing WebSocket with clean message architecture support');
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     var wsUrl = protocol + '//' + window.location.host + '/ws/analysis';
 
-    debugLogger.debugLog('Connecting to Enhanced Real-time WebSocket: ' + wsUrl);
+    debugLogger.debugLog('🔌 CLEAN ARCH: Connecting to WebSocket: ' + wsUrl);
     progressManager.updateConnectionStatus('connecting');
 
     websocket = new WebSocket(wsUrl);
 
     websocket.onopen = function(event) {
-        debugLogger.debugLog('Enhanced Real-time WebSocket connection established');
+        debugLogger.debugLog('✅ CLEAN ARCH: WebSocket connection established');
         progressManager.updateConnectionStatus('connected');
         wsStats.connected = true;
         reconnectAttempts = 0;
-        ui.showStatus('Connected to Real-time SOC Analysis WebSocket', 'success');
+        ui.showStatus('🔌 Connected to Clean Architecture SOC Analysis WebSocket', 'success');
+        
+        // Reset clean architecture state
+        cleanArchitectureEnabled = false;
+        messageTypeValidationEnabled = false;
     };
 
-    // 👈 MODIFIED: Add extensive debug logging to existing onmessage handler
     websocket.onmessage = function(event) {
         wsStats.messages_received++;
         
         try {
             var data = JSON.parse(event.data);
             
-            // 🚀 DEBUG LOGGING: Log every raw WebSocket message
-            debugLogger.debugLog('📨 RAW WebSocket message received - Type: ' + data.type);
-            console.log('📨 RAW WebSocket message:', data);
+            debugLogger.debugLog('📨 CLEAN ARCH: Raw WebSocket message received - Type: ' + data.type);
+            console.log('📨 CLEAN ARCH: Raw message:', data);
             
-            // 🎯 SPECIFIC CHECK: Look for our missing message type
-            if (data.type === 'priority_findings_update') {
-                console.log('🎯 RAW MESSAGE: priority_findings_update detected in raw WebSocket data!');
-                console.log('🎯 RAW DATA:', JSON.stringify(data, null, 2));
-                debugLogger.debugLog('🎯 CRITICAL: priority_findings_update message received via WebSocket');
-            } else {
-                console.log('📝 RAW MESSAGE: Type "' + data.type + '" (not priority_findings_update)');
-            }
-            
-            // Call the existing message handler
-            handleEnhancedRealtimeWebSocketMessage(data);
+            // Handle the message using clean architecture
+            handleCleanArchitectureMessage(data);
             
         } catch (e) {
             console.error('❌ Error parsing WebSocket message:', e);
@@ -85,283 +137,255 @@ function initWebSocket() {
     };
 
     websocket.onclose = function(event) {
-        debugLogger.debugLog('Enhanced Real-time WebSocket connection closed: ' + event.code + ' - ' + event.reason);
+        debugLogger.debugLog('🔌 CLEAN ARCH: WebSocket connection closed: ' + event.code + ' - ' + event.reason);
         progressManager.updateConnectionStatus('disconnected');
         wsStats.connected = false;
 
         if (!event.wasClean && reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++;
-            ui.showStatus('Connection lost. Reconnecting... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')', 'warning');
+            ui.showStatus('🔄 Connection lost. Reconnecting... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')', 'warning');
             setTimeout(function() {
                 initWebSocket();
                 wsStats.reconnects++;
             }, 2000 * reconnectAttempts);
         } else if (reconnectAttempts >= maxReconnectAttempts) {
-            ui.showStatus('Connection failed. Please refresh the page.', 'error');
+            ui.showStatus('❌ Connection failed. Please refresh the page.', 'error');
         }
     };
 
     websocket.onerror = function(error) {
-        debugLogger.debugLog('Enhanced Real-time WebSocket error: ' + error, 'ERROR');
+        debugLogger.debugLog('❌ CLEAN ARCH: WebSocket error: ' + error, 'ERROR');
         progressManager.updateConnectionStatus('error');
-        ui.showStatus('Enhanced Real-time WebSocket connection error', 'error');
+        ui.showStatus('❌ Clean Architecture WebSocket connection error', 'error');
     };
 }
 
-// NEW: Smart progress calculation based on completed stages
-function updateOverallProgress() {
-    var progress = 0;
-    var statusText = 'Initializing';
-    
-    // Each stage contributes to overall progress
-    if (workflowProgress.triage >= 1) {
-        progress += 30;  // Triage active/complete
-        statusText = 'Analyzing Threats';
-    }
-    if (workflowProgress.triage >= 2) {
-        progress += 10;  // Triage complete
-        statusText = 'Triage Complete';
-    }
-    if (workflowProgress.context >= 1) {
-        progress += 20; // Context active  
-        statusText = 'Researching Historical Context';
-    }
-    if (workflowProgress.context >= 2) {
-        progress += 10; // Context complete
-        statusText = 'Context Research Complete';
-    }
-    if (workflowProgress.analyst >= 1) {
-        progress += 20; // Analysis active
-        statusText = 'Deep Analysis in Progress';
-    }
-    if (workflowProgress.analyst >= 2) {
-        progress += 10; // Analysis complete
-        statusText = 'Analysis Complete';
-    }
-    
-    workflowProgress.overall = progress;
-    
-    // Update UI with calculated progress
-    ui.updateProgress(progress, statusText);
-    
-    debugLogger.debugLog('Smart progress calculated: ' + progress + '% - ' + statusText);
-}
+// ============================================================================
+// CLEAN ARCHITECTURE MESSAGE HANDLER
+// ============================================================================
 
-// NEW: Reset workflow progress for new analysis
-function resetWorkflowProgress() {
-    workflowProgress = { triage: 0, context: 0, analyst: 0, overall: 0 };
-    functionCallsDetected = { triage: false, context: false, analyst: false };
-    agentOutputBuffers = { triage: [], context: [], analyst: [] };
-    debugLogger.debugLog('Workflow progress reset');
-}
-
-// 👈 MODIFIED: Add extensive debug logging to message handler
-function handleEnhancedRealtimeWebSocketMessage(data) {
-    // 🚀 DEBUG LOGGING: Log every message that enters the handler
-    debugLogger.debugLog('🔍 FRONTEND: Processing message type: ' + data.type);
-    console.log('🔍 FRONTEND DEBUG: Full message entering handler:', data);
+function handleCleanArchitectureMessage(data) {
+    // Main message handler for clean architecture messages
+    var messageType = data.type;
+    var category = getMessageCategory(messageType);
     
-    // 🎯 SPECIFIC CHECK: Critical logging for our target message
-    if (data.type === 'priority_findings_update') {
-        console.log('🎯 FRONTEND DEBUG: priority_findings_update message received in handler!', data);
-        console.log('🎯 FRONTEND DEBUG: About to call handleEnhancedPriorityFindingsUpdate');
-        debugLogger.debugLog('🎯 CRITICAL: priority_findings_update entering switch statement');
-    } else {
-        console.log('📝 FRONTEND DEBUG: Message type "' + data.type + '" - not priority_findings_update');
+    debugLogger.debugLog('🔍 CLEAN ARCH: Processing ' + category + '/' + messageType + ' message');
+    
+    // Validate message type if validation is enabled
+    if (!validateMessageType(messageType)) {
+        return; // Skip invalid message types
     }
     
-    switch (data.type) {
-        case 'connection_established':
-            currentSessionId = data.session_id;
-            debugLogger.debugLog('Connected with session ID: ' + data.session_id);
+    // Route to appropriate handler based on category and type
+    switch (category) {
+        case 'control':
+            handleControlMessage(data);
+            break;
             
-            // Reset progress for new session
-            resetWorkflowProgress();
+        case 'results':
+            handleResultsMessage(data);
+            break;
             
-            // Show enhanced real-time features notification
-            ui.showStatus('Real-time streaming enabled - agent outputs will appear live', 'info');
+        case 'status':
+            handleStatusMessage(data);
             break;
-
-        case 'function_call_detected':
-            // Handle detected function calls
-            handleFunctionCallDetected(data);
+            
+        case 'interaction':
+            handleInteractionMessage(data);
             break;
-
-        case 'real_time_agent_output':
-            // Handle real-time agent output as it arrives
-            handleEnhancedRealtimeAgentOutput(data);
-            break;
-
-        case 'priority_findings_update':
-            console.log('🎯 FRONTEND: Handling priority_findings_update in switch case');
-            debugLogger.debugLog('🎯 CRITICAL: priority_findings_update switch case triggered');
-            // Handle immediate priority findings
-            handleEnhancedPriorityFindingsUpdate(data);
-            break;
-
-        case 'context_results_update':
-            // Handle immediate context results
-            handleEnhancedContextResultsUpdate(data);
-            break;
-
-        case 'detailed_analysis_update':
-            // Handle immediate detailed analysis
-            handleEnhancedDetailedAnalysisUpdate(data);
-            break;
-
-        case 'analysis_workflow_complete':
-            // Handle final workflow completion
-            handleEnhancedWorkflowComplete(data);
-            break;
-
-        case 'workflow_rejected':
-            // Handle workflow rejection
-            handleEnhancedWorkflowRejected(data);
-            break;
-
-        case 'real_time_error':
-            // Handle real-time errors
-            debugLogger.debugLog('Real-time error: ' + data.content, 'ERROR');
-            ui.showStatus('Real-time error: ' + data.content, 'error');
-            break;
-
-        case 'UserInputRequestedEvent':
-            // Handle AutoGen-style user input request (approval request)
-            debugLogger.debugLog('User input requested (approval request) - Enhanced Real-time');
-            console.log('Real-time user input request data:', data);
-            approvalWorkflow.handleApprovalRequest(data);
-            break;
-
-        case 'logs_retrieved':
-            debugLogger.debugLog('Logs retrieved message received');
-            progressManager.handleLogsRetrieved(data);
-            break;
-
-        case 'error':
-            debugLogger.debugLog('Server error received: ' + data.message, 'ERROR');
-            console.log('Server error data:', data);
-            ui.showStatus('Error: ' + (data.message || data.content || 'Unknown error'), 'error');
-            break;
-
-        case 'pong':
-            debugLogger.debugLog('Received pong from server');
-            break;
-
+            
         default:
-            debugLogger.debugLog('🚨 FRONTEND: Unknown enhanced real-time message type: ' + data.type, 'WARNING');
-            console.log('🚨 FRONTEND: Unknown enhanced real-time message data:', data);
+            // Handle unknown categories (might be custom or new message types)
+            handleUnknownMessage(data);
+            break;
     }
 }
 
-function handleFunctionCallDetected(data) {
-    var agent = data.agent;
-    var functionName = data.function;
-    var content = data.content;
+// ============================================================================
+// CATEGORY-SPECIFIC MESSAGE HANDLERS
+// ============================================================================
+
+function handleControlMessage(data) {
+    // Handle control category messages
+    var messageType = data.type;
     
-    debugLogger.debugLog('🔧 FUNCTION CALL DETECTED: ' + functionName + ' from ' + agent);
-    console.log('🔧 Function call details:', data);
+    debugLogger.debugLog('🎛️ CLEAN ARCH: Handling control message: ' + messageType);
     
-    // Mark function call as detected
-    functionCallsDetected[agent] = true;
+    switch (messageType) {
+        case 'connection_established':
+            handleConnectionEstablished(data);
+            break;
+            
+        case 'message_types_advertisement':
+            handleMessageTypesAdvertisement(data);
+            break;
+            
+        case 'analysis_complete':
+            handleAnalysisComplete(data);
+            break;
+            
+        case 'workflow_rejected':
+            handleWorkflowRejected(data);
+            break;
+            
+        case 'error':
+            handleErrorMessage(data);
+            break;
+            
+        case 'logs_retrieved':
+            handleLogsRetrieved(data);
+            break;
+            
+        case 'pong':
+            handlePongMessage(data);
+            break;
+            
+        default:
+            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown control message type: ' + messageType, 'WARNING');
+            break;
+    }
+}
+
+function handleResultsMessage(data) {
+    // Handle results category messages
+    var messageType = data.type;
     
-    // Show immediate feedback
-    ui.showStatus('🔧 Function call detected: ' + functionName + ' from ' + agent, 'info');
+    debugLogger.debugLog('📊 CLEAN ARCH: Handling results message: ' + messageType);
     
-    // Update agent output to show function is being called
-    var outputElement = document.getElementById(agent + 'Output');
-    if (outputElement) {
-        var timestamp = new Date().toLocaleTimeString();
-        var functionCallText = '[' + timestamp + '] 🔧 FUNCTION CALL DETECTED: ' + functionName + '\n' +
-            '⚡ Processing structured findings...\n' +
-            '📊 Validating data and preparing results...\n';
+    switch (messageType) {
+        case 'triage_findings':
+            handleTriageFindings(data);
+            break;
+            
+        case 'context_research':
+            handleContextResearch(data);
+            break;
+            
+        case 'analysis_recommendations':
+            handleAnalysisRecommendations(data);
+            break;
+            
+        default:
+            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown results message type: ' + messageType, 'WARNING');
+            break;
+    }
+}
+
+function handleStatusMessage(data) {
+    // Handle status category messages
+    var messageType = data.type;
+    
+    debugLogger.debugLog('📈 CLEAN ARCH: Handling status message: ' + messageType);
+    
+    switch (messageType) {
+        case 'agent_status_update':
+            handleAgentStatusUpdate(data);
+            break;
+            
+        case 'agent_function_detected':
+            handleAgentFunctionDetected(data);
+            break;
+            
+        case 'agent_output_stream':
+            handleAgentOutputStream(data);
+            break;
+            
+        case 'workflow_progress':
+            handleWorkflowProgress(data);
+            break;
+            
+        default:
+            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown status message type: ' + messageType, 'WARNING');
+            break;
+    }
+}
+
+function handleInteractionMessage(data) {
+    // Handle interaction category messages
+    var messageType = data.type;
+    
+    debugLogger.debugLog('👤 CLEAN ARCH: Handling interaction message: ' + messageType);
+    
+    switch (messageType) {
+        case 'approval_request':
+            handleApprovalRequest(data);
+            break;
+            
+        case 'approval_timeout':
+            handleApprovalTimeout(data);
+            break;
+            
+        default:
+            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown interaction message type: ' + messageType, 'WARNING');
+            break;
+    }
+}
+
+function handleUnknownMessage(data) {
+    // Handle messages with unknown categories
+    debugLogger.debugLog('❓ CLEAN ARCH: Unknown message category for type: ' + data.type, 'WARNING');
+    
+    // Try to handle as legacy message for backward compatibility
+    if (handleLegacyMessage && typeof handleLegacyMessage === 'function') {
+        handleLegacyMessage(data);
+    } else {
+        ui.showStatus('⚠️ Received unknown message type: ' + data.type, 'warning');
+    }
+}
+
+// ============================================================================
+// SPECIFIC MESSAGE HANDLERS
+// ============================================================================
+
+function handleConnectionEstablished(data) {
+    // Handle connection established message
+    currentSessionId = data.session_id;
+    var features = data.features || [];
+    var serverInfo = data.server_info || {};
+    
+    debugLogger.debugLog('✅ CLEAN ARCH: Connected with session ID: ' + currentSessionId);
+    debugLogger.debugLog('🔧 CLEAN ARCH: Server features: ' + features.join(', '));
+    debugLogger.debugLog('📋 CLEAN ARCH: Server info: ' + JSON.stringify(serverInfo));
+    
+    // Check if clean architecture is enabled
+    if (features.includes('clean_message_architecture')) {
+        cleanArchitectureEnabled = true;
+        debugLogger.debugLog('✅ CLEAN ARCH: Clean message architecture enabled');
+    }
+    
+    if (features.includes('type_validation')) {
+        // Don't enable validation yet - wait for message types advertisement
+        debugLogger.debugLog('🔧 CLEAN ARCH: Type validation available, waiting for type advertisement');
+    }
+    
+    ui.showStatus('🚀 Connected to Clean Architecture SOC Analysis (v' + (serverInfo.version || 'unknown') + ')', 'success');
+}
+
+function handleMessageTypesAdvertisement(data) {
+    // Handle message types advertisement
+    if (data.supported_types) {
+        supportedMessageTypes = data.supported_types;
+        messageTypeValidationEnabled = true;
         
-        // Clear waiting text and show function call status
-        if (outputElement.textContent.includes('Waiting for') || 
-            outputElement.textContent.includes('waiting') ||
-            outputElement.textContent.length < 100) {
-            outputElement.textContent = functionCallText;
-        } else {
-            outputElement.textContent += '\n\n' + functionCallText;
+        debugLogger.debugLog('📢 CLEAN ARCH: Received ' + supportedMessageTypes.all_types.length + ' supported message types');
+        debugLogger.debugLog('📋 CLEAN ARCH: Message categories: ' + Object.keys(supportedMessageTypes).join(', '));
+        
+        // Log type breakdown
+        console.log('📊 CLEAN ARCH: Supported Message Types:', supportedMessageTypes);
+        
+        ui.showStatus('📢 Message types advertised - ' + supportedMessageTypes.all_types.length + ' types supported', 'info');
+        
+        // Now enable full clean architecture features
+        if (cleanArchitectureEnabled) {
+            ui.showStatus('✅ Clean Architecture fully enabled with type validation', 'success');
         }
-        
-        // Auto-scroll
-        outputElement.scrollTop = outputElement.scrollHeight;
-    }
-    
-    // Update agent status to show it's processing function call
-    ui.updateAgentStatus(agent, 'active');
-    ui.showAgentSpinner(agent, true);
-    
-    // Add special styling to indicate function call
-    var agentCard = document.getElementById(agent + 'Card');
-    if (agentCard) {
-        agentCard.classList.add('function-calling');
-        agentCard.style.borderLeft = '4px solid #f39c12';
-        agentCard.style.boxShadow = '0 0 20px rgba(243, 156, 18, 0.4)';
+    } else {
+        debugLogger.debugLog('⚠️ CLEAN ARCH: No supported_types in advertisement message', 'WARNING');
     }
 }
 
-function handleEnhancedRealtimeAgentOutput(data) {
-    var agent = data.agent;
-    var content = data.content;
-    var timestamp = data.timestamp;
-    var source = data.source;
-    
-    // Enhanced filtering and processing
-    if (!agent || agent === 'unknown' || !agentOutputBuffers[agent]) {
-        debugLogger.debugLog('Skipping unknown or invalid agent output: ' + agent);
-        return;
-    }
-    
-    // Skip system messages but be more permissive for actual agent content
-    if (content.includes('ENHANCED SECURITY LOG ANALYSIS') || 
-        content.includes('MULTI-STAGE WORKFLOW') ||
-        content.includes('TriageSpecialist: Begin initial triage')) {
-        debugLogger.debugLog('Skipping task description message from: ' + agent);
-        return;
-    }
-    
-    // NEW: Mark agent as active when receiving output
-    if (workflowProgress[agent] === 0) {
-        workflowProgress[agent] = 1;
-        ui.updateAgentStatus(agent, 'active');
-        ui.showAgentSpinner(agent, true);
-        updateOverallProgress();
-    }
-    
-    // Enhanced function call result detection
-    if ((content.includes('status') && content.includes('priority_identified')) ||
-        (content.includes('status') && content.includes('analysis_complete')) ||
-        content.includes('FUNCTION CALLED') ||
-        content.includes('FUNCTION EXECUTED')) {
-        debugLogger.debugLog('🎯 Function call result detected for: ' + agent);
-        handleEnhancedFunctionCallResult(agent, content, timestamp);
-        return;
-    }
-    
-    debugLogger.debugLog('Processing enhanced real-time output from ' + agent + ': ' + content.substring(0, 100) + '...');
-    
-    // Add to buffer
-    agentOutputBuffers[agent].push({
-        content: content,
-        timestamp: timestamp,
-        source: source
-    });
-    
-    // Keep only last 20 messages
-    if (agentOutputBuffers[agent].length > 20) {
-        agentOutputBuffers[agent].shift();
-    }
-    
-    // Update agent display with enhanced formatting
-    updateEnhancedAgentOutput(agent, content, timestamp);
-}
-
-// 👈 MODIFIED: Add extensive debug logging to priority findings handler
-function handleEnhancedPriorityFindingsUpdate(data) {
-    console.log('🎯 FRONTEND: handleEnhancedPriorityFindingsUpdate called with data:', data);
-    debugLogger.debugLog('🎯 CRITICAL: handleEnhancedPriorityFindingsUpdate function executing');
-    
+function handleTriageFindings(data) {
+    // Handle structured triage findings
     var findings = data.data;
     
     if (findings && findings.threat_type && findings.source_ip) {
@@ -373,16 +397,18 @@ function handleEnhancedPriorityFindingsUpdate(data) {
         var confidence = findings.confidence_score || 0;
         var eventCount = findings.event_count || 0;
         
-        console.log('🎯 FRONTEND: Processing priority findings - ' + threatType + ' from ' + sourceIp);
-        debugLogger.debugLog('🎯 CRITICAL: Processing priority findings: ' + threatType);
+        debugLogger.debugLog('🎯 CLEAN ARCH: Triage findings - ' + threatType + ' from ' + sourceIp);
         
-        // Show enhanced immediate notification
+        // Update agent state
+        agentStates.triage.status = 'complete';
+        agentStates.triage.has_findings = true;
+        
+        // Show notification
         ui.showStatus('🚨 Priority ' + priority.toUpperCase() + ' threat: ' + threatType + ' from ' + sourceIp, 'warning');
         
-        // 👈 CRITICAL: Update the triage agent card with structured findings
+        // Update triage agent display
         var triageOutput = document.getElementById('triageOutput');
         if (triageOutput) {
-            console.log('🎯 FRONTEND: Updating triageOutput element');
             var timestamp = new Date().toLocaleTimeString();
             var structuredOutput = '[' + timestamp + '] ✅ TRIAGE ANALYSIS COMPLETE:\n' +
                 '🎯 Threat Type: ' + threatType + '\n' +
@@ -397,99 +423,276 @@ function handleEnhancedPriorityFindingsUpdate(data) {
             
             triageOutput.textContent = structuredOutput;
             triageOutput.scrollTop = triageOutput.scrollHeight;
-            
-            console.log('🎯 FRONTEND: triageOutput updated successfully');
-            debugLogger.debugLog('🎯 CRITICAL: triageOutput element updated with structured findings');
-        } else {
-            console.error('❌ FRONTEND: triageOutput element not found!');
-            debugLogger.debugLog('❌ CRITICAL: triageOutput element not found', 'ERROR');
         }
         
-        // Update progress tracking
-        workflowProgress.triage = 2; // Complete
+        // Update UI
         ui.updateAgentStatus('triage', 'complete');
-        ui.showAgentSpinner('triage', false);
-        updateOverallProgress();
-        
-        // Add visual feedback to triage card
         var triageCard = document.getElementById('triageCard');
         if (triageCard) {
             triageCard.classList.add('active');
-            triageCard.style.borderLeft = '4px solid #56ab2f'; // Success color
-            
-            // Highlight effect
-            triageCard.classList.add('new-content');
-            setTimeout(function() {
-                triageCard.classList.remove('new-content');
-            }, 1500);
-            
-            console.log('🎯 FRONTEND: triageCard visual feedback applied');
-        } else {
-            console.error('❌ FRONTEND: triageCard element not found!');
+            triageCard.style.borderLeft = '4px solid #56ab2f';
         }
         
-        console.log('🎯 FRONTEND: Priority findings processing completed successfully');
-        debugLogger.debugLog('🎯 CRITICAL: Priority findings processed and displayed: ' + threatType + ' from ' + sourceIp);
+        debugLogger.debugLog('✅ CLEAN ARCH: Triage findings processed and displayed');
     } else {
-        console.error('❌ FRONTEND: Invalid findings data structure:', findings);
-        debugLogger.debugLog('❌ CRITICAL: Invalid findings data in handleEnhancedPriorityFindingsUpdate', 'ERROR');
+        debugLogger.debugLog('❌ CLEAN ARCH: Invalid triage findings data', 'ERROR');
     }
 }
 
-function handleEnhancedContextResultsUpdate(data) {
-    debugLogger.debugLog('Enhanced context results update received in real-time');
-    var results = data.data;
+function handleContextResearch(data) {
+    // Handle structured context research results
+    var research = data.data;
     
-    if (results && results.documents) {
-        var documentCount = results.documents.length;
+    if (research) {
+        var documentCount = research.total_documents_found || 0;
+        var queries = research.search_queries || [];
         
-        // Show immediate notification
+        debugLogger.debugLog('📚 CLEAN ARCH: Context research - ' + documentCount + ' documents found');
+        
+        // Update agent state
+        agentStates.context.status = 'complete';
+        agentStates.context.has_research = true;
+        
+        // Show notification
         ui.showStatus('🔎 Found ' + documentCount + ' related historical incidents', 'info');
         
-        // NEW: Update progress tracking
-        workflowProgress.context = 2; // Complete
-        ui.updateAgentStatus('context', 'complete');
-        ui.showAgentSpinner('context', false);
-        updateOverallProgress();
+        // Update context agent display
+        var contextOutput = document.getElementById('contextOutput');
+        if (contextOutput) {
+            var timestamp = new Date().toLocaleTimeString();
+            var researchOutput = '[' + timestamp + '] ✅ CONTEXT RESEARCH COMPLETE:\n' +
+                '🔍 Search Queries: ' + queries.join(', ') + '\n' +
+                '📚 Documents Found: ' + documentCount + '\n' +
+                '📊 Pattern Analysis: ' + (research.pattern_analysis || 'None provided') + '\n' +
+                '💡 Recommendations: ' + (research.recommendations || []).join(', ') + '\n' +
+                '🎯 Confidence: ' + (research.confidence_assessment || 'Unknown');
+            
+            contextOutput.textContent = researchOutput;
+            contextOutput.scrollTop = contextOutput.scrollHeight;
+        }
         
-        debugLogger.debugLog('Enhanced context results processed: ' + documentCount + ' documents');
+        // Update UI
+        ui.updateAgentStatus('context', 'complete');
+        var contextCard = document.getElementById('contextCard');
+        if (contextCard) {
+            contextCard.classList.add('active');
+            contextCard.style.borderLeft = '4px solid #56ab2f';
+        }
+        
+        debugLogger.debugLog('✅ CLEAN ARCH: Context research processed and displayed');
+    } else {
+        debugLogger.debugLog('❌ CLEAN ARCH: Invalid context research data', 'ERROR');
     }
 }
 
-function handleEnhancedDetailedAnalysisUpdate(data) {
-    debugLogger.debugLog('Enhanced detailed analysis update received in real-time');
+function handleAnalysisRecommendations(data) {
+    // Handle structured analysis recommendations
     var analysis = data.data;
     
-    if (analysis && analysis.recommended_actions) {
-        var actionCount = analysis.recommended_actions.length;
+    if (analysis) {
+        var actionCount = (analysis.recommended_actions || []).length;
+        var businessImpact = analysis.business_impact || 'Under assessment';
         
-        // Show immediate notification
+        debugLogger.debugLog('👨‍💼 CLEAN ARCH: Analysis recommendations - ' + actionCount + ' actions');
+        
+        // Update agent state
+        agentStates.analyst.status = 'complete';
+        agentStates.analyst.has_recommendations = true;
+        
+        // Show notification
         ui.showStatus('👨‍💼 Analysis complete with ' + actionCount + ' recommendations', 'success');
         
-        // NEW: Update progress tracking
-        workflowProgress.analyst = 2; // Complete
-        ui.updateAgentStatus('analyst', 'complete');
-        ui.showAgentSpinner('analyst', false);
-        updateOverallProgress();
+        // Update analyst agent display
+        var analystOutput = document.getElementById('analystOutput');
+        if (analystOutput) {
+            var timestamp = new Date().toLocaleTimeString();
+            var analysisOutput = '[' + timestamp + '] ✅ DETAILED ANALYSIS COMPLETE:\n' +
+                '🎯 Threat Assessment: ' + (analysis.threat_assessment?.severity || 'Unknown') + '\n' +
+                '📋 Recommendations: ' + actionCount + ' actions\n' +
+                '💼 Business Impact: ' + businessImpact + '\n' +
+                '🔒 Confidence: ' + (analysis.threat_assessment?.confidence || 'Unknown') + '\n' +
+                '📝 Notes: ' + (analysis.investigation_notes || 'None provided') + '\n' +
+                '⚡ Actions: ' + (analysis.recommended_actions || []).join(', ');
+            
+            analystOutput.textContent = analysisOutput;
+            analystOutput.scrollTop = analystOutput.scrollHeight;
+        }
         
-        debugLogger.debugLog('Enhanced detailed analysis processed: ' + actionCount + ' recommendations');
+        // Update UI
+        ui.updateAgentStatus('analyst', 'complete');
+        var analystCard = document.getElementById('analystCard');
+        if (analystCard) {
+            analystCard.classList.add('active');
+            analystCard.style.borderLeft = '4px solid #56ab2f';
+        }
+        
+        debugLogger.debugLog('✅ CLEAN ARCH: Analysis recommendations processed and displayed');
+    } else {
+        debugLogger.debugLog('❌ CLEAN ARCH: Invalid analysis recommendations data', 'ERROR');
     }
 }
 
-function handleEnhancedWorkflowComplete(data) {
-    debugLogger.debugLog('Enhanced real-time workflow completion received');
+function handleAgentStatusUpdate(data) {
+    // Handle agent status update messages
+    var agent = data.agent;
+    var status = data.status;
+    var message = data.message;
+    var previousStatus = data.previous_status;
     
-    if (data.was_rejected) {
-        ui.showStatus('❌ Analysis workflow was rejected by user', 'warning');
-        ui.updateProgress(100, 'Workflow rejected');
-    } else {
+    debugLogger.debugLog('📊 CLEAN ARCH: Agent status update - ' + agent + ': ' + previousStatus + ' → ' + status);
+    
+    // Update agent state
+    if (agentStates[agent]) {
+        agentStates[agent].status = status;
+    }
+    
+    // Update UI
+    ui.updateAgentStatus(agent, status);
+    
+    if (message) {
+        ui.showStatus(agent.charAt(0).toUpperCase() + agent.slice(1) + ': ' + message, 'info');
+    }
+}
+
+function handleAgentFunctionDetected(data) {
+    // Handle agent function detection messages
+    var agent = data.agent;
+    var functionName = data.function_name;
+    var description = data.description;
+    
+    debugLogger.debugLog('🔧 CLEAN ARCH: Function detected - ' + functionName + ' from ' + agent);
+    
+    // Show notification
+    ui.showStatus('🔧 Function call: ' + functionName + ' from ' + agent, 'info');
+    
+    // Update agent status to show it's processing
+    ui.updateAgentStatus(agent, 'active');
+    
+    // Add visual feedback
+    var agentCard = document.getElementById(agent + 'Card');
+    if (agentCard) {
+        agentCard.style.borderLeft = '4px solid #f39c12';
+        agentCard.style.boxShadow = '0 0 20px rgba(243, 156, 18, 0.4)';
+    }
+}
+
+function handleAgentOutputStream(data) {
+    // Handle real-time agent output streaming
+    var agent = data.agent;
+    var content = data.content;
+    var isFinal = data.is_final;
+    
+    debugLogger.debugLog('💬 CLEAN ARCH: Agent output stream from ' + agent + ': ' + content.substring(0, 50) + '...');
+    
+    // Update agent output
+    var outputElement = document.getElementById(agent + 'Output');
+    if (outputElement) {
+        var timestamp = new Date().toLocaleTimeString();
+        var formattedContent = '[' + timestamp + '] ' + content;
+        
+        // Smart content management
+        var existingContent = outputElement.textContent;
+        
+        if (existingContent.includes('Waiting for') || 
+            existingContent.includes('waiting') ||
+            existingContent.length < 50) {
+            // Replace placeholder text
+            outputElement.textContent = formattedContent;
+        } else {
+            // Append new content
+            outputElement.textContent = existingContent + '\n\n' + formattedContent;
+        }
+        
+        // Auto-scroll
+        outputElement.scrollTop = outputElement.scrollHeight;
+    }
+    
+    // Mark as active if not already
+    if (agentStates[agent] && agentStates[agent].status === 'pending') {
+        ui.updateAgentStatus(agent, 'active');
+    }
+}
+
+function handleWorkflowProgress(data) {
+    // Handle workflow progress updates
+    var progressPercentage = data.progress_percentage;
+    var currentStage = data.current_stage;
+    var completedStages = data.completed_stages || [];
+    var estimatedTimeRemaining = data.estimated_time_remaining;
+    
+    debugLogger.debugLog('📈 CLEAN ARCH: Workflow progress - ' + progressPercentage + '% - ' + currentStage);
+    
+    // Update global progress state
+    workflowProgress.current_stage = currentStage;
+    workflowProgress.progress_percentage = progressPercentage;
+    workflowProgress.completed_stages = completedStages;
+    workflowProgress.estimated_time_remaining = estimatedTimeRemaining;
+    
+    // Update UI progress
+    ui.updateProgress(progressPercentage, currentStage);
+    
+    // Show stage transition notifications
+    if (currentStage !== workflowProgress.current_stage) {
+        ui.showStatus('📈 Stage: ' + currentStage, 'info');
+    }
+}
+
+function handleApprovalRequest(data) {
+    // Handle approval request messages
+    var stage = data.stage;
+    var prompt = data.prompt;
+    var context = data.context || {};
+    var timeoutSeconds = data.timeout_seconds || 300;
+    
+    debugLogger.debugLog('👤 CLEAN ARCH: Approval request for ' + stage + ' stage');
+    
+    // Create approval request data for the approval workflow
+    var approvalData = {
+        type: 'approval_request',
+        content: prompt,
+        source: stage + 'Agent',
+        stage: stage,
+        context: context,
+        timeout_seconds: timeoutSeconds,
+        session_id: currentSessionId
+    };
+    
+    // Use the existing approval workflow handler
+    approvalWorkflow.handleApprovalRequest(approvalData);
+}
+
+function handleApprovalTimeout(data) {
+    // Handle approval timeout messages
+    var stage = data.stage;
+    var defaultAction = data.default_action;
+    
+    debugLogger.debugLog('⏰ CLEAN ARCH: Approval timeout for ' + stage + ' stage');
+    
+    ui.showStatus('⏰ Approval timeout for ' + stage + ' - ' + defaultAction, 'warning');
+    
+    // Use the existing approval workflow timeout handler
+    approvalWorkflow.handleApprovalTimeout(data);
+}
+
+function handleAnalysisComplete(data) {
+    // Handle analysis completion messages
+    var success = data.success;
+    var resultsSummary = data.results_summary || {};
+    var duration = data.duration_seconds;
+    
+    debugLogger.debugLog('🎉 CLEAN ARCH: Analysis complete - Success: ' + success + ', Duration: ' + duration + 's');
+    
+    if (success) {
         ui.showStatus('🎉 Multi-agent analysis completed successfully!', 'success');
         ui.updateProgress(100, 'Analysis complete');
         
-        // Show enhanced final results if available
+        // Show final results summary
         setTimeout(function() {
-            showEnhancedRealtimeResultsSummary();
+            showCleanArchitectureResultsSummary(resultsSummary);
         }, 1000);
+    } else {
+        ui.showStatus('⚠️ Analysis completed with issues', 'warning');
+        ui.updateProgress(100, 'Completed with issues');
     }
     
     // Reset analysis state
@@ -501,15 +704,16 @@ function handleEnhancedWorkflowComplete(data) {
     if (analyzeBtn) {
         analyzeBtn.disabled = false;
     }
-    
-    // Reset for next analysis
-    setTimeout(resetWorkflowProgress, 2000);
 }
 
-function handleEnhancedWorkflowRejected(data) {
-    debugLogger.debugLog('Enhanced real-time workflow rejection received');
+function handleWorkflowRejected(data) {
+    // Handle workflow rejection messages
+    var rejectedStage = data.rejected_stage;
+    var reason = data.reason;
     
-    ui.showStatus('❌ ' + (data.content || 'Analysis workflow rejected'), 'error');
+    debugLogger.debugLog('❌ CLEAN ARCH: Workflow rejected at ' + rejectedStage + ' stage');
+    
+    ui.showStatus('❌ Workflow rejected at ' + rejectedStage + ' stage: ' + (reason || 'User decision'), 'error');
     ui.updateProgress(100, 'Rejected');
     
     // Reset analysis state
@@ -521,280 +725,161 @@ function handleEnhancedWorkflowRejected(data) {
     if (analyzeBtn) {
         analyzeBtn.disabled = false;
     }
-    
-    // Reset for next analysis
-    setTimeout(resetWorkflowProgress, 2000);
 }
 
-// Keep all the other existing functions unchanged...
-function handleEnhancedFunctionCallResult(agent, content, timestamp) {
-    debugLogger.debugLog('🎯 Processing enhanced function call result for: ' + agent);
+function handleErrorMessage(data) {
+    // Handle error messages
+    var errorMessage = data.message;
+    var errorCode = data.error_code;
+    var details = data.details;
     
-    try {
-        // Multiple strategies to extract function call results
-        var result_data = null;
-        
-        // Strategy 1: Look for JSON with status
-        var jsonPatterns = [
-            /\{[^}]*"status"[^}]*"priority_identified"[^}]*\}/g,
-            /\{.*?"status".*?"priority_identified".*?\}/g,
-            /\{[^}]*"status"[^}]*"analysis_complete"[^}]*\}/g,
-            /\{.*?"status".*?"analysis_complete".*?\}/g
-        ];
-        
-        for (var i = 0; i < jsonPatterns.length; i++) {
-            var matches = content.match(jsonPatterns[i]);
-            if (matches) {
-                try {
-                    result_data = JSON.parse(matches[0]);
-                    break;
-                } catch (e) {
-                    continue;
-                }
-            }
-        }
-        
-        // Strategy 2: Look for FUNCTION EXECUTED messages
-        if (!result_data && content.includes('FUNCTION EXECUTED')) {
-            debugLogger.debugLog('📊 Function execution confirmed for: ' + agent);
-            showFunctionExecutionConfirmation(agent, content, timestamp);
-            return;
-        }
-        
-        if (result_data && (result_data.status === 'priority_identified' || result_data.status === 'analysis_complete')) {
-            var data = result_data.data || {};
-            var displayTime = new Date(timestamp).toLocaleTimeString();
-            
-            var resultText = '';
-            if (result_data.status === 'priority_identified') {
-                resultText = '[' + displayTime + '] ✅ PRIORITY FINDINGS GENERATED:\n' +
-                    '🎯 Threat: ' + (data.threat_type || 'Unknown') + '\n' +
-                    '📍 Source: ' + (data.source_ip || 'Unknown') + '\n' +
-                    '⚠️ Priority: ' + (data.priority || 'Unknown').toUpperCase() + '\n' +
-                    '📊 Confidence: ' + (data.confidence_score || 'Unknown') + '\n' +
-                    '📈 Events: ' + (data.event_count || 'Unknown') + '\n' +
-                    '🎯 Pattern: ' + (data.attack_pattern || 'Not specified') + '\n' +
-                    '⏰ Timeline: ' + (data.timeline ? data.timeline.start + ' → ' + data.timeline.end : 'Unknown');
-            } else if (result_data.status === 'analysis_complete') {
-                var actionCount = data.recommended_actions ? data.recommended_actions.length : 0;
-                resultText = '[' + displayTime + '] ✅ DETAILED ANALYSIS COMPLETE:\n' +
-                    '🎯 Threat Assessment: ' + (data.threat_assessment?.severity || 'Unknown') + '\n' +
-                    '📋 Recommendations: ' + actionCount + ' actions\n' +
-                    '💼 Business Impact: ' + (data.business_impact || 'Under review') + '\n' +
-                    '🔒 Confidence: ' + (data.threat_assessment?.confidence || 'Unknown') + '\n' +
-                    '📝 Notes: ' + (data.investigation_notes || 'None provided');
-            }
-            
-            updateEnhancedAgentOutput(agent, resultText, timestamp);
-            
-            // Update status to complete
-            ui.updateAgentStatus(agent, 'complete');
-            ui.showAgentSpinner(agent, false);
-            
-            // Remove function-calling style and add success style
-            var agentCard = document.getElementById(agent + 'Card');
-            if (agentCard) {
-                agentCard.classList.remove('function-calling');
-                agentCard.style.borderLeft = '4px solid #56ab2f'; // Success color
-                agentCard.style.boxShadow = '0 0 20px rgba(86, 171, 47, 0.4)';
-                
-                // Reset after animation
-                setTimeout(function() {
-                    agentCard.style.boxShadow = '';
-                }, 3000);
-            }
-            
-            // Show success notification
-            var successMessage = agent.charAt(0).toUpperCase() + agent.slice(1) + ' analysis complete';
-            if (result_data.status === 'priority_identified') {
-                successMessage += ': ' + (data.threat_type || 'Threat detected');
-            } else {
-                successMessage += ': ' + actionCount + ' recommendations';
-            }
-            ui.showStatus('✅ ' + successMessage, 'success');
-            
-            // Trigger appropriate update handler
-            if (result_data.status === 'priority_identified') {
-                handleEnhancedPriorityFindingsUpdate({
-                    data: data,
-                    timestamp: timestamp
-                });
-            } else if (result_data.status === 'analysis_complete') {
-                handleEnhancedDetailedAnalysisUpdate({
-                    data: data,
-                    timestamp: timestamp
-                });
-            }
-        } else {
-            debugLogger.debugLog('Could not extract structured results, showing raw content');
-            updateEnhancedAgentOutput(agent, content, timestamp);
-        }
-    } catch (e) {
-        debugLogger.debugLog('Error parsing enhanced function call result: ' + e, 'ERROR');
-        // Fallback to normal output handling
-        updateEnhancedAgentOutput(agent, content, timestamp);
-    }
-}
-
-function showFunctionExecutionConfirmation(agent, content, timestamp) {
-    var displayTime = new Date(timestamp).toLocaleTimeString();
-    var confirmationText = '[' + displayTime + '] ✅ FUNCTION EXECUTION CONFIRMED\n' +
-        '🔧 Function successfully called and executed\n' +
-        '📊 Processing results and preparing structured output...\n';
+    debugLogger.debugLog('💥 CLEAN ARCH: Error received - ' + errorMessage, 'ERROR');
     
-    updateEnhancedAgentOutput(agent, confirmationText, timestamp);
-    
-    // Show notification
-    ui.showStatus('✅ ' + agent + ' function executed successfully', 'success');
-}
-
-function updateEnhancedAgentOutput(agent, content, timestamp) {
-    var outputElement = document.getElementById(agent + 'Output');
-    if (!outputElement) return;
-    
-    var displayTime = new Date(timestamp).toLocaleTimeString();
-    var formattedContent = '[' + displayTime + '] ' + content;
-    
-    // Smart content management with enhanced logic
-    var existingContent = outputElement.textContent;
-    
-    if (existingContent.includes('Waiting for') || 
-        existingContent.includes('waiting') ||
-        existingContent.length < 50) {
-        // Replace placeholder text
-        outputElement.textContent = formattedContent;
-    } else {
-        // Append new content with separator
-        outputElement.textContent = existingContent + '\n\n' + formattedContent;
+    var displayMessage = errorMessage;
+    if (errorCode) {
+        displayMessage = '[' + errorCode + '] ' + errorMessage;
     }
     
-    // Auto-scroll
-    outputElement.scrollTop = outputElement.scrollHeight;
+    ui.showStatus('❌ ' + displayMessage, 'error');
     
-    // Enhanced visual feedback
-    var agentCard = document.getElementById(agent + 'Card');
-    if (agentCard) {
-        agentCard.classList.add('active');
-        
-        // Enhanced highlight effect for new content
-        agentCard.classList.add('new-content');
-        setTimeout(function() {
-            agentCard.classList.remove('new-content');
-        }, 1500);
+    if (details) {
+        console.error('Error details:', details);
     }
-}
+};
 
-function showEnhancedRealtimeResultsSummary() {
-    debugLogger.debugLog('Showing enhanced real-time results summary');
+function handleLogsRetrieved(data) {
+    // Handle logs retrieved messages
+    var logs = data.logs;
+    var count = data.count;
+    var message = data.message;
     
-    // Create an enhanced summary from the real-time data we've collected
+    debugLogger.debugLog('📥 CLEAN ARCH: Logs retrieved - ' + count + ' entries');
+    
+    progressManager.handleLogsRetrieved({
+        logs: logs,
+        message: message
+    });
+};
+
+function handlePongMessage(data) {
+    // Handle pong response messages
+    debugLogger.debugLog('🏓 CLEAN ARCH: Received pong from server');
+    ui.showStatus('🏓 Server responded to ping', 'info');
+};
+
+// ============================================================================
+// RESULTS SUMMARY
+// ============================================================================
+
+function showCleanArchitectureResultsSummary(resultsSummary) {
+    debugLogger.debugLog('📊 CLEAN ARCH: Showing results summary');
+    
     var findings = [];
     
-    // Check what we learned from each agent
-    var triageBuffer = agentOutputBuffers.triage || [];
-    var contextBuffer = agentOutputBuffers.context || [];
-    var analystBuffer = agentOutputBuffers.analyst || [];
-    
-    if (triageBuffer.length > 0 || functionCallsDetected.triage) {
+    // Check agent states and build findings
+    if (agentStates.triage.has_findings) {
         findings.push({
             title: '🚨 Triage Results',
             content: 'Priority threat assessment completed with structured findings, threat classification, and source identification.'
         });
     }
     
-    if (contextBuffer.length > 0 || functionCallsDetected.context) {
+    if (agentStates.context.has_research) {
         findings.push({
             title: '📚 Historical Context',
             content: 'Related historical incidents analyzed for pattern matching, threat correlation, and lessons learned integration.'
         });
     }
     
-    if (analystBuffer.length > 0 || functionCallsDetected.analyst) {
+    if (agentStates.analyst.has_recommendations) {
         findings.push({
             title: '🎯 Deep Analysis Complete',
             content: 'Comprehensive analysis completed with actionable recommendations, business impact assessment, and implementation timeline.'
         });
     }
     
-    // Show the enhanced findings
+    // Add clean architecture specific findings
+    findings.push({
+        title: '🔧 Clean Architecture',
+        content: 'Analysis completed using clean message architecture with ' + supportedMessageTypes.all_types.length + ' validated message types and type-safe communication.'
+    });
+    
+    // Show the findings
     if (findings.length > 0) {
         ui.displayFinalResults({
             structured_findings: {
                 priority_threat: {
                     priority: 'high',
-                    threat_type: 'Enhanced Multi-stage Analysis',
-                    brief_summary: 'Real-time analysis completed successfully with smart progress tracking'
+                    threat_type: 'Clean Architecture Multi-stage Analysis',
+                    brief_summary: 'Real-time analysis completed successfully with clean message architecture'
                 }
             },
             chroma_context: {}
         });
     }
-}
+};
 
-// Enhanced WebSocket message sending with retry logic
+// ============================================================================
+// MESSAGE SENDING WITH VALIDATION
+// ============================================================================
+
 function sendWebSocketMessage(message) {
-    if (websocket && websocket.readyState == WebSocket.OPEN) {
+    // Send WebSocket message with type validation
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
         var messageString = JSON.stringify(message);
         websocket.send(messageString);
         wsStats.messages_sent++;
-        debugLogger.debugLog('Enhanced Real-time WebSocket message sent - Type: ' + message.type);
-        console.log('Sent enhanced real-time WebSocket message:', message);
+        
+        debugLogger.debugLog('📤 CLEAN ARCH: WebSocket message sent - Type: ' + message.type);
+        console.log('📤 CLEAN ARCH: Sent message:', message);
         return true;
     } else {
-        debugLogger.debugLog('Enhanced Real-time WebSocket not connected, cannot send message - ReadyState: ' + (websocket ? websocket.readyState : 'null'), 'ERROR');
-        ui.showStatus('Not connected to server', 'error');
+        debugLogger.debugLog('❌ CLEAN ARCH: WebSocket not connected, cannot send message - ReadyState: ' + (websocket ? websocket.readyState : 'null'), 'ERROR');
+        ui.showStatus('❌ Not connected to server', 'error');
         return false;
     }
-}
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 function showWebSocketStats() {
-    var bufferSizes = Object.keys(agentOutputBuffers).map(function(agent) {
-        return agent + ': ' + agentOutputBuffers[agent].length + ' messages';
+    // Show WebSocket statistics including clean architecture info
+    var agentStatesStr = Object.keys(agentStates).map(function(agent) {
+        var state = agentStates[agent];
+        return agent + ': ' + state.status + (state.has_findings || state.has_research || state.has_recommendations ? ' (has_data)' : '');
     }).join(', ');
     
-    var functionCallStatus = Object.keys(functionCallsDetected).map(function(agent) {
-        return agent + ': ' + (functionCallsDetected[agent] ? 'DETECTED' : 'none');
-    }).join(', ');
-    
-    var progressStatus = Object.keys(workflowProgress).map(function(stage) {
-        return stage + ': ' + workflowProgress[stage];
-    }).join(', ');
-    
-    var stats = 'Enhanced Real-time WebSocket Statistics:\n' +
+    var stats = 'Clean Architecture WebSocket Statistics:\n' +
         'Connected: ' + wsStats.connected + '\n' +
         'Messages Sent: ' + wsStats.messages_sent + '\n' +
         'Messages Received: ' + wsStats.messages_received + '\n' +
+        'Type Validation Errors: ' + wsStats.type_validation_errors + '\n' +
         'Reconnects: ' + wsStats.reconnects + '\n' +
         'Connection State: ' + (websocket ? websocket.readyState : 'No connection') + '\n' +
         'Session ID: ' + (currentSessionId || 'None') + '\n' +
-        'Smart Progress: ' + progressStatus + '\n' +
-        'Real-time Buffers: ' + bufferSizes + '\n' +
-        'Function Calls: ' + functionCallStatus;
+        'Clean Architecture: ' + (cleanArchitectureEnabled ? 'Enabled' : 'Disabled') + '\n' +
+        'Type Validation: ' + (messageTypeValidationEnabled ? 'Enabled' : 'Disabled') + '\n' +
+        'Supported Types: ' + supportedMessageTypes.all_types.length + '\n' +
+        'Workflow Progress: ' + workflowProgress
+        'Agent States: ' + agentStatesStr;
 
     debugLogger.debugLog(stats);
-    console.log('Enhanced Real-time WebSocket Stats:', {
-        connected: wsStats.connected,
-        messages_sent: wsStats.messages_sent,
-        messages_received: wsStats.messages_received,
-        reconnects: wsStats.reconnects,
-        connection_state: websocket ? websocket.readyState : 'No connection',
-        session_id: currentSessionId,
-        smart_progress: workflowProgress,
-        agent_buffers: agentOutputBuffers,
-        function_calls_detected: functionCallsDetected
-    });
-    ui.showStatus('Enhanced Real-time WebSocket stats logged to debug console', 'info');
+    logMessageTypeStats();
+    ui.showStatus('📊 Clean Architecture WebSocket stats logged to console', 'info');
 }
 
 function testConnection() {
-    debugLogger.debugLog('Testing enhanced real-time WebSocket connection');
+    // Test WebSocket connection
+    debugLogger.debugLog('🔍 Testing clean architecture WebSocket connection');
     if (websocket && websocket.readyState === WebSocket.OPEN) {
-        if (sendWebSocketMessage({ type: 'ping' })) {
-            ui.showStatus('Ping sent to enhanced real-time server', 'info');
+        if (sendWebSocketMessage({ type: 'ping', session_id: currentSessionId })) {
+            ui.showStatus('🏓 Ping sent to clean architecture server', 'info');
         }
     } else {
-        debugLogger.debugLog('Cannot test connection - Enhanced Real-time WebSocket not ready. State: ' + (websocket ? websocket.readyState : 'null'), 'WARNING');
-        ui.showStatus('Enhanced Real-time WebSocket not connected', 'warning');
+        debugLogger.debugLog('❌ Cannot test connection - WebSocket not ready. State: ' + (websocket ? websocket.readyState : 'null'), 'WARNING');
+        ui.showStatus('❌ Clean Architecture WebSocket not connected', 'warning');
     }
 }
 
@@ -807,20 +892,18 @@ function getWebSocket() {
 }
 
 function getConnectionStats() {
-    return wsStats;
+    return {
+        ...wsStats,
+        clean_architecture_enabled: cleanArchitectureEnabled,
+        type_validation_enabled: messageTypeValidationEnabled,
+        supported_types_count: supportedMessageTypes.all_types.length,
+        agent_states: agentStates,
+        workflow_progress: workflowProgress
+    };
 }
 
-function getAgentOutputBuffers() {
-    return agentOutputBuffers;
-}
-
-function getFunctionCallsDetected() {
-    return functionCallsDetected;
-}
-
-// NEW: Export workflow progress for debugging
-function getWorkflowProgress() {
-    return workflowProgress;
+function getSupportedMessageTypes() {
+    return supportedMessageTypes;
 }
 
 // Handle page unload
@@ -838,7 +921,8 @@ export {
     getCurrentSessionId, 
     getWebSocket, 
     getConnectionStats,
-    getAgentOutputBuffers,
-    getFunctionCallsDetected,
-    getWorkflowProgress
+    getSupportedMessageTypes,
+    validateMessageType,
+    getMessageCategory,
+    logMessageTypeStats
 };
