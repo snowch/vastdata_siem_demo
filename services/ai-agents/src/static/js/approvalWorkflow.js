@@ -1,13 +1,15 @@
-// services/ai-agents/src/static/js/approvalWorkflow.js - COMPLETE UPDATED VERSION
-// Enhanced approval workflow with improved context detection and multi-stage support
+// services/ai-agents/src/static/js/approvalWorkflow.js - DUPLICATE APPROVAL FIX
+// Enhanced approval workflow with better duplicate prevention and unknown stage filtering
 
 import * as debugLogger from './debugLogger.js';
 import * as ui from './ui.js';
 import * as websocket from './websocket.js';
 
-// Approval Workflow Logic with Multi-Stage Support
+// Approval Workflow Logic with Enhanced Duplicate Prevention
 var currentApprovalStage = null;
 var awaitingApproval = false;
+var lastApprovalTimestamp = null;
+var processedApprovalIds = new Set(); // Track processed approval requests
 
 // Define approval stages and their configurations
 const APPROVAL_STAGES = {
@@ -42,13 +44,48 @@ const APPROVAL_STAGES = {
 };
 
 function handleApprovalRequest(data) {
-    debugLogger.debugLog('Multi-stage approval request received - Message: ' + data.content);
+    debugLogger.debugLog('🔍 APPROVAL: Processing approval request - Type: ' + data.type + ', Stage: ' + (data.stage || 'undefined'));
     console.log('Full approval request data:', data);
     
-    // Determine which agent is requesting approval based on the message content or source
+    // ENHANCED: Filter out invalid or problematic approval requests
+    if (!isValidApprovalRequest(data)) {
+        debugLogger.debugLog('❌ APPROVAL: Invalid or filtered approval request', 'WARNING');
+        return;
+    }
+    
+    // ENHANCED: Check for duplicate requests
+    var approvalId = generateApprovalId(data);
+    if (processedApprovalIds.has(approvalId)) {
+        debugLogger.debugLog('⚠️ APPROVAL: Duplicate approval request detected, skipping: ' + approvalId, 'WARNING');
+        return;
+    }
+    
+    // Determine which agent is requesting approval
     var requestingAgent = determineRequestingAgent(data);
     
-    debugLogger.debugLog('Approval requested by agent: ' + requestingAgent);
+    // ENHANCED: Additional validation for requesting agent
+    if (!requestingAgent || requestingAgent === 'unknown') {
+        debugLogger.debugLog('❌ APPROVAL: Could not determine requesting agent, skipping', 'WARNING');
+        return;
+    }
+    
+    debugLogger.debugLog('✅ APPROVAL: Valid approval request from agent: ' + requestingAgent);
+    
+    // ENHANCED: Check if we're already waiting for approval from this agent
+    if (awaitingApproval && currentApprovalStage === requestingAgent) {
+        debugLogger.debugLog('⚠️ APPROVAL: Already awaiting approval from ' + requestingAgent + ', skipping duplicate', 'WARNING');
+        return;
+    }
+    
+    // ENHANCED: If we're waiting for a different stage, complete the previous one first
+    if (awaitingApproval && currentApprovalStage && currentApprovalStage !== requestingAgent) {
+        debugLogger.debugLog('🔄 APPROVAL: Switching from ' + currentApprovalStage + ' to ' + requestingAgent + ' approval');
+        hideAgentApprovalButtons(currentApprovalStage);
+    }
+    
+    // Mark this request as processed
+    processedApprovalIds.add(approvalId);
+    lastApprovalTimestamp = Date.now();
     
     // Set state
     awaitingApproval = true;
@@ -70,92 +107,163 @@ function handleApprovalRequest(data) {
         agentCard.scrollIntoView({ behavior: 'smooth' });
     }
     
-    debugLogger.debugLog('Multi-stage approval workflow activated for: ' + requestingAgent);
+    debugLogger.debugLog('✅ APPROVAL: Multi-stage approval workflow activated for: ' + requestingAgent);
+}
+
+// ENHANCED: Validation function for approval requests
+function isValidApprovalRequest(data) {
+    // Filter out requests with no stage or unknown stage
+    if (!data.stage || data.stage === 'unknown') {
+        debugLogger.debugLog('🚫 APPROVAL: Filtering out request with unknown/missing stage', 'INFO');
+        return false;
+    }
+    
+    // Must be a recognized stage
+    if (!APPROVAL_STAGES[data.stage]) {
+        debugLogger.debugLog('🚫 APPROVAL: Filtering out request with unrecognized stage: ' + data.stage, 'INFO');
+        return false;
+    }
+    
+    // FIXED: Only filter out the specific problematic combination
+    // Allow empty prompts for legitimate stages, but filter out the specific generic prompt
+    if (data.stage === 'unknown' && data.prompt === 'Enter your response: ') {
+        debugLogger.debugLog('🚫 APPROVAL: Filtering out generic unknown stage request', 'INFO');
+        return false;
+    }
+    
+    // Must have reasonable timing (prevent rapid-fire duplicates)
+    if (lastApprovalTimestamp && (Date.now() - lastApprovalTimestamp) < 500) {
+        debugLogger.debugLog('🚫 APPROVAL: Filtering out request due to rapid timing', 'INFO');
+        return false;
+    }
+    
+    // ENHANCED: For triage stage, be more permissive with prompts
+    if (data.stage === 'triage') {
+        debugLogger.debugLog('✅ APPROVAL: Allowing triage stage request (permissive validation)', 'INFO');
+        return true;
+    }
+    
+    // For other stages, ensure they have meaningful content
+    if (data.stage === 'context' || data.stage === 'analyst') {
+        if (!data.prompt || data.prompt.trim() === '' || data.prompt === 'Enter your response: ') {
+            debugLogger.debugLog('🚫 APPROVAL: Filtering out ' + data.stage + ' request with insufficient prompt', 'INFO');
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// ENHANCED: Generate unique ID for approval requests to detect duplicates
+function generateApprovalId(data) {
+    var id = (data.stage || 'unknown') + '_' + 
+             (data.prompt ? data.prompt.substring(0, 50) : 'empty') + '_' + 
+             (data.session_id || 'nosession');
+    return id;
 }
 
 function determineRequestingAgent(data) {
-    // ENHANCED: Better detection for context agent approval requests
-    var content = data.content || '';
+    // ENHANCED: Better detection for requesting agent with priority order
+    var content = data.content || data.prompt || '';
     var source = data.source || '';
     var stage = data.stage || '';
     
-    debugLogger.debugLog('Determining requesting agent from stage: "' + stage + '", source: "' + source + '" and content snippet: "' + content.substring(0, 100) + '..."');
+    debugLogger.debugLog('🔍 APPROVAL: Determining agent from stage: "' + stage + '", source: "' + source + '" and content snippet: "' + content.substring(0, 100) + '..."');
     
-    // First check the stage field from the message (most reliable)
+    // PRIORITY 1: Check the stage field from the message (most reliable)
     if (stage && APPROVAL_STAGES[stage]) {
-        debugLogger.debugLog('Detected agent from stage field: ' + stage);
+        debugLogger.debugLog('✅ APPROVAL: Detected agent from stage field: ' + stage);
         return stage;
     }
     
-    // Check source next
+    // PRIORITY 2: Check source field
     if (source.includes('Triage') || source.includes('triage')) {
-        debugLogger.debugLog('Detected triage agent from source');
+        debugLogger.debugLog('✅ APPROVAL: Detected triage agent from source');
         return 'triage';
     } else if (source.includes('Context') || source.includes('context')) {
-        debugLogger.debugLog('Detected context agent from source');
+        debugLogger.debugLog('✅ APPROVAL: Detected context agent from source');
         return 'context';
     } else if (source.includes('Analyst') || source.includes('analyst') || source.includes('Senior')) {
-        debugLogger.debugLog('Detected analyst agent from source');
+        debugLogger.debugLog('✅ APPROVAL: Detected analyst agent from source');
         return 'analyst';
     }
     
-    // ENHANCED: Better content analysis for context agent
+    // PRIORITY 3: Enhanced content analysis with more specific patterns
     var contentLower = content.toLowerCase();
     
-    // Context agent specific indicators (more specific patterns)
-    if (contentLower.includes('context validation required') || 
-        contentLower.includes('🔍 context validation required') ||
-        contentLower.includes('historical insights relevant') ||
-        contentLower.includes('should we proceed with deep security analysis') ||
-        contentLower.includes('context research') ||
-        contentLower.includes('found') && contentLower.includes('historical incidents') ||
-        (contentLower.includes('historical') && contentLower.includes('incidents')) ||
-        (contentLower.includes('pattern') && contentLower.includes('analysis')) ||
-        contentLower.includes('proceed with deep analysis') ||
-        contentLower.includes('auto_triggered')) {
-        debugLogger.debugLog('Detected context agent from content indicators');
-        return 'context';
+    // Context agent specific indicators (most specific first)
+    var contextIndicators = [
+        'context validation required',
+        '🔍 context validation required',
+        'historical insights relevant',
+        'should we proceed with deep security analysis',
+        'proceed with deep analysis using this context',
+        'are these insights relevant for the current threat analysis',
+        'found 30 related historical incidents', // From your console output
+        'found' + '.*' + 'historical incidents',
+        'context research',
+        'auto_triggered'
+    ];
+    
+    for (var i = 0; i < contextIndicators.length; i++) {
+        if (contentLower.includes(contextIndicators[i])) {
+            debugLogger.debugLog('✅ APPROVAL: Detected context agent from content indicator: ' + contextIndicators[i]);
+            return 'context';
+        }
     }
     
     // Triage agent indicators
-    if (contentLower.includes('priority threat') || 
-        contentLower.includes('investigate this') || 
-        contentLower.includes('brute force') || 
-        contentLower.includes('attack detected') ||
-        contentLower.includes('proceed with investigating') || 
-        contentLower.includes('high priority') || 
-        contentLower.includes('critical threat')) {
-        debugLogger.debugLog('Detected triage agent from content indicators');
-        return 'triage';
+    var triageIndicators = [
+        'priority threat',
+        'investigate this',
+        'brute force',
+        'attack detected',
+        'proceed with investigating',
+        'high priority',
+        'critical threat',
+        'sql injection and brute force attacks' // From your console output
+    ];
+    
+    for (var i = 0; i < triageIndicators.length; i++) {
+        if (contentLower.includes(triageIndicators[i])) {
+            debugLogger.debugLog('✅ APPROVAL: Detected triage agent from content indicator: ' + triageIndicators[i]);
+            return 'triage';
+        }
     }
     
     // Analyst agent indicators
-    if (contentLower.includes('recommend') || 
-        contentLower.includes('action') || 
-        contentLower.includes('authorize') || 
-        contentLower.includes('recommendations') || 
-        contentLower.includes('implement') ||
-        contentLower.includes('block ip') || 
-        contentLower.includes('reset passwords') || 
-        contentLower.includes('remediation') || 
-        contentLower.includes('containment')) {
-        debugLogger.debugLog('Detected analyst agent from content indicators');
-        return 'analyst';
+    var analystIndicators = [
+        'recommend',
+        'action',
+        'authorize',
+        'recommendations',
+        'implement',
+        'block ip',
+        'reset passwords',
+        'remediation',
+        'containment'
+    ];
+    
+    for (var i = 0; i < analystIndicators.length; i++) {
+        if (contentLower.includes(analystIndicators[i])) {
+            debugLogger.debugLog('✅ APPROVAL: Detected analyst agent from content indicator: ' + analystIndicators[i]);
+            return 'analyst';
+        }
     }
     
-    debugLogger.debugLog('Could not determine agent type, defaulting to triage');
-    return 'triage';
+    debugLogger.debugLog('❌ APPROVAL: Could not determine agent type - will be filtered out');
+    return null; // Changed from 'triage' to null to prevent defaulting
 }
 
 function showAgentApprovalButtons(agentType, requestData) {
-    debugLogger.debugLog('Showing approval buttons for agent: ' + agentType);
+    debugLogger.debugLog('🎯 APPROVAL: Showing approval buttons for agent: ' + agentType);
     
     // Remove any existing approval buttons for this agent
     hideAgentApprovalButtons(agentType);
 
     var stageConfig = APPROVAL_STAGES[agentType];
     if (!stageConfig) {
-        debugLogger.debugLog('No approval stage configuration found for: ' + agentType, 'ERROR');
+        debugLogger.debugLog('❌ APPROVAL: No approval stage configuration found for: ' + agentType, 'ERROR');
         return;
     }
 
@@ -178,8 +286,8 @@ function showAgentApprovalButtons(agentType, requestData) {
             }
         }
         
-        // Use the prompt from the request if available
-        if (requestData.prompt && requestData.prompt.trim()) {
+        // Use the prompt from the request if available and meaningful
+        if (requestData.prompt && requestData.prompt.trim() && requestData.prompt !== 'Enter your response: ') {
             customPrompt = requestData.prompt;
         }
     }
@@ -219,13 +327,13 @@ function showAgentApprovalButtons(agentType, requestData) {
     // Add to agent card - AFTER the agent-content, not inside it
     var agentCard = document.getElementById(agentType + 'Card');
     if (!agentCard) {
-        debugLogger.debugLog('Agent card not found: ' + agentType, 'ERROR');
+        debugLogger.debugLog('❌ APPROVAL: Agent card not found: ' + agentType, 'ERROR');
         return;
     }
     
     var agentContent = agentCard.querySelector('.agent-content');
     if (!agentContent) {
-        debugLogger.debugLog('Agent card content not found: ' + agentType, 'ERROR');
+        debugLogger.debugLog('❌ APPROVAL: Agent card content not found: ' + agentType, 'ERROR');
         return;
     }
     
@@ -238,7 +346,7 @@ function showAgentApprovalButtons(agentType, requestData) {
     // Add visual feedback
     agentCard.classList.add('approval-active');
     
-    // ENHANCED: Auto-focus on first button for better accessibility
+    // Auto-focus on first button for better accessibility
     setTimeout(function() {
         var firstButton = approvalSection.querySelector('.btn');
         if (firstButton) {
@@ -246,15 +354,26 @@ function showAgentApprovalButtons(agentType, requestData) {
         }
     }, 100);
     
-    debugLogger.debugLog('Approval section created for agent: ' + agentType);
+    debugLogger.debugLog('✅ APPROVAL: Approval section created for agent: ' + agentType);
 }
 
 function extractIncidentCount(content) {
-    // Try to extract number from content like "Found 24 related historical incidents"
-    var matches = content.match(/found (\d+) related/i) || 
-                  content.match(/(\d+) historical incidents/i) ||
-                  content.match(/analysis of (\d+) historical/i);
-    return matches ? parseInt(matches[1], 10) : 0;
+    // Enhanced extraction for numbers from content
+    var patterns = [
+        /found (\d+) related/i,
+        /(\d+) historical incidents/i,
+        /analysis of (\d+) historical/i,
+        /found (\d+) related historical incidents/i // Specific to your console output
+    ];
+    
+    for (var i = 0; i < patterns.length; i++) {
+        var matches = content.match(patterns[i]);
+        if (matches) {
+            return parseInt(matches[1], 10);
+        }
+    }
+    
+    return 0;
 }
 
 function attachApprovalEventListeners(agentType, container, stageConfig) {
@@ -335,23 +454,26 @@ function handleCustomResponse(agentType) {
     }
     
     var customText = textarea.value.trim();
-    debugLogger.debugLog('Custom response for ' + agentType + ': ' + customText);
+    debugLogger.debugLog('✏️ APPROVAL: Custom response for ' + agentType + ': ' + customText);
     
     sendApprovalResponse(agentType, 'custom: ' + customText);
 }
 
 function handleStandardApproval(agentType, value) {
-    debugLogger.debugLog('Standard approval for ' + agentType + ': ' + value);
+    debugLogger.debugLog('✅ APPROVAL: Standard approval for ' + agentType + ': ' + value);
     sendApprovalResponse(agentType, value);
 }
 
 function sendApprovalResponse(agentType, response) {
     if (!awaitingApproval || currentApprovalStage !== agentType) {
-        debugLogger.debugLog('Not awaiting approval for this agent: ' + agentType, 'WARNING');
+        debugLogger.debugLog('⚠️ APPROVAL: Not awaiting approval for this agent: ' + agentType, 'WARNING');
         return;
     }
 
-    debugLogger.debugLog('Sending approval response for ' + agentType + ': ' + response);
+    debugLogger.debugLog('📤 APPROVAL: Sending approval response for ' + agentType + ': ' + response);
+    
+    // ENHANCED: Clear the processed request ID to allow new requests from this agent
+    processedApprovalIds.clear();
     
     // Reset state
     awaitingApproval = false;
@@ -365,7 +487,7 @@ function sendApprovalResponse(agentType, response) {
         target_agent: agentType
     };
     
-    debugLogger.debugLog('Sending approval message: ' + JSON.stringify(approvalMessage));
+    debugLogger.debugLog('📨 APPROVAL: Sending approval message: ' + JSON.stringify(approvalMessage));
     
     if (websocket.sendWebSocketMessage(approvalMessage)) {
         hideAgentApprovalButtons(agentType);
@@ -383,9 +505,9 @@ function sendApprovalResponse(agentType, response) {
         }
         
         ui.showStatus(statusMessage, response === 'reject' ? 'warning' : 'success');
-        debugLogger.debugLog('Approval response sent successfully for: ' + agentType);
+        debugLogger.debugLog('✅ APPROVAL: Approval response sent successfully for: ' + agentType);
     } else {
-        debugLogger.debugLog('Failed to send approval response for: ' + agentType, 'ERROR');
+        debugLogger.debugLog('❌ APPROVAL: Failed to send approval response for: ' + agentType, 'ERROR');
         ui.showStatus('Failed to send response - please try again', 'error');
         // Reset state so user can try again
         awaitingApproval = true;
@@ -396,7 +518,7 @@ function sendApprovalResponse(agentType, response) {
 function hideAgentApprovalButtons(agentType) {
     var approvalSection = document.getElementById(agentType + 'ApprovalSection');
     if (approvalSection) {
-        debugLogger.debugLog('Hiding approval section for: ' + agentType);
+        debugLogger.debugLog('🗑️ APPROVAL: Hiding approval section for: ' + agentType);
         approvalSection.remove();
     }
     
@@ -408,9 +530,15 @@ function hideAgentApprovalButtons(agentType) {
 }
 
 function hideAllApprovalButtons() {
+    debugLogger.debugLog('🗑️ APPROVAL: Hiding all approval buttons');
     Object.keys(APPROVAL_STAGES).forEach(function(agentType) {
         hideAgentApprovalButtons(agentType);
     });
+    
+    // ENHANCED: Clear processed requests when hiding all
+    processedApprovalIds.clear();
+    awaitingApproval = false;
+    currentApprovalStage = null;
 }
 
 function getAwaitingApproval() {
@@ -418,10 +546,12 @@ function getAwaitingApproval() {
 }
 
 function setAwaitingApproval(value) {
-    debugLogger.debugLog('Setting awaiting approval to: ' + value + ' (was: ' + awaitingApproval + ')');
+    debugLogger.debugLog('🔄 APPROVAL: Setting awaiting approval to: ' + value + ' (was: ' + awaitingApproval + ')');
     awaitingApproval = value;
     if (!value) {
         currentApprovalStage = null;
+        // Clear processed requests when not awaiting approval
+        processedApprovalIds.clear();
     }
 }
 
@@ -452,7 +582,7 @@ function rejectAnalysis() {
 
 // Handle approval timeout
 function handleApprovalTimeout(data) {
-    debugLogger.debugLog('Approval timeout received for stage: ' + currentApprovalStage);
+    debugLogger.debugLog('⏰ APPROVAL: Approval timeout received for stage: ' + currentApprovalStage);
     
     if (awaitingApproval && currentApprovalStage) {
         awaitingApproval = false;
@@ -460,7 +590,10 @@ function handleApprovalTimeout(data) {
         currentApprovalStage = null;
         hideAgentApprovalButtons(stage);
         ui.showStatus('Approval timeout for ' + stage + ' - Analysis continuing automatically', 'warning');
-        debugLogger.debugLog('Approval workflow timed out for: ' + stage);
+        debugLogger.debugLog('⏰ APPROVAL: Approval workflow timed out for: ' + stage);
+        
+        // Clear processed requests on timeout
+        processedApprovalIds.clear();
     }
 }
 
@@ -469,8 +602,19 @@ function debugApprovalState() {
     return {
         awaitingApproval: awaitingApproval,
         currentStage: currentApprovalStage,
-        availableStages: Object.keys(APPROVAL_STAGES)
+        availableStages: Object.keys(APPROVAL_STAGES),
+        processedApprovalIds: Array.from(processedApprovalIds),
+        lastApprovalTimestamp: lastApprovalTimestamp
     };
+}
+
+function clearApprovalHistory() {
+    debugLogger.debugLog('🗑️ APPROVAL: Clearing approval history and state');
+    processedApprovalIds.clear();
+    awaitingApproval = false;
+    currentApprovalStage = null;
+    lastApprovalTimestamp = null;
+    hideAllApprovalButtons();
 }
 
 export { 
@@ -486,5 +630,6 @@ export {
     getCurrentApprovalStage,
     showAgentApprovalButtons,
     hideAgentApprovalButtons,
-    debugApprovalState
+    debugApprovalState,
+    clearApprovalHistory
 };

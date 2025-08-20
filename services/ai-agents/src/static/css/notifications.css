@@ -1,4 +1,4 @@
-/* notifications.css - Toast messages and notification system - FIXED VERSION */
+/* notifications.css - Toast messages and notification system - MEDIA QUERY FIXED */
 
 /* Toast Container */
 #toast-container {
@@ -47,7 +47,6 @@
 .toast.info {
     background: linear-gradient(45deg, #071B33, #6B8899); /* VAST Blue Gradient */
 }
-
 
 /* Toast Progress Bar */
 .toast::after {
@@ -369,8 +368,8 @@
     animation: fadeOut 0.3s ease forwards;
 }
 
-/* High Contrast Mode Support */
-@media (prefers-contrast: high) {
+/* High Contrast Mode Support - FIXED MEDIA QUERY */
+@media (prefers-contrast: more) {
     .toast {
         border: 2px solid currentColor;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
