@@ -321,7 +321,7 @@ function updateTriageDisplay(triageData) {
     var triageCard = document.getElementById('triageCard');
     if (triageCard) {
         triageCard.classList.add('active');
-        triageCard.style.borderLeft = getPriorityColor(triageData.priority);
+        // triageCard.style.borderLeft = getPriorityColor(triageData.priority);
     }
 }
 
@@ -342,7 +342,7 @@ function updateContextDisplay(contextData) {
     var contextCard = document.getElementById('contextCard');
     if (contextCard) {
         contextCard.classList.add('active');
-        contextCard.style.borderLeft = '4px solid #4ecdc4';
+        // contextCard.style.borderLeft = '4px solid #4ecdc4';
     }
 }
 
@@ -369,7 +369,7 @@ function updateAnalystDisplay(analystData) {
     var analystCard = document.getElementById('analystCard');
     if (analystCard) {
         analystCard.classList.add('active');
-        analystCard.style.borderLeft = '4px solid #a8e6cf';
+        // analystCard.style.borderLeft = '4px solid #a8e6cf';
     }
 }
 

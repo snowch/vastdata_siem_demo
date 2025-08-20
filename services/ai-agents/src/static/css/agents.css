@@ -108,18 +108,6 @@
 .agent-card[data-status="pending"] {
     opacity: 0.7;
 }
-/* 
-.agent-card[data-status="active"] {
-    border-left: 4px solid var(--light-blue);
-}
-
-.agent-card[data-status="complete"] {
-    border-left: 4px solid var(--primary-green);
-}
-
-.agent-card[data-status="error"] {
-    border-left: 4px solid var(--dark-red);
-} */
 
 .agent-card[data-status="awaiting-approval"] {
     /* border-left: 4px solid var(--dark-yellow); */
