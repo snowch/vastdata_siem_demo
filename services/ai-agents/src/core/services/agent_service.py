@@ -1,6 +1,6 @@
-# services/ai-agents/src/core/services/agent_service.py - COMPLETE FIXED VERSION
+# services/ai-agents/src/core/services/agent_service.py - COMPLETE UPDATED VERSION
 """
-Agent Service with Clean Message Architecture
+Agent Service with Clean Message Architecture and Enhanced Context Approval
 Uses the new message registry for type-safe, structured messaging
 """
 
@@ -26,8 +26,6 @@ from autogen_agentchat.conditions import (
     FunctionCallTermination
 )
 from autogen_core import CancellationToken
-from core.models.analysis import SOCAnalysisResult, PriorityFindings
-# from utils.serialization import sanitize_chroma_results
 from core.models.analysis import SOCAnalysisResult, PriorityFindings, ContextResearchResult
 
 # Import the new message registry
@@ -329,9 +327,8 @@ class WorkflowProgressTracker:
         )
 
 # ============================================================================
-# ENHANCED MESSAGE PROCESSOR
+# ENHANCED MESSAGE PROCESSOR - WITH CONTEXT APPROVAL AUTO-TRIGGER
 # ============================================================================
-
 
 async def _process_clean_streaming_message(
     message,
@@ -339,7 +336,7 @@ async def _process_clean_streaming_message(
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any]
 ):
-    """Process streaming messages using clean architecture - SIMPLIFIED CONTEXT HANDLING"""
+    """Process streaming messages using clean architecture - ENHANCED CONTEXT APPROVAL DETECTION"""
     try:
         if not hasattr(message, 'source') or not hasattr(message, 'content'):
             return
@@ -394,7 +391,7 @@ async def _process_clean_streaming_message(
 
             return  # Don't send as output stream
 
-        # PRIORITY 2: Handle structured context research results (NEW - SIMPLIFIED)
+        # PRIORITY 2: Handle structured context research results - ENHANCED WITH AUTO-APPROVAL
         elif (source == "ContextAgent" and
               isinstance(message, StructuredMessage) and
               isinstance(message.content, ContextResearchResult)):
@@ -409,7 +406,6 @@ async def _process_clean_streaming_message(
 
             agent_logger.info(f"✅ CLEAN ARCH: Structured context research: {context_result.get('total_documents_found')} documents")
 
-            # ** THE FIX IS HERE **
             # Parse the list of JSON strings into a list of dictionaries
             raw_incidents = context_result.get('related_incidents', [])
             parsed_incidents = []
@@ -422,21 +418,45 @@ async def _process_clean_streaming_message(
                     agent_logger.warning(f"Could not parse incident string to JSON: {incident_str}")
                     parsed_incidents.append({"raw_text": incident_str, "parse_error": True})
 
-
             # Send structured context research results
             research_data = {
                 "search_queries": context_result.get('search_queries_executed', []),
                 "total_documents_found": context_result.get('total_documents_found', 0),
-                "relevant_incidents": parsed_incidents, # Use the newly parsed list of dicts
+                "relevant_incidents": parsed_incidents,
                 "pattern_analysis": context_result.get('pattern_analysis', ''),
                 "recommendations": context_result.get('recommended_actions', []),
                 "confidence_assessment": context_result.get('confidence_assessment', 'unknown')
             }
-            # ** END OF FIX **
 
             await sender.send_context_research(research_data)
             await sender.send_agent_status_update("context", "complete", "Context research complete")
             await progress_tracker.update_stage("context_complete")
+
+            # 🚀 NEW: AUTOMATICALLY TRIGGER APPROVAL AFTER STRUCTURED CONTEXT RESULTS
+            # Check if we're not already waiting for approval to prevent spam
+            if not sender._awaiting_approval:
+                agent_logger.info(f"🔄 CLEAN ARCH: Auto-triggering context approval after structured results")
+                sender._awaiting_approval = True
+
+                # Create approval request with context information
+                incidents_count = context_result.get('total_documents_found', 0)
+                pattern_analysis = context_result.get('pattern_analysis', 'Pattern analysis completed')
+                
+                approval_prompt = f"Found {incidents_count} related historical incidents. {pattern_analysis[:100]}... Are these insights relevant for the current threat analysis?"
+
+                await sender.send_approval_request(
+                    stage="context",
+                    prompt=approval_prompt,
+                    context={
+                        "source": source, 
+                        "timestamp": datetime.now().isoformat(),
+                        "incidents_found": incidents_count,
+                        "pattern_analysis": pattern_analysis,
+                        "auto_triggered": True
+                    }
+                )
+                
+                agent_logger.info(f"✅ CLEAN ARCH: Context approval request auto-triggered")
 
             return  # Don't send as output stream
 
@@ -465,7 +485,7 @@ async def _process_clean_streaming_message(
             return  # Don't send as output stream
 
         # ====================================================================
-        # APPROVAL REQUEST PROCESSING (prevent duplicates)
+        # ENHANCED APPROVAL REQUEST PROCESSING - IMPROVED CONTEXT DETECTION
         # ====================================================================
 
         elif isinstance(message, UserInputRequestedEvent):
@@ -484,6 +504,39 @@ async def _process_clean_streaming_message(
                 stage=stage,
                 prompt=getattr(message, 'content', 'Approval required'),
                 context={"source": source, "timestamp": datetime.now().isoformat()}
+            )
+
+            return  # Don't send as output stream
+
+        # ====================================================================
+        # ENHANCED: DETECT CONTEXT AGENT APPROVAL REQUESTS IN TEXT MESSAGES
+        # ====================================================================
+
+        # Enhanced detection for context agent approval requests in regular text messages
+        elif (source == "ContextAgent" and 
+              isinstance(message, TextMessage) and
+              _is_context_approval_request(content)):
+
+            # Check if we're already waiting for approval to prevent spam
+            if sender._awaiting_approval:
+                agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate context approval request")
+                return
+
+            agent_logger.info(f"👤 CLEAN ARCH: Context agent approval request detected in text message")
+            sender._awaiting_approval = True
+
+            # Extract context from the message for better prompt
+            context_info = _extract_context_info(content)
+            
+            await sender.send_approval_request(
+                stage="context",
+                prompt=context_info.get('prompt', 'Are these historical insights relevant for the current threat analysis?'),
+                context={
+                    "source": source, 
+                    "timestamp": datetime.now().isoformat(),
+                    "incidents_found": context_info.get('incidents_found', 0),
+                    "pattern_analysis": context_info.get('pattern_analysis', '')
+                }
             )
 
             return  # Don't send as output stream
@@ -513,7 +566,7 @@ async def _process_clean_streaming_message(
         if ('FunctionCall(' in content or
             'report_priority_findings' in content or
             'report_detailed_analysis' in content or
-            'analyze_historical_incidents' in content):  # Updated function name
+            'analyze_historical_incidents' in content):
 
             agent_type = _determine_agent_type_from_source(source)
             function_name = _extract_function_name(content)
@@ -550,11 +603,8 @@ async def _process_clean_streaming_message(
                 )
 
         # ====================================================================
-        # LEGACY TOOL OUTPUT PARSING (REMOVED FOR CONTEXT)
+        # LEGACY TOOL OUTPUT PARSING (for analyst only)
         # ====================================================================
-
-        # REMOVED: Complex context parsing logic since ContextAgent now returns structured objects
-        # The context agent tool output parsing has been eliminated
 
         # Still handle analyst tool outputs for detailed analysis
         await _parse_analyst_tool_outputs(message, final_results, sender)
@@ -564,6 +614,74 @@ async def _process_clean_streaming_message(
         agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         await sender.send_error(f"Message processing error: {str(e)}")
 
+# ============================================================================
+# ENHANCED HELPER FUNCTIONS FOR CONTEXT APPROVAL DETECTION
+# ============================================================================
+
+def _is_context_approval_request(content: str) -> bool:
+    """Enhanced detection for context agent approval requests"""
+    content_lower = content.lower()
+    
+    # Look for specific phrases that indicate context approval request
+    approval_indicators = [
+        "context validation required",
+        "🔍 context validation required",
+        "historical insights relevant",
+        "should we proceed with deep security analysis",
+        "proceed with deep analysis using this context",
+        "are these insights relevant",
+        "multistageapprovalagent:",  # Look for direct agent mentions
+        "should we proceed",
+        "based on my analysis of",
+        "are these insights relevant for the current threat analysis"
+    ]
+    
+    # Check if content contains approval indicators
+    has_approval_indicator = any(indicator in content_lower for indicator in approval_indicators)
+    
+    # Also check for question marks and context-related terms
+    has_question = "?" in content
+    has_context_terms = any(term in content_lower for term in [
+        "historical", "context", "incidents", "pattern", "analysis"
+    ])
+    
+    # Check for agent addressing pattern
+    has_agent_address = "multistageapprovalagent:" in content_lower
+    
+    result = has_approval_indicator or has_agent_address or (has_question and has_context_terms)
+    
+    if result:
+        agent_logger.info(f"✅ Context approval request detected in content")
+    
+    return result
+
+def _extract_context_info(content: str) -> Dict[str, Any]:
+    """Extract context information from approval request content"""
+    context_info = {
+        'prompt': 'Are these historical insights relevant for the current threat analysis?',
+        'incidents_found': 0,
+        'pattern_analysis': ''
+    }
+    
+    # Try to extract number of incidents
+    import re
+    incidents_match = re.search(r'analyzed (\d+) historical', content, re.IGNORECASE)
+    if not incidents_match:
+        incidents_match = re.search(r'analysis of (\d+) historical', content, re.IGNORECASE)
+    if not incidents_match:
+        incidents_match = re.search(r'found (\d+) related', content, re.IGNORECASE)
+    
+    if incidents_match:
+        context_info['incidents_found'] = int(incidents_match.group(1))
+        context_info['prompt'] = f"Found {context_info['incidents_found']} related historical incidents. Are these insights relevant for the current threat analysis?"
+    
+    # Extract pattern information
+    if 'pattern' in content.lower():
+        pattern_start = content.lower().find('pattern')
+        pattern_excerpt = content[max(0, pattern_start-20):pattern_start+100]
+        context_info['pattern_analysis'] = pattern_excerpt.strip()
+    
+    return context_info
 
 def _determine_agent_type_from_source(source: str) -> Optional[str]:
     """Determine agent type from message source"""
@@ -608,8 +726,8 @@ def _extract_function_name(content: str) -> str:
         return 'report_priority_findings'
     elif 'report_detailed_analysis' in content:
         return 'report_detailed_analysis'
-    elif 'search_historical_incidents' in content:
-        return 'search_historical_incidents'
+    elif 'analyze_historical_incidents' in content:
+        return 'analyze_historical_incidents'
     elif 'FunctionCall(' in content:
         # Try to extract function name from FunctionCall
         try:
@@ -634,7 +752,6 @@ def _is_system_message(content: str) -> bool:
 
     return any(indicator in content for indicator in system_indicators)
 
-
 async def _parse_analyst_tool_outputs(message, final_results: Dict, sender: CleanMessageSender):
     """Parse tool outputs from analyst agent only - context parsing removed"""
     content = str(message.content)
@@ -655,60 +772,73 @@ async def _parse_analyst_tool_outputs(message, final_results: Dict, sender: Clea
     except Exception as e:
         agent_logger.error(f"❌ CLEAN ARCH: Error parsing analyst tool outputs: {e}")
 
-def _extract_function_name(content: str) -> str:
-    """Extract function name from content - updated for new context function"""
-    if 'report_priority_findings' in content:
-        return 'report_priority_findings'
-    elif 'report_detailed_analysis' in content:
-        return 'report_detailed_analysis'
-    elif 'analyze_historical_incidents' in content:  # Updated function name
-        return 'analyze_historical_incidents'
-    elif 'FunctionCall(' in content:
-        # Try to extract function name from FunctionCall
-        try:
-            start = content.find('FunctionCall(') + len('FunctionCall(')
-            end = content.find(',', start)
-            if end == -1:
-                end = content.find(')', start)
-            return content[start:end].strip().strip('"\'')
-        except:
-            return 'unknown_function'
-
-    return 'unknown_function'
-
 # ============================================================================
-# TEAM CREATION WITH FIXED TERMINATION
+# TEAM CREATION - MULTIPLE APPROVAL AGENTS FOR PROPER WORKFLOW
 # ============================================================================
 
 async def _create_soc_team(
     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
 ):
-    """Create SOC team with proper termination conditions"""
+    """Create SOC team with multiple approval agents for proper multi-stage workflow"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
 
     # Create agents
     triage_agent = TriageAgent(model_client)
-
-    # Single approval agent that handles all stages
-    approval_agent = UserProxyAgent(
-        name="MultiStageApprovalAgent",
-        input_func=user_input_func
-    )
-
     context_agent = ContextAgent(model_client)
     analyst_agent = AnalystAgent(model_client)
 
-    # FIXED: More specific termination conditions
+    # Create multiple approval agents for different stages
+    triage_approval_agent = UserProxyAgent(
+        name="TriageApprovalAgent",
+        input_func=user_input_func
+    )
+    
+    context_approval_agent = UserProxyAgent(
+        name="ContextApprovalAgent", 
+        input_func=user_input_func
+    )
+    
+    analyst_approval_agent = UserProxyAgent(
+        name="AnalystApprovalAgent",
+        input_func=user_input_func
+    )
 
+    # FIXED: Proper agent order for multi-stage approval workflow
+    # Order: triage → triage_approval → context → context_approval → analyst → analyst_approval
+    team = RoundRobinGroupChat(
+        [
+            triage_agent,           # 1. Analyze threats
+            triage_approval_agent,  # 2. Approve investigation  
+            context_agent,          # 3. Research historical context
+            context_approval_agent, # 4. Approve context relevance
+            analyst_agent,          # 5. Deep analysis
+            analyst_approval_agent  # 6. Approve recommendations
+        ],
+        termination_condition=_create_termination_conditions(),
+        custom_message_types=[
+            StructuredMessage[PriorityFindings],
+            StructuredMessage[SOCAnalysisResult],
+            StructuredMessage[ContextResearchResult]
+        ],
+    )
+
+    agent_logger.info("SOC team created with multi-stage approval workflow")
+    return team, model_client
+
+def _create_termination_conditions():
+    """Create comprehensive termination conditions for multi-stage workflow"""
+    
     # Normal completion when analyst finishes with specific phrase
     normal_completion = (
         SourceMatchTermination("SeniorAnalyst") &
         TextMentionTermination("ANALYSIS_COMPLETE - Senior SOC investigation finished")
     )
 
-    # Rejection termination
+    # Rejection termination from any approval agent
     rejection_termination = (
-        SourceMatchTermination("MultiStageApprovalAgent") &
+        (SourceMatchTermination("TriageApprovalAgent") |
+         SourceMatchTermination("ContextApprovalAgent") |
+         SourceMatchTermination("AnalystApprovalAgent")) &
         TextMentionTermination("WORKFLOW_REJECTED")
     )
 
@@ -718,12 +848,12 @@ async def _create_soc_team(
         FunctionCallTermination("report_detailed_analysis")
     )
 
-    # Backup termination conditions - REDUCED limits
-    max_messages = MaxMessageTermination(30)  # REDUCED from 50
-    token_limit = TokenUsageTermination(max_total_token=60000)  # REDUCED from 80000
-    timeout = TimeoutTermination(timeout_seconds=600)  # REDUCED from 900 (10 minutes)
+    # Backup termination conditions - INCREASED limits for multi-stage workflow
+    max_messages = MaxMessageTermination(60)  # Increased for more agents
+    token_limit = TokenUsageTermination(max_total_token=90000)  # Increased for more conversation
+    timeout = TimeoutTermination(timeout_seconds=1200)  # 20 minutes for multi-stage
 
-    # FIXED: Combined termination - should stop after analyst function call OR normal completion
+    # Combined termination
     termination = (
         function_completion |
         normal_completion |
@@ -732,21 +862,8 @@ async def _create_soc_team(
         token_limit |
         timeout
     )
-
-    # Create team
-    team = RoundRobinGroupChat(
-        [triage_agent, approval_agent, context_agent, analyst_agent],
-        termination_condition=termination,
-        custom_message_types=[
-            StructuredMessage[PriorityFindings],
-            StructuredMessage[SOCAnalysisResult],
-            StructuredMessage[ContextResearchResult]
-        ],
-    )
-
-    agent_logger.info("SOC team created with improved termination conditions")
-
-    return team, model_client
+    
+    return termination
 
 # ============================================================================
 # MAIN WORKFLOW FUNCTION
@@ -759,7 +876,7 @@ async def run_analysis_workflow(
     message_callback: Optional[Callable] = None
 ) -> bool:
     """
-    Execute SOC analysis workflow using clean message architecture
+    Execute SOC analysis workflow using clean message architecture with enhanced context approval
     """
     agent_logger.info(f"🚀 CLEAN ARCH: Starting SOC analysis workflow for session {session_id}")
 
@@ -770,7 +887,7 @@ async def run_analysis_workflow(
     # Initialize results tracking
     final_results = {
         'priority_findings': None,
-        'chroma_context': {},
+        'context_research': None,
         'detailed_analysis': None,
         'structured_result': None,
         'was_rejected': False,
@@ -834,36 +951,36 @@ async def run_analysis_workflow(
         team, model_client = await _create_soc_team(user_input_func=_user_input_func)
 
         # Create the enhanced analysis task
-        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE
+        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE AND MULTI-STAGE APPROVAL
 
 Please analyze these OCSF security log events for threats requiring immediate attention:
 
 {log_batch}
 
-MULTI-STAGE WORKFLOW:
+MULTI-STAGE WORKFLOW WITH DEDICATED APPROVAL AGENTS:
 1. **TRIAGE STAGE**: TriageSpecialist performs initial threat identification
-   - After findings: Request approval with clear threat summary
+   - After findings: TriageApprovalAgent handles approval for investigation
    - Wait for user decision on investigation
 
 2. **CONTEXT STAGE**: ContextAgent searches historical incidents (if approved)
-   - After research: Request validation with historical findings summary
+   - After research: ContextApprovalAgent handles validation of historical findings
    - Wait for user validation of context relevance
 
 3. **ANALYSIS STAGE**: SeniorAnalyst performs deep analysis (if context approved)
-   - After recommendations: Request authorization for proposed actions
+   - After recommendations: AnalystApprovalAgent handles authorization for proposed actions
    - Wait for user authorization of recommended actions
 
 4. **COMPLETION**: When complete, end with specific completion phrase
 
 APPROVAL POINTS:
-- Each stage MUST request human approval before proceeding
+- Each stage has dedicated approval agent
 - Provide clear, specific information for decision-making
-- Wait for explicit approval before continuing
+- Wait for explicit approval before continuing to next agent
 - Handle custom instructions and modifications
 
-TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, request approval to proceed with the investigation."""
+TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, wait for TriageApprovalAgent to handle the approval process."""
 
-        agent_logger.info(f"Starting clean architecture team execution for session {session_id}")
+        agent_logger.info(f"Starting multi-stage approval team execution for session {session_id}")
 
         # Use run_stream for real-time message processing
         stream = team.run_stream(task=task, cancellation_token=CancellationToken())
@@ -890,7 +1007,7 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                 success=success,
                 results_summary={
                     "has_priority_findings": final_results.get('priority_findings') is not None,
-                    "has_context_data": bool(final_results.get('chroma_context')),
+                    "has_context_data": final_results.get('context_research') is not None,
                     "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
                     "was_rejected": final_results.get('was_rejected', False)
                 },

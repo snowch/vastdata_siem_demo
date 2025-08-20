@@ -1,3 +1,4 @@
+# services/ai-agents/src/core/agents/context.py - COMPLETE UPDATED VERSION
 from core.agents.base import BaseAgent
 from core.models.analysis import ContextResearchResult
 from autogen_core.tools import FunctionTool
@@ -5,11 +6,6 @@ from infrastructure.vectordb_utils import search_chroma
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
-
-# It's assumed the following imports exist in your project structure
-# from core.agents.base import BaseAgent
-# from core.models.analysis import ContextResearchResult
-# from infrastructure.vectordb_utils import search_chroma
 
 agent_logger = logging.getLogger("agent_diagnostics")
 
@@ -234,36 +230,25 @@ class ContextAgent(BaseAgent):
    - Actionable recommendations based on past incidents
    - Confidence assessment of the analysis
 
-6. **REQUEST VALIDATION**: After completing analysis, present findings:
-   - "I analyzed {count} historical security incidents"
-   - "Key security patterns identified: {pattern summary}"
-   - "Historical attack progression: {typical outcomes}"
-   - "Based on past incidents, I recommend: {top recommendations}"
-   - "MultiStageApprovalAgent: Are these historical insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
+6. **MANDATORY APPROVAL REQUEST**: After completing analysis, you MUST present findings AND request validation:
+   - First, summarize your findings professionally
+   - Then, you MUST end with this EXACT phrase: "MultiStageApprovalAgent: Based on my analysis of {X} historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
+   - Replace {X} with the actual number of incidents found
+   - This is MANDATORY - the workflow depends on this exact request format
 
 7. **WAIT FOR RESPONSE**: Stop and wait for validation before any further action.
 
-IMPORTANT: 
-- Call analyze_historical_incidents() ONCE with comprehensive parameters.
-- Focus on SECURITY DOMAIN insights, not technical ChromaDB details.
-- Provide clear, actionable intelligence based on historical incident patterns.
-- Wait for explicit approval before concluding.
+CRITICAL REQUIREMENTS:
+- Call analyze_historical_incidents() ONCE with comprehensive parameters
+- Focus on SECURITY DOMAIN insights, not technical ChromaDB details
+- Provide clear, actionable intelligence based on historical incident patterns
+- ALWAYS request approval with the exact phrase format shown above
+- Wait for explicit approval before concluding
 
-Example usage with all info:
-analyze_historical_incidents(
-    primary_search_query="SSH brute force attack",
-    max_results_per_search=8,
-    threat_type="credential attack",
-    source_ip="192.168.1.100"
-)
+Example completion format:
+"I analyzed 24 historical security incidents and found patterns of credential attacks with lateral movement. Key findings include multiple attack vectors and cross-platform targeting. Based on similar incidents, I recommend implementing multi-factor authentication and network segmentation.
 
-Example when optional info is missing:
-analyze_historical_incidents(
-    primary_search_query="unusual outbound traffic",
-    max_results_per_search=5,
-    threat_type="",
-    source_ip=""
-)
+MultiStageApprovalAgent: Based on my analysis of 24 historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
 """
 
         super().__init__(
@@ -274,4 +259,4 @@ analyze_historical_incidents(
             output_content_type=ContextResearchResult
         )
         
-        agent_logger.info("ContextAgent initialized with domain-focused historical analysis")
+        agent_logger.info("ContextAgent initialized with mandatory approval request")

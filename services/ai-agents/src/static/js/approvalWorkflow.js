@@ -1,4 +1,5 @@
-// Enhanced approvalWorkflow.js with improved layout - buttons at bottom
+// services/ai-agents/src/static/js/approvalWorkflow.js - COMPLETE UPDATED VERSION
+// Enhanced approval workflow with improved context detection and multi-stage support
 
 import * as debugLogger from './debugLogger.js';
 import * as ui from './ui.js';
@@ -20,12 +21,13 @@ const APPROVAL_STAGES = {
     },
     'context': {
         title: 'Historical Context Validation',
-        prompt: 'Are these historical incidents relevant to the current analysis?',
+        prompt: 'Are these historical insights relevant for the current analysis?',
         buttons: [
             { text: '✅ Relevant context, proceed to analysis', value: 'approve', class: 'btn-approve' },
             { text: '❌ Not relevant, skip context', value: 'reject', class: 'btn-reject' },
             { text: '✏️ Provide different context', value: 'custom', class: 'btn-custom' }
-        ]
+        ],
+        allowCustomInput: true
     },
     'analyst': {
         title: 'Action Authorization',
@@ -72,29 +74,76 @@ function handleApprovalRequest(data) {
 }
 
 function determineRequestingAgent(data) {
-    // Try to determine which agent is requesting approval
+    // ENHANCED: Better detection for context agent approval requests
     var content = data.content || '';
     var source = data.source || '';
+    var stage = data.stage || '';
     
-    // Check source first
+    debugLogger.debugLog('Determining requesting agent from stage: "' + stage + '", source: "' + source + '" and content snippet: "' + content.substring(0, 100) + '..."');
+    
+    // First check the stage field from the message (most reliable)
+    if (stage && APPROVAL_STAGES[stage]) {
+        debugLogger.debugLog('Detected agent from stage field: ' + stage);
+        return stage;
+    }
+    
+    // Check source next
     if (source.includes('Triage') || source.includes('triage')) {
+        debugLogger.debugLog('Detected triage agent from source');
         return 'triage';
     } else if (source.includes('Context') || source.includes('context')) {
+        debugLogger.debugLog('Detected context agent from source');
         return 'context';
-    } else if (source.includes('Analyst') || source.includes('analyst')) {
+    } else if (source.includes('Analyst') || source.includes('analyst') || source.includes('Senior')) {
+        debugLogger.debugLog('Detected analyst agent from source');
         return 'analyst';
     }
     
-    // Fallback to content analysis
-    if (content.toLowerCase().includes('triage') || content.toLowerCase().includes('priority threat')) {
+    // ENHANCED: Better content analysis for context agent
+    var contentLower = content.toLowerCase();
+    
+    // Context agent specific indicators (more specific patterns)
+    if (contentLower.includes('context validation required') || 
+        contentLower.includes('🔍 context validation required') ||
+        contentLower.includes('historical insights relevant') ||
+        contentLower.includes('should we proceed with deep security analysis') ||
+        contentLower.includes('context research') ||
+        contentLower.includes('found') && contentLower.includes('historical incidents') ||
+        (contentLower.includes('historical') && contentLower.includes('incidents')) ||
+        (contentLower.includes('pattern') && contentLower.includes('analysis')) ||
+        contentLower.includes('proceed with deep analysis') ||
+        contentLower.includes('auto_triggered')) {
+        debugLogger.debugLog('Detected context agent from content indicators');
+        return 'context';
+    }
+    
+    // Triage agent indicators
+    if (contentLower.includes('priority threat') || 
+        contentLower.includes('investigate this') || 
+        contentLower.includes('brute force') || 
+        contentLower.includes('attack detected') ||
+        contentLower.includes('proceed with investigating') || 
+        contentLower.includes('high priority') || 
+        contentLower.includes('critical threat')) {
+        debugLogger.debugLog('Detected triage agent from content indicators');
         return 'triage';
-    } else if (content.toLowerCase().includes('historical') || content.toLowerCase().includes('context')) {
-        return 'context';
-    } else if (content.toLowerCase().includes('recommend') || content.toLowerCase().includes('action')) {
+    }
+    
+    // Analyst agent indicators
+    if (contentLower.includes('recommend') || 
+        contentLower.includes('action') || 
+        contentLower.includes('authorize') || 
+        contentLower.includes('recommendations') || 
+        contentLower.includes('implement') ||
+        contentLower.includes('block ip') || 
+        contentLower.includes('reset passwords') || 
+        contentLower.includes('remediation') || 
+        contentLower.includes('containment')) {
+        debugLogger.debugLog('Detected analyst agent from content indicators');
         return 'analyst';
     }
     
-    // Default to triage if can't determine
+    debugLogger.debugLog('Could not determine agent type, defaulting to triage');
     return 'triage';
 }
 
@@ -113,11 +162,31 @@ function showAgentApprovalButtons(agentType, requestData) {
     // Create approval section container
     var approvalSection = document.createElement('div');
     approvalSection.id = agentType + 'ApprovalSection';
-    approvalSection.className = 'approval-section';
+    approvalSection.className = 'approval-section stage-' + agentType;
+    
+    // ENHANCED: Better prompts based on agent type and context
+    var customPrompt = stageConfig.prompt;
+    if (agentType === 'context' && requestData) {
+        // Extract key information from context for better prompt
+        var context = requestData.context || {};
+        var content = requestData.content || requestData.prompt || '';
+        
+        if (context.incidents_found || content.includes('incidents')) {
+            var incidentCount = context.incidents_found || extractIncidentCount(content);
+            if (incidentCount > 0) {
+                customPrompt = 'Found ' + incidentCount + ' related historical incidents. Are these insights relevant for the current threat analysis?';
+            }
+        }
+        
+        // Use the prompt from the request if available
+        if (requestData.prompt && requestData.prompt.trim()) {
+            customPrompt = requestData.prompt;
+        }
+    }
     
     var buttonsHtml = '<div class="approval-prompt">' + 
         '<h4>' + stageConfig.title + '</h4>' +
-        '<p>' + stageConfig.prompt + '</p>' +
+        '<p>' + customPrompt + '</p>' +
         '</div>' +
         '<div class="button-group">';
     
@@ -126,7 +195,8 @@ function showAgentApprovalButtons(agentType, requestData) {
         buttonsHtml += '<button class="btn ' + button.class + '" ' +
             'data-agent="' + agentType + '" ' +
             'data-value="' + button.value + '" ' +
-            'data-index="' + index + '">' +
+            'data-index="' + index + '" ' +
+            'tabindex="0">' +
             button.text + '</button>';
     });
     
@@ -168,7 +238,23 @@ function showAgentApprovalButtons(agentType, requestData) {
     // Add visual feedback
     agentCard.classList.add('approval-active');
     
+    // ENHANCED: Auto-focus on first button for better accessibility
+    setTimeout(function() {
+        var firstButton = approvalSection.querySelector('.btn');
+        if (firstButton) {
+            firstButton.focus();
+        }
+    }, 100);
+    
     debugLogger.debugLog('Approval section created for agent: ' + agentType);
+}
+
+function extractIncidentCount(content) {
+    // Try to extract number from content like "Found 24 related historical incidents"
+    var matches = content.match(/found (\d+) related/i) || 
+                  content.match(/(\d+) historical incidents/i) ||
+                  content.match(/analysis of (\d+) historical/i);
+    return matches ? parseInt(matches[1], 10) : 0;
 }
 
 function attachApprovalEventListeners(agentType, container, stageConfig) {
@@ -188,6 +274,34 @@ function attachApprovalEventListeners(agentType, container, stageConfig) {
                 handleStandardApproval(agentType, value);
             }
         });
+    });
+    
+    // Handle keyboard navigation within approval section
+    container.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            // Let default tab behavior work
+            return;
+        }
+        
+        if (e.key === 'Enter' && e.target.classList.contains('btn')) {
+            e.preventDefault();
+            e.target.click();
+        }
+        
+        // Quick approval shortcuts
+        if (e.key === '1' || (e.key === 'Enter' && !e.target.classList.contains('btn'))) {
+            e.preventDefault();
+            var firstButton = container.querySelector('.btn[data-value="approve"]');
+            if (firstButton) firstButton.click();
+        } else if (e.key === '2' || (e.key === 'Escape' && !e.target.classList.contains('btn'))) {
+            e.preventDefault();
+            var secondButton = container.querySelector('.btn[data-value="reject"]');
+            if (secondButton) secondButton.click();
+        } else if (e.key === '3') {
+            e.preventDefault();
+            var thirdButton = container.querySelector('.btn[data-value="custom"]');
+            if (thirdButton) thirdButton.click();
+        }
     });
 }
 
@@ -350,6 +464,15 @@ function handleApprovalTimeout(data) {
     }
 }
 
+// ENHANCED: Export additional functions for debugging
+function debugApprovalState() {
+    return {
+        awaitingApproval: awaitingApproval,
+        currentStage: currentApprovalStage,
+        availableStages: Object.keys(APPROVAL_STAGES)
+    };
+}
+
 export { 
     handleApprovalRequest, 
     handleApprovalTimeout, 
@@ -362,5 +485,6 @@ export {
     setAwaitingApproval,
     getCurrentApprovalStage,
     showAgentApprovalButtons,
-    hideAgentApprovalButtons
+    hideAgentApprovalButtons,
+    debugApprovalState
 };
