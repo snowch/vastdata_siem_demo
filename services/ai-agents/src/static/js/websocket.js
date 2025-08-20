@@ -68,11 +68,39 @@ function validateMessageType(messageType) {
 
 function getMessageCategory(messageType) {
     // Get the category for a message type
+    
+    // Handle core control messages even before types are advertised
+    const coreControlTypes = [
+        'connection_established', 
+        'message_types_advertisement', 
+        'error', 
+        'logs_retrieved', 
+        'ping', 
+        'pong'
+    ];
+    
+    if (coreControlTypes.includes(messageType)) {
+        return 'control';
+    }
+    
+    // Handle core interaction types
+    const coreInteractionTypes = [
+        'approval_request',
+        'approval_response', 
+        'approval_timeout'
+    ];
+    
+    if (coreInteractionTypes.includes(messageType)) {
+        return 'interaction';
+    }
+    
+    // Check against advertised types if available
     for (const [category, types] of Object.entries(supportedMessageTypes)) {
         if (category !== 'all_types' && types.includes(messageType)) {
             return category;
         }
     }
+    
     return 'unknown';
 }
 
@@ -325,12 +353,11 @@ function handleUnknownMessage(data) {
     // Handle messages with unknown categories
     debugLogger.debugLog('❓ CLEAN ARCH: Unknown message category for type: ' + data.type, 'WARNING');
     
-    // Try to handle as legacy message for backward compatibility
-    if (handleLegacyMessage && typeof handleLegacyMessage === 'function') {
-        handleLegacyMessage(data);
-    } else {
-        ui.showStatus('⚠️ Received unknown message type: ' + data.type, 'warning');
-    }
+    // Log the message details for debugging
+    console.log('❓ CLEAN ARCH: Unknown message details:', data);
+    
+    // Show warning to user
+    ui.showStatus('⚠️ Received unknown message type: ' + data.type, 'warning');
 }
 
 // ============================================================================
