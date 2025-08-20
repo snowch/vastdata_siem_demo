@@ -33,7 +33,7 @@
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
-    border-left: 4px solid #667eea;
+    border-left: 4px solid var(--light-blue);
     transition: var(--transition-fast);
     position: relative;
     overflow: hidden;
@@ -62,36 +62,37 @@
 
 /* Finding Card Types */
 .finding-card.threat {
-    border-left-color: #ff416c;
+    border-left-color: var(--dark-red);
 }
 
 .finding-card.threat h4 {
-    color: #c0392b;
+    color: var(--dark-red);
 }
 
 .finding-card.context {
-    border-left-color: #4ecdc4;
+    border-left-color: var(--light-blue);
 }
 
 .finding-card.context h4 {
-    color: #2c6e6a;
+    color: var(--light-blue);
 }
 
 .finding-card.analysis {
-    border-left-color: #a8e6cf;
+    border-left-color: var(--primary-green);
 }
 
 .finding-card.analysis h4 {
-    color: #2d5a3d;
+    color: var(--primary-green);
 }
 
 .finding-card.recommendation {
-    border-left-color: #667eea;
+    border-left-color: var(--jade-green);
 }
 
 .finding-card.recommendation h4 {
-    color: #4a5fc1;
+    color: var(--jade-green);
 }
+
 
 /* Priority Levels in Findings */
 .finding-priority {
@@ -132,7 +133,7 @@
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
     margin-bottom: var(--spacing-xl);
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(128, 201, 213, 0.2);
 }
 
 .findings-summary h4 {
