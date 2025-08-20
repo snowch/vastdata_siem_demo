@@ -1,5 +1,5 @@
-# services/ai-agents/src/core/services/agent_service.py - FOURTH UPDATE
-# Remove progress parameter requirement - simplify function signature
+# services/ai-agents/src/core/services/agent_service.py - DEBUG VERSION
+# Add extensive logging to debug callback issues
 
 import json
 import logging
@@ -95,21 +95,150 @@ async def _process_streaming_message(
     session_id: str,
     final_results: Dict[str, Any]
 ):
-    """Process a streaming message and send real-time updates"""
+    """Process a streaming message and send real-time updates - DEBUG VERSION"""
     try:
         if hasattr(message, 'source') and hasattr(message, 'content'):
             source = message.source
             content = str(message.content)
             
             agent_logger.debug(f"Processing streaming message from {source}: Type={type(message).__name__}")
+            agent_logger.debug(f"Message callback available: {message_callback is not None}")
             
-            # Send to real-time callback if available
+            # PRIORITY 1: Handle structured output from triage agent
+            if (source == "TriageSpecialist" and 
+                isinstance(message, StructuredMessage) and
+                isinstance(message.content, PriorityFindings)):
+                
+                # Store structured findings
+                priority_findings = message.content.model_dump()
+                final_results['priority_findings'] = priority_findings
+                agent_logger.info(f"✅ STRUCTURED TRIAGE: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
+                
+                # Send priority findings update via callback - DEBUG VERSION
+                if message_callback:
+                    try:
+                        agent_logger.info(f"🚀 ATTEMPTING to send priority_findings_update via callback for session {session_id}")
+                        
+                        callback_data = {
+                            'type': 'priority_findings_update',
+                            'data': priority_findings,
+                            'session_id': session_id
+                        }
+                        
+                        agent_logger.info(f"📤 Callback data prepared: type={callback_data['type']}, session={session_id}")
+                        agent_logger.debug(f"📋 Full callback data: {json.dumps(callback_data, indent=2)}")
+                        
+                        await message_callback(callback_data)
+                        
+                        agent_logger.info(f"✅ SUCCESSFULLY SENT priority_findings_update for session {session_id}")
+                        
+                    except Exception as e:
+                        agent_logger.error(f"❌ ERROR sending priority_findings_update: {e}")
+                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+                else:
+                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send priority_findings_update")
+                
+                # EARLY RETURN: Don't send this as real_time_agent_output since we sent structured version
+                agent_logger.debug(f"⏭️ Early return for structured triage message - session {session_id}")
+                return
+            
+            # PRIORITY 2: Handle structured results from analyst
+            elif (source == "SeniorAnalyst" and 
+                  isinstance(message, StructuredMessage) and
+                  isinstance(message.content, SOCAnalysisResult)):
+                
+                final_results['structured_result'] = message.content.model_dump()
+                agent_logger.info(f"✅ STRUCTURED ANALYST: Analysis complete")
+                
+                # Send structured analysis results
+                if message_callback:
+                    try:
+                        agent_logger.info(f"🚀 ATTEMPTING to send detailed_analysis_update via callback for session {session_id}")
+                        
+                        await message_callback({
+                            'type': 'detailed_analysis_update',
+                            'data': message.content.model_dump(),
+                            'session_id': session_id
+                        })
+                        
+                        agent_logger.info(f"✅ SUCCESSFULLY SENT detailed_analysis_update for session {session_id}")
+                        
+                    except Exception as e:
+                        agent_logger.error(f"❌ ERROR sending detailed_analysis_update: {e}")
+                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+                else:
+                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send detailed_analysis_update")
+                
+                # EARLY RETURN: Don't send this as real_time_agent_output since we sent structured version
+                agent_logger.debug(f"⏭️ Early return for structured analyst message - session {session_id}")
+                return
+            
+            # PRIORITY 3: Handle approval requests
+            elif isinstance(message, UserInputRequestedEvent):
+                agent_logger.info(f"👤 APPROVAL REQUEST: session {session_id}")
+                
+                if message_callback:
+                    try:
+                        agent_logger.info(f"🚀 ATTEMPTING to send UserInputRequestedEvent via callback for session {session_id}")
+                        
+                        await message_callback({
+                            'type': 'UserInputRequestedEvent',
+                            'content': getattr(message, 'content', 'Approval required'),
+                            'source': source,
+                            'session_id': session_id
+                        })
+                        
+                        agent_logger.info(f"✅ SUCCESSFULLY SENT UserInputRequestedEvent for session {session_id}")
+                        
+                    except Exception as e:
+                        agent_logger.error(f"❌ ERROR sending UserInputRequestedEvent: {e}")
+                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+                else:
+                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send UserInputRequestedEvent")
+                
+                # EARLY RETURN: Don't send approval requests as real_time_agent_output
+                agent_logger.debug(f"⏭️ Early return for approval request - session {session_id}")
+                return
+            
+            # PRIORITY 4: Handle workflow rejection
+            elif (source == "MultiStageApprovalAgent" and 
+                  ("WORKFLOW_REJECTED" in content or 
+                   ("REJECTED" in content and "human operator" in content))):
+                
+                final_results['was_rejected'] = True
+                agent_logger.info(f"❌ WORKFLOW REJECTED: session {session_id}")
+                
+                if message_callback:
+                    try:
+                        agent_logger.info(f"🚀 ATTEMPTING to send workflow_rejected via callback for session {session_id}")
+                        
+                        await message_callback({
+                            'type': 'workflow_rejected',
+                            'content': 'Analysis workflow was rejected by user',
+                            'session_id': session_id
+                        })
+                        
+                        agent_logger.info(f"✅ SUCCESSFULLY SENT workflow_rejected for session {session_id}")
+                        
+                    except Exception as e:
+                        agent_logger.error(f"❌ ERROR sending workflow_rejected: {e}")
+                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+                else:
+                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send workflow_rejected")
+                
+                # EARLY RETURN: Don't send rejection as real_time_agent_output
+                agent_logger.debug(f"⏭️ Early return for workflow rejection - session {session_id}")
+                return
+            
+            # DEFAULT: Send ALL OTHER messages as real_time_agent_output
+            # This includes triage intermediate work, context outputs, analyst work, etc.
             if (message_callback and 
-                source not in ['user', 'system'] and 
-                not isinstance(message, UserInputRequestedEvent)):
+                source not in ['user', 'system']):
                 try:
                     agent_type = determine_agent_type(source)
                     if agent_type:
+                        agent_logger.debug(f"💬 SENDING real_time_agent_output: {agent_type} - {content[:50]}...")
+                        
                         await message_callback({
                             'type': 'real_time_agent_output',
                             'agent': agent_type,
@@ -118,69 +247,22 @@ async def _process_streaming_message(
                             'timestamp': datetime.now().isoformat(),
                             'session_id': session_id
                         })
+                        
+                        agent_logger.debug(f"✅ SENT real_time_agent_output for {agent_type}")
+                    else:
+                        agent_logger.debug(f"⚠️ Could not determine agent type for source: {source}")
                 except Exception as e:
-                    agent_logger.error(f"Error in message callback: {e}")
-            
-            # Handle structured output from triage agent
-            if (source == "TriageSpecialist" and 
-                isinstance(message, StructuredMessage) and
-                isinstance(message.content, PriorityFindings)):
-                
-                # Store structured findings
-                priority_findings = message.content.model_dump()
-                final_results['priority_findings'] = priority_findings
-                agent_logger.info(f"Structured priority findings stored: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
-                
-                # Send priority findings update via callback
-                if message_callback:
-                    await message_callback({
-                        'type': 'priority_findings',
-                        'data': priority_findings,
-                        'session_id': session_id
-                    })
-            
-            # Handle approval requests
-            elif isinstance(message, UserInputRequestedEvent):
-                agent_logger.info(f"User input requested for session {session_id}")
-                
-                if message_callback:
-                    try:
-                        await message_callback({
-                            'type': 'UserInputRequestedEvent',
-                            'content': getattr(message, 'content', 'Approval required'),
-                            'source': source,
-                            'session_id': session_id
-                        })
-                    except Exception as e:
-                        agent_logger.error(f"Error sending approval request: {e}")
-            
-            # Check for workflow rejection
-            elif (source == "MultiStageApprovalAgent" and 
-                  ("WORKFLOW_REJECTED" in content or 
-                   ("REJECTED" in content and "human operator" in content))):
-                
-                final_results['was_rejected'] = True
-                agent_logger.info(f"Analysis rejected by user for session {session_id}")
-                
-                if message_callback:
-                    await message_callback({
-                        'type': 'workflow_rejected',
-                        'content': 'Analysis workflow was rejected by user',
-                        'session_id': session_id
-                    })
-            
-            # Handle structured results from analyst
-            elif (source == "SeniorAnalyst" and 
-                  isinstance(message, StructuredMessage) and
-                  isinstance(message.content, SOCAnalysisResult)):
-                
-                final_results['structured_result'] = message.content.model_dump()
+                    agent_logger.error(f"❌ ERROR sending real_time_agent_output: {e}")
+                    agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+            elif not message_callback:
+                agent_logger.debug(f"⚠️ No callback available for real_time_agent_output from {source}")
             
             # Parse tool outputs for context and analyst agents
             await _parse_tool_outputs(message, final_results, message_callback, session_id)
                 
     except Exception as e:
-        agent_logger.error(f"Error processing streaming message: {e}")
+        agent_logger.error(f"❌ CRITICAL ERROR processing streaming message: {e}")
+        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
 
 def determine_agent_type(agent_source: str) -> str:
     """Enhanced agent type determination"""
@@ -221,11 +303,20 @@ async def _parse_tool_outputs(message, final_results: Dict, message_callback: Op
                     
                     # Send context update
                     if message_callback:
-                        await message_callback({
-                            'type': 'context_results',
-                            'data': tool_result['results'],
-                            'session_id': session_id
-                        })
+                        try:
+                            agent_logger.info(f"🚀 ATTEMPTING to send context_results_update via callback for session {session_id}")
+                            
+                            await message_callback({
+                                'type': 'context_results_update',
+                                'data': tool_result['results'],
+                                'session_id': session_id
+                            })
+                            
+                            agent_logger.info(f"✅ SUCCESSFULLY SENT context_results_update for session {session_id}")
+                            
+                        except Exception as e:
+                            agent_logger.error(f"❌ ERROR sending context_results_update: {e}")
+                            agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
         
         # Extract detailed analysis from analyst agent tools
         elif "status" in content and "analysis_complete" in content:
@@ -238,33 +329,53 @@ async def _parse_tool_outputs(message, final_results: Dict, message_callback: Op
                     
                     # Send analysis complete update
                     if message_callback:
-                        await message_callback({
-                            'type': 'analysis_complete',
-                            'data': tool_result['data'],
-                            'session_id': session_id
-                        })
+                        try:
+                            agent_logger.info(f"🚀 ATTEMPTING to send detailed_analysis_update (tool) via callback for session {session_id}")
+                            
+                            await message_callback({
+                                'type': 'detailed_analysis_update',
+                                'data': tool_result['data'],
+                                'session_id': session_id
+                            })
+                            
+                            agent_logger.info(f"✅ SUCCESSFULLY SENT detailed_analysis_update (tool) for session {session_id}")
+                            
+                        except Exception as e:
+                            agent_logger.error(f"❌ ERROR sending detailed_analysis_update (tool): {e}")
+                            agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
         
         # Detect function calls
         if ('FunctionCall(' in content or 
             'report_priority_findings' in content or 
             'report_detailed_analysis' in content):
             
-            agent_logger.info(f"Function call detected from {message.source}")
+            agent_logger.info(f"🔧 FUNCTION CALL: {message.source}")
             
             if message_callback:
-                agent_type = determine_agent_type(message.source)
-                function_name = "priority_findings" if 'priority' in content else "detailed_analysis"
-                await message_callback({
-                    'type': 'function_call_detected',
-                    'agent': agent_type,
-                    'function': function_name,
-                    'content': content,
-                    'timestamp': datetime.now().isoformat(),
-                    'session_id': session_id
-                })
+                try:
+                    agent_type = determine_agent_type(message.source)
+                    function_name = "priority_findings" if 'priority' in content else "detailed_analysis"
+                    
+                    agent_logger.info(f"🚀 ATTEMPTING to send function_call_detected via callback for session {session_id}")
+                    
+                    await message_callback({
+                        'type': 'function_call_detected',
+                        'agent': agent_type,
+                        'function': function_name,
+                        'content': content,
+                        'timestamp': datetime.now().isoformat(),
+                        'session_id': session_id
+                    })
+                    
+                    agent_logger.info(f"✅ SUCCESSFULLY SENT function_call_detected for session {session_id}")
+                    
+                except Exception as e:
+                    agent_logger.error(f"❌ ERROR sending function_call_detected: {e}")
+                    agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
                         
     except Exception as e:
-        agent_logger.error(f"Error parsing tool outputs: {e}")
+        agent_logger.error(f"❌ ERROR parsing tool outputs: {e}")
+        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
 
 async def run_analysis_workflow(
     log_batch: str,
@@ -285,6 +396,7 @@ async def run_analysis_workflow(
         bool: True if analysis completed successfully, False otherwise
     """
     agent_logger.info(f"Starting simplified SOC analysis workflow for session {session_id}")
+    agent_logger.info(f"Callbacks available - user_input: {user_input_callback is not None}, message: {message_callback is not None}")
     
     # Initialize simple results tracking
     final_results = {
@@ -380,12 +492,21 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         
         # Send final completion update
         if message_callback:
-            await message_callback({
-                'type': 'analysis_complete_final',
-                'was_rejected': final_results.get('was_rejected', False),
-                'results': final_results,
-                'session_id': session_id
-            })
+            try:
+                agent_logger.info(f"🚀 ATTEMPTING to send analysis_complete_final via callback for session {session_id}")
+                
+                await message_callback({
+                    'type': 'analysis_complete_final',
+                    'was_rejected': final_results.get('was_rejected', False),
+                    'results': final_results,
+                    'session_id': session_id
+                })
+                
+                agent_logger.info(f"✅ SUCCESSFULLY SENT analysis_complete_final for session {session_id}")
+                
+            except Exception as e:
+                agent_logger.error(f"❌ ERROR sending analysis_complete_final: {e}")
+                agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
         
         success = not final_results.get('was_rejected', False)
         
@@ -400,10 +521,13 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         
         # Send error via callback
         if message_callback:
-            await message_callback({
-                'type': 'error',
-                'content': f"Analysis error: {str(e)}",
-                'session_id': session_id
-            })
+            try:
+                await message_callback({
+                    'type': 'error',
+                    'content': f"Analysis error: {str(e)}",
+                    'session_id': session_id
+                })
+            except Exception as callback_error:
+                agent_logger.error(f"❌ ERROR sending error via callback: {callback_error}")
         
         return False

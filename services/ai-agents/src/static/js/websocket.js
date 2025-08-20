@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/websocket.js - SECOND UPDATE
-// Remove progress_update handling, add smart progress calculation from specific events
+// services/ai-agents/src/static/js/websocket.js - DEBUG VERSION
+// Complete file with debug logging for priority_findings_update issue
 
 // Import other modules
 import * as debugLogger from './debugLogger.js';
@@ -54,12 +54,34 @@ function initWebSocket() {
         ui.showStatus('Connected to Real-time SOC Analysis WebSocket', 'success');
     };
 
+    // 👈 MODIFIED: Add extensive debug logging to existing onmessage handler
     websocket.onmessage = function(event) {
         wsStats.messages_received++;
-        var data = JSON.parse(event.data);
-        debugLogger.debugLog('Enhanced Real-time WebSocket message received - Type: ' + data.type);
-        console.log('Full real-time WebSocket message:', data);
-        handleEnhancedRealtimeWebSocketMessage(data);
+        
+        try {
+            var data = JSON.parse(event.data);
+            
+            // 🚀 DEBUG LOGGING: Log every raw WebSocket message
+            debugLogger.debugLog('📨 RAW WebSocket message received - Type: ' + data.type);
+            console.log('📨 RAW WebSocket message:', data);
+            
+            // 🎯 SPECIFIC CHECK: Look for our missing message type
+            if (data.type === 'priority_findings_update') {
+                console.log('🎯 RAW MESSAGE: priority_findings_update detected in raw WebSocket data!');
+                console.log('🎯 RAW DATA:', JSON.stringify(data, null, 2));
+                debugLogger.debugLog('🎯 CRITICAL: priority_findings_update message received via WebSocket');
+            } else {
+                console.log('📝 RAW MESSAGE: Type "' + data.type + '" (not priority_findings_update)');
+            }
+            
+            // Call the existing message handler
+            handleEnhancedRealtimeWebSocketMessage(data);
+            
+        } catch (e) {
+            console.error('❌ Error parsing WebSocket message:', e);
+            console.error('❌ Raw message data:', event.data);
+            debugLogger.debugLog('❌ WebSocket message parse error: ' + e, 'ERROR');
+        }
     };
 
     websocket.onclose = function(event) {
@@ -133,8 +155,20 @@ function resetWorkflowProgress() {
     debugLogger.debugLog('Workflow progress reset');
 }
 
+// 👈 MODIFIED: Add extensive debug logging to message handler
 function handleEnhancedRealtimeWebSocketMessage(data) {
-    debugLogger.debugLog('Handling enhanced real-time WebSocket message type: ' + data.type);
+    // 🚀 DEBUG LOGGING: Log every message that enters the handler
+    debugLogger.debugLog('🔍 FRONTEND: Processing message type: ' + data.type);
+    console.log('🔍 FRONTEND DEBUG: Full message entering handler:', data);
+    
+    // 🎯 SPECIFIC CHECK: Critical logging for our target message
+    if (data.type === 'priority_findings_update') {
+        console.log('🎯 FRONTEND DEBUG: priority_findings_update message received in handler!', data);
+        console.log('🎯 FRONTEND DEBUG: About to call handleEnhancedPriorityFindingsUpdate');
+        debugLogger.debugLog('🎯 CRITICAL: priority_findings_update entering switch statement');
+    } else {
+        console.log('📝 FRONTEND DEBUG: Message type "' + data.type + '" - not priority_findings_update');
+    }
     
     switch (data.type) {
         case 'connection_established':
@@ -159,6 +193,8 @@ function handleEnhancedRealtimeWebSocketMessage(data) {
             break;
 
         case 'priority_findings_update':
+            console.log('🎯 FRONTEND: Handling priority_findings_update in switch case');
+            debugLogger.debugLog('🎯 CRITICAL: priority_findings_update switch case triggered');
             // Handle immediate priority findings
             handleEnhancedPriorityFindingsUpdate(data);
             break;
@@ -196,9 +232,6 @@ function handleEnhancedRealtimeWebSocketMessage(data) {
             approvalWorkflow.handleApprovalRequest(data);
             break;
 
-        // REMOVED: case 'progress_update' - no longer needed!
-        // Smart progress calculation happens automatically from specific events
-
         case 'logs_retrieved':
             debugLogger.debugLog('Logs retrieved message received');
             progressManager.handleLogsRetrieved(data);
@@ -215,8 +248,8 @@ function handleEnhancedRealtimeWebSocketMessage(data) {
             break;
 
         default:
-            debugLogger.debugLog('Unknown enhanced real-time message type: ' + data.type, 'WARNING');
-            console.log('Unknown enhanced real-time message data:', data);
+            debugLogger.debugLog('🚨 FRONTEND: Unknown enhanced real-time message type: ' + data.type, 'WARNING');
+            console.log('🚨 FRONTEND: Unknown enhanced real-time message data:', data);
     }
 }
 
@@ -324,25 +357,82 @@ function handleEnhancedRealtimeAgentOutput(data) {
     updateEnhancedAgentOutput(agent, content, timestamp);
 }
 
+// 👈 MODIFIED: Add extensive debug logging to priority findings handler
 function handleEnhancedPriorityFindingsUpdate(data) {
-    debugLogger.debugLog('Enhanced priority findings update received in real-time');
+    console.log('🎯 FRONTEND: handleEnhancedPriorityFindingsUpdate called with data:', data);
+    debugLogger.debugLog('🎯 CRITICAL: handleEnhancedPriorityFindingsUpdate function executing');
+    
     var findings = data.data;
     
     if (findings && findings.threat_type && findings.source_ip) {
         var priority = findings.priority || 'medium';
         var threatType = findings.threat_type;
         var sourceIp = findings.source_ip;
+        var targetHosts = findings.target_hosts || [];
+        var attackPattern = findings.attack_pattern || 'Unknown pattern';
+        var confidence = findings.confidence_score || 0;
+        var eventCount = findings.event_count || 0;
+        
+        console.log('🎯 FRONTEND: Processing priority findings - ' + threatType + ' from ' + sourceIp);
+        debugLogger.debugLog('🎯 CRITICAL: Processing priority findings: ' + threatType);
         
         // Show enhanced immediate notification
         ui.showStatus('🚨 Priority ' + priority.toUpperCase() + ' threat: ' + threatType + ' from ' + sourceIp, 'warning');
         
-        // NEW: Update progress tracking
+        // 👈 CRITICAL: Update the triage agent card with structured findings
+        var triageOutput = document.getElementById('triageOutput');
+        if (triageOutput) {
+            console.log('🎯 FRONTEND: Updating triageOutput element');
+            var timestamp = new Date().toLocaleTimeString();
+            var structuredOutput = '[' + timestamp + '] ✅ TRIAGE ANALYSIS COMPLETE:\n' +
+                '🎯 Threat Type: ' + threatType + '\n' +
+                '📍 Source IP: ' + sourceIp + '\n' +
+                '🎯 Target Hosts: ' + targetHosts.join(', ') + '\n' +
+                '⚠️ Priority: ' + priority.toUpperCase() + '\n' +
+                '📊 Confidence: ' + (confidence * 100).toFixed(1) + '%\n' +
+                '📈 Events: ' + eventCount + '\n' +
+                '🔍 Attack Pattern: ' + attackPattern + '\n' +
+                '⏰ Timeline: ' + (findings.timeline ? findings.timeline.start + ' → ' + findings.timeline.end : 'Unknown') + '\n' +
+                '📋 Summary: ' + (findings.brief_summary || 'No summary available');
+            
+            triageOutput.textContent = structuredOutput;
+            triageOutput.scrollTop = triageOutput.scrollHeight;
+            
+            console.log('🎯 FRONTEND: triageOutput updated successfully');
+            debugLogger.debugLog('🎯 CRITICAL: triageOutput element updated with structured findings');
+        } else {
+            console.error('❌ FRONTEND: triageOutput element not found!');
+            debugLogger.debugLog('❌ CRITICAL: triageOutput element not found', 'ERROR');
+        }
+        
+        // Update progress tracking
         workflowProgress.triage = 2; // Complete
         ui.updateAgentStatus('triage', 'complete');
         ui.showAgentSpinner('triage', false);
         updateOverallProgress();
         
-        debugLogger.debugLog('Enhanced priority findings processed: ' + threatType + ' from ' + sourceIp);
+        // Add visual feedback to triage card
+        var triageCard = document.getElementById('triageCard');
+        if (triageCard) {
+            triageCard.classList.add('active');
+            triageCard.style.borderLeft = '4px solid #56ab2f'; // Success color
+            
+            // Highlight effect
+            triageCard.classList.add('new-content');
+            setTimeout(function() {
+                triageCard.classList.remove('new-content');
+            }, 1500);
+            
+            console.log('🎯 FRONTEND: triageCard visual feedback applied');
+        } else {
+            console.error('❌ FRONTEND: triageCard element not found!');
+        }
+        
+        console.log('🎯 FRONTEND: Priority findings processing completed successfully');
+        debugLogger.debugLog('🎯 CRITICAL: Priority findings processed and displayed: ' + threatType + ' from ' + sourceIp);
+    } else {
+        console.error('❌ FRONTEND: Invalid findings data structure:', findings);
+        debugLogger.debugLog('❌ CRITICAL: Invalid findings data in handleEnhancedPriorityFindingsUpdate', 'ERROR');
     }
 }
 

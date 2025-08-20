@@ -131,7 +131,7 @@ async def real_time_message_callback(message_data: dict):
         if message_type in [
             'real_time_agent_output',
             'function_call_detected', 
-            'priority_findings',
+            'priority_findings_update',
             'context_results',
             'analysis_complete',
             'workflow_rejected',
