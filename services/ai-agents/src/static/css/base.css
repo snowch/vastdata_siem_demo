@@ -3,28 +3,28 @@
 /* CSS Custom Properties */
 :root {
     /* Color System */
-    --primary-gradient: linear-gradient(45deg, #667eea, #764ba2);
-    --secondary-gradient: linear-gradient(45deg, #36d1dc, #5b86e5);
-    --success-gradient: linear-gradient(45deg, #56ab2f, #a8e6cf);
-    --error-gradient: linear-gradient(45deg, #ff416c, #ff4757);
-    --warning-gradient: linear-gradient(45deg, #ffa726, #fb8c00);
-    --info-gradient: linear-gradient(45deg, #667eea, #764ba2);
-    --neutral-gradient: linear-gradient(45deg, #95a5a6, #7f8c8d);
+    --primary-gradient: linear-gradient(45deg, #03ae6f, #76e7b0);
+    --secondary-gradient: linear-gradient(45deg, #80c9d5, #a2aeb4);
+    --success-gradient: linear-gradient(45deg, #00c97f, #76e7b0);
+    --error-gradient: linear-gradient(45deg, #ff365d, #E49090);
+    --warning-gradient: linear-gradient(45deg, #ffab00, #f9e150);
+    --info-gradient: linear-gradient(45deg, #80c9d5, #a2aeb4);
+    --neutral-gradient: linear-gradient(45deg, #a2aeb4, #E8EBEC);
     
     /* Agent Colors */
-    --triage-gradient: linear-gradient(45deg, #ff6b6b, #ee5a24);
-    --context-gradient: linear-gradient(45deg, #4ecdc4, #44a08d);
-    --analyst-gradient: linear-gradient(45deg, #a8e6cf, #3d8b37);
+    --triage-gradient: linear-gradient(45deg, #ff365d, #E49090);
+    --context-gradient: linear-gradient(45deg, #80c9d5, #a2aeb4);
+    --analyst-gradient: linear-gradient(45deg, #00c97f, #76e7b0);
     
     /* Text Colors */
-    --text-primary: #2c3e50;
-    --text-secondary: #5a6c7d;
+    --text-primary: #E8EBEC;
+    --text-secondary: #a2aeb4;
     --text-muted: #7f8c8d;
     
     /* Background Colors */
-    --bg-primary: rgba(255, 255, 255, 0.95);
-    --bg-secondary: #f8f9fa;
-    --bg-dark: rgba(44, 62, 80, 0.95);
+    --bg-primary: rgba(8, 49, 65, .9);
+    --bg-secondary: #012330;
+    --bg-dark: rgba(22, 66, 83, .95);
     
     /* Spacing System */
     --spacing-xs: 4px;
@@ -69,7 +69,7 @@
 /* Base Typography */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #164253;
     min-height: 100vh;
     color: var(--text-primary);
     padding-top: 20px;
