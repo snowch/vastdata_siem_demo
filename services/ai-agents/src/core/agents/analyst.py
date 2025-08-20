@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/agents/analyst.py - COMPLETE FIXED VERSION
+# services/ai-agents/src/core/agents/analyst.py - ENHANCED APPROVAL TRIGGERING VERSION
 from core.agents.base import BaseAgent
 from core.models.analysis import SOCAnalysisResult
 from autogen_core.tools import FunctionTool
@@ -20,7 +20,7 @@ def report_detailed_analysis(
     recommended_actions: List[str],
     investigation_notes: str
 ) -> Dict[str, Any]:
-    """Report detailed analysis results - FIXED: Removed problematic attack_timeline parameter"""
+    """Report detailed analysis results - ENHANCED with better output"""
     try:
         # Create timeline events from the analysis
         current_time = datetime.now().isoformat()
@@ -64,7 +64,15 @@ def report_detailed_analysis(
         
         agent_logger.info(f"✅ ANALYST FUNCTION CALLED - Detailed analysis validated: {len(recommended_actions)} recommendations generated")
         print(f"🔧 ANALYST FUNCTION EXECUTED: {threat_type_detailed} - Severity: {threat_severity} - Actions: {len(recommended_actions)}")
-        return {"status": "analysis_complete", "data": validated_analysis.model_dump()}
+        
+        # Return the validated analysis in the expected format
+        function_result = {"status": "analysis_complete", "data": validated_analysis.model_dump()}
+        
+        # Also print it clearly for parsing
+        print(f"FUNCTION_RESULT: {function_result}")
+        
+        return function_result
+        
     except Exception as e:
         agent_logger.error(f"Detailed analysis validation error: {e}")
         print(f"❌ ANALYST FUNCTION ERROR: {e}")
@@ -116,22 +124,46 @@ report_detailed_analysis(
     investigation_notes="additional_analysis_notes_and_observations"
 )
 
-6. **REQUEST AUTHORIZATION**: After calling the function, present recommendations:
-   - "Based on my analysis, I recommend the following actions:"
-   - "IMMEDIATE (within 1 hour): {immediate actions}"
-   - "SHORT-TERM (within 24 hours): {short-term actions}"  
-   - "LONG-TERM (within 1 week): {long-term actions}"
-   - "MultiStageApprovalAgent: Do you authorize these recommendations? Any modifications needed?"
+6. **PRESENT RECOMMENDATIONS CLEARLY**: After calling the function, present your findings in this EXACT format:
 
-7. **WAIT FOR RESPONSE**: Stop and wait for authorization before concluding
+"Based on my comprehensive security analysis, I have completed the investigation with the following key findings:
 
-8. **CONCLUDE**: After receiving authorization, end with "SOC investigation completed with authorized actions"
+🎯 THREAT ASSESSMENT:
+- Severity: [threat_severity]
+- Confidence: [threat_confidence]%
+- Threat Type: [threat_type_detailed]
+
+💼 BUSINESS IMPACT:
+[business_impact]
+
+📋 RECOMMENDED ACTIONS:
+
+IMMEDIATE (within 1 hour):
+- [list immediate actions]
+
+SHORT-TERM (within 24 hours):
+- [list short-term actions]
+
+LONG-TERM (within 1 week):
+- [list long-term actions]
+
+🔍 INVESTIGATION NOTES:
+[investigation_notes]
+
+MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {number} security actions. Do you authorize these recommendations? Any modifications needed?"
+
+7. **WAIT FOR AUTHORIZATION**: Stop and wait for authorization before concluding
+
+8. **CONCLUDE**: After receiving authorization, end with "ANALYSIS_COMPLETE - Senior SOC investigation finished"
 
 ⚠️ CRITICAL REQUIREMENTS:
 - DO NOT start until you see approved context research
-- You MUST CALL report_detailed_analysis() function - do not just describe it
-- CALL the function FIRST, then request authorization
-- Look for messages indicating context validation before beginning"""
+- You MUST CALL report_detailed_analysis() function first - do not just describe it
+- PRESENT findings in the exact format shown above
+- ALWAYS end your presentation with the MultiStageApprovalAgent question
+- CALL the function FIRST, then present findings, then request authorization
+- Look for messages indicating context validation before beginning
+- The function call and presentation must both happen in your response"""
 
          super().__init__(
             name="SeniorAnalystSpecialist",
@@ -141,5 +173,5 @@ report_detailed_analysis(
             output_content_type=SOCAnalysisResult
          )
          
-         print(f"🔧 Analyst agent initialized with {len([analysis_tool])} tools")
-         agent_logger.info(f"Analyst agent created with tools: {[analysis_tool.name]}")
+         print(f"🔧 Enhanced Analyst agent initialized with {len([analysis_tool])} tools")
+         agent_logger.info(f"Enhanced Analyst agent created with tools: {[analysis_tool.name]}")
