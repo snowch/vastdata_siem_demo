@@ -18,8 +18,8 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.messages import StructuredMessage, UserInputRequestedEvent, TextMessage
 from autogen_agentchat.conditions import (
-    TextMentionTermination, 
-    MaxMessageTermination, 
+    TextMentionTermination,
+    MaxMessageTermination,
     TokenUsageTermination,
     TimeoutTermination,
     SourceMatchTermination,
@@ -53,18 +53,18 @@ agent_logger = logging.getLogger("agent_diagnostics")
 
 class CleanMessageSender:
     """Type-safe message sender using the clean architecture"""
-    
+
     def __init__(self, session_id: str, message_callback: Optional[Callable] = None):
         self.session_id = session_id
         self.message_callback = message_callback
         self._awaiting_approval = False  # Track approval state to prevent duplicates
-        
+
     async def send_message(self, message) -> bool:
         """Send a typed message through the callback"""
         if not self.message_callback:
             agent_logger.warning(f"No message callback available for session {self.session_id}")
             return False
-            
+
         try:
             # Convert Pydantic model to dict for JSON serialization
             if hasattr(message, 'model_dump'):
@@ -72,31 +72,31 @@ class CleanMessageSender:
                 message_data = message.model_dump(mode='json')
             else:
                 message_data = message
-                
+
             # Validate message type
             message_type = message_data.get('type')
             if not validate_message_type(message_type):
                 agent_logger.error(f"❌ Invalid message type: {message_type}")
                 return False
-                
+
             agent_logger.debug(f"🚀 CLEAN ARCH: Sending {message_type} for session {self.session_id}")
             await self.message_callback(message_data)
             return True
-            
+
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send message: {e}")
             agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             return False
-    
+
     def clear_approval_state(self):
         """Clear the approval waiting state"""
         self._awaiting_approval = False
         agent_logger.debug(f"🔄 CLEAN ARCH: Cleared approval state for session {self.session_id}")
-    
+
     # ========================================================================
     # STRUCTURED RESULTS
     # ========================================================================
-    
+
     async def send_triage_findings(self, findings_data: Dict[str, Any]) -> bool:
         """Send structured triage findings"""
         try:
@@ -106,7 +106,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to create triage findings message: {e}")
             return False
-    
+
     async def send_context_research(self, research_data: Dict[str, Any]) -> bool:
         """Send structured context research results"""
         try:
@@ -120,7 +120,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to create context research message: {e}")
             return False
-    
+
     async def send_analysis_recommendations(self, analysis_data: Dict[str, Any]) -> bool:
         """Send structured analysis recommendations"""
         try:
@@ -135,11 +135,11 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to create analysis recommendations message: {e}")
             return False
-    
+
     # ========================================================================
     # STATUS UPDATES
     # ========================================================================
-    
+
     async def send_agent_status_update(self, agent: str, status: str, message: str = None, previous_status: str = None) -> bool:
         """Send agent status update"""
         try:
@@ -156,7 +156,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send agent status update: {e}")
             return False
-    
+
     async def send_function_detected(self, agent: str, function_name: str, description: str = None) -> bool:
         """Send function call detection"""
         try:
@@ -172,7 +172,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send function detection: {e}")
             return False
-    
+
     async def send_agent_output_stream(self, agent: str, content: str, is_final: bool = False) -> bool:
         """Send real-time agent output"""
         try:
@@ -188,7 +188,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send agent output stream: {e}")
             return False
-    
+
     async def send_workflow_progress(self, progress_percentage: int, current_stage: str, completed_stages: List[str] = None, estimated_time_remaining: int = None) -> bool:
         """Send workflow progress update"""
         try:
@@ -205,11 +205,11 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send workflow progress: {e}")
             return False
-    
+
     # ========================================================================
     # INTERACTION MESSAGES
     # ========================================================================
-    
+
     async def send_approval_request(self, stage: str, prompt: str, context: Dict[str, Any] = None, timeout_seconds: int = 300) -> bool:
         """Send approval request"""
         try:
@@ -226,11 +226,11 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send approval request: {e}")
             return False
-    
+
     # ========================================================================
-    # CONTROL MESSAGES  
+    # CONTROL MESSAGES
     # ========================================================================
-    
+
     async def send_analysis_complete(self, success: bool, results_summary: Dict[str, Any] = None, duration_seconds: float = None) -> bool:
         """Send analysis completion notification"""
         try:
@@ -246,7 +246,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send analysis complete: {e}")
             return False
-    
+
     async def send_workflow_rejected(self, rejected_stage: str, reason: str = None) -> bool:
         """Send workflow rejection notification"""
         try:
@@ -261,7 +261,7 @@ class CleanMessageSender:
         except Exception as e:
             agent_logger.error(f"❌ CLEAN ARCH: Failed to send workflow rejection: {e}")
             return False
-    
+
     async def send_error(self, error_message: str, error_code: str = None, details: Dict[str, Any] = None) -> bool:
         """Send error notification"""
         try:
@@ -283,13 +283,13 @@ class CleanMessageSender:
 
 class WorkflowProgressTracker:
     """Track workflow progress and calculate smart percentages"""
-    
+
     def __init__(self, sender: CleanMessageSender):
         self.sender = sender
         self.start_time = datetime.now()
         self.completed_stages = []
         self.current_stage = "initializing"
-        
+
         # Stage definitions with their completion percentages
         self.stages = {
             "initializing": 5,
@@ -301,26 +301,26 @@ class WorkflowProgressTracker:
             "analyst_complete": 95,
             "finalizing": 100
         }
-    
+
     async def update_stage(self, new_stage: str) -> bool:
         """Update current stage and send progress"""
         if new_stage == self.current_stage:
             return True
-            
+
         # Mark previous stage as completed
         if self.current_stage not in self.completed_stages:
             self.completed_stages.append(self.current_stage)
-        
+
         self.current_stage = new_stage
         progress = self.stages.get(new_stage, 0)
-        
+
         # Calculate estimated time remaining
         elapsed = (datetime.now() - self.start_time).total_seconds()
         if progress > 0 and progress < 100:
             estimated_remaining = int((elapsed / progress) * (100 - progress))
         else:
             estimated_remaining = None
-        
+
         return await self.sender.send_workflow_progress(
             progress_percentage=progress,
             current_stage=new_stage.replace('_', ' ').title(),
@@ -334,7 +334,7 @@ class WorkflowProgressTracker:
 
 
 async def _process_clean_streaming_message(
-    message, 
+    message,
     sender: CleanMessageSender,
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any]
@@ -343,16 +343,16 @@ async def _process_clean_streaming_message(
     try:
         if not hasattr(message, 'source') or not hasattr(message, 'content'):
             return
-            
+
         source = message.source
         content = str(message.content)
-        
+
         agent_logger.debug(f"🔍 CLEAN ARCH: Processing message from {source}: {type(message).__name__}")
-        
+
         # ====================================================================
         # CHECK FOR WORKFLOW COMPLETION SIGNALS
         # ====================================================================
-        
+
         # PRIORITY 0: Check for workflow completion signals
         if "ANALYSIS_COMPLETE - Senior SOC investigation finished" in content:
             agent_logger.info(f"✅ CLEAN ARCH: Workflow completion signal detected")
@@ -367,149 +367,164 @@ async def _process_clean_streaming_message(
                 }
             )
             return  # Stop processing further messages
-        
+
         # ====================================================================
         # HANDLE STRUCTURED RESULTS (DOMAIN OBJECTS)
         # ====================================================================
-        
+
         # PRIORITY 1: Handle structured triage findings (prevent duplicates)
-        if (source == "TriageSpecialist" and 
+        if (source == "TriageSpecialist" and
             isinstance(message, StructuredMessage) and
             isinstance(message.content, PriorityFindings)):
-            
+
             # Check if we already processed triage findings
             if final_results.get('priority_findings') is not None:
                 agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate triage findings")
                 return  # Skip duplicate triage findings
-            
+
             findings = message.content.model_dump()
             final_results['priority_findings'] = findings
-            
+
             agent_logger.info(f"✅ CLEAN ARCH: Structured triage findings: {findings.get('threat_type')} from {findings.get('source_ip')}")
-            
+
             # Send using clean architecture
             await sender.send_triage_findings(findings)
             await sender.send_agent_status_update("triage", "complete", "Triage analysis complete")
             await progress_tracker.update_stage("triage_complete")
-            
+
             return  # Don't send as output stream
-        
+
         # PRIORITY 2: Handle structured context research results (NEW - SIMPLIFIED)
-        elif (source == "ContextAgent" and 
+        elif (source == "ContextAgent" and
               isinstance(message, StructuredMessage) and
               isinstance(message.content, ContextResearchResult)):
-            
+
             # Check if we already processed context results
             if final_results.get('context_research') is not None:
                 agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate context research")
                 return  # Skip duplicate context research
-            
+
             context_result = message.content.model_dump()
             final_results['context_research'] = context_result
-            
+
             agent_logger.info(f"✅ CLEAN ARCH: Structured context research: {context_result.get('total_documents_found')} documents")
-            
+
+            # ** THE FIX IS HERE **
+            # Parse the list of JSON strings into a list of dictionaries
+            raw_incidents = context_result.get('related_incidents', [])
+            parsed_incidents = []
+            for incident_str in raw_incidents:
+                try:
+                    # The items are strings, so we need to load them as JSON
+                    parsed_incidents.append(json.loads(incident_str))
+                except json.JSONDecodeError:
+                    # If a string is not valid JSON, handle it gracefully
+                    agent_logger.warning(f"Could not parse incident string to JSON: {incident_str}")
+                    parsed_incidents.append({"raw_text": incident_str, "parse_error": True})
+
+
             # Send structured context research results
             research_data = {
                 "search_queries": context_result.get('search_queries_executed', []),
                 "total_documents_found": context_result.get('total_documents_found', 0),
-                "relevant_incidents": context_result.get('related_incidents', []),
+                "relevant_incidents": parsed_incidents, # Use the newly parsed list of dicts
                 "pattern_analysis": context_result.get('pattern_analysis', ''),
                 "recommendations": context_result.get('recommended_actions', []),
                 "confidence_assessment": context_result.get('confidence_assessment', 'unknown')
             }
-            
+            # ** END OF FIX **
+
             await sender.send_context_research(research_data)
             await sender.send_agent_status_update("context", "complete", "Context research complete")
             await progress_tracker.update_stage("context_complete")
-            
+
             return  # Don't send as output stream
-        
+
         # PRIORITY 3: Handle structured analyst results (prevent duplicates)
-        elif (source == "SeniorAnalyst" and 
+        elif (source == "SeniorAnalyst" and
               isinstance(message, StructuredMessage) and
               isinstance(message.content, SOCAnalysisResult)):
-            
+
             # Check if we already processed analyst results
             if final_results.get('structured_result') is not None:
                 agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate analyst results")
                 return  # Skip duplicate analyst results
-            
+
             result = message.content.model_dump()
             final_results['structured_result'] = result
-            
+
             agent_logger.info(f"✅ CLEAN ARCH: Structured analyst results received")
-            
+
             # Extract analysis data
             if 'detailed_analysis' in result:
                 await sender.send_analysis_recommendations(result['detailed_analysis'])
-            
+
             await sender.send_agent_status_update("analyst", "complete", "Deep analysis complete")
             await progress_tracker.update_stage("analyst_complete")
-            
+
             return  # Don't send as output stream
-        
+
         # ====================================================================
         # APPROVAL REQUEST PROCESSING (prevent duplicates)
         # ====================================================================
-        
+
         elif isinstance(message, UserInputRequestedEvent):
             # Check if we're already waiting for approval to prevent spam
             if sender._awaiting_approval:
                 agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate approval request")
                 return
-            
+
             agent_logger.info(f"👤 CLEAN ARCH: Approval request from {source}")
             sender._awaiting_approval = True  # Mark as awaiting approval
-            
+
             # Determine stage from source
             stage = _determine_approval_stage_from_source(source)
-            
+
             await sender.send_approval_request(
                 stage=stage,
                 prompt=getattr(message, 'content', 'Approval required'),
                 context={"source": source, "timestamp": datetime.now().isoformat()}
             )
-            
+
             return  # Don't send as output stream
-        
+
         # ====================================================================
         # WORKFLOW STATUS PROCESSING
         # ====================================================================
-        
-        elif (source == "MultiStageApprovalAgent" and 
-              ("WORKFLOW_REJECTED" in content or 
+
+        elif (source == "MultiStageApprovalAgent" and
+              ("WORKFLOW_REJECTED" in content or
                ("REJECTED" in content and "human operator" in content))):
-            
+
             final_results['was_rejected'] = True
             agent_logger.info(f"❌ CLEAN ARCH: Workflow rejected")
-            
+
             await sender.send_workflow_rejected(
                 rejected_stage=_determine_rejection_stage(content),
                 reason="User rejected the workflow"
             )
-            
+
             return  # Don't send as output stream
-        
+
         # ====================================================================
         # FUNCTION CALL DETECTION (for progress tracking)
         # ====================================================================
-        
-        if ('FunctionCall(' in content or 
-            'report_priority_findings' in content or 
+
+        if ('FunctionCall(' in content or
+            'report_priority_findings' in content or
             'report_detailed_analysis' in content or
             'analyze_historical_incidents' in content):  # Updated function name
-            
+
             agent_type = _determine_agent_type_from_source(source)
             function_name = _extract_function_name(content)
-            
+
             if agent_type:
                 await sender.send_function_detected(
                     agent=agent_type,
                     function_name=function_name,
                     description=f"Function call detected in {source}"
                 )
-                
+
                 # Update progress for function calls
                 if agent_type == "triage":
                     await progress_tracker.update_stage("triage_active")
@@ -517,15 +532,15 @@ async def _process_clean_streaming_message(
                     await progress_tracker.update_stage("context_active")
                 elif agent_type == "analyst":
                     await progress_tracker.update_stage("analyst_active")
-        
+
         # ====================================================================
         # AGENT OUTPUT STREAMING (for non-structured content)
         # ====================================================================
-        
+
         # Send as agent output stream for relevant agents
         agent_type = _determine_agent_type_from_source(source)
         if agent_type and source not in ['user', 'system']:
-            
+
             # Filter out system messages but allow actual agent content
             if not _is_system_message(content):
                 await sender.send_agent_output_stream(
@@ -533,17 +548,17 @@ async def _process_clean_streaming_message(
                     content=content,
                     is_final=False
                 )
-        
+
         # ====================================================================
         # LEGACY TOOL OUTPUT PARSING (REMOVED FOR CONTEXT)
         # ====================================================================
-        
+
         # REMOVED: Complex context parsing logic since ContextAgent now returns structured objects
         # The context agent tool output parsing has been eliminated
-        
+
         # Still handle analyst tool outputs for detailed analysis
         await _parse_analyst_tool_outputs(message, final_results, sender)
-                
+
     except Exception as e:
         agent_logger.error(f"❌ CLEAN ARCH: Critical error processing message: {e}")
         agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
@@ -553,14 +568,14 @@ async def _process_clean_streaming_message(
 def _determine_agent_type_from_source(source: str) -> Optional[str]:
     """Determine agent type from message source"""
     source_lower = source.lower()
-    
+
     if 'triage' in source_lower:
         return 'triage'
     elif 'context' in source_lower:
         return 'context'
     elif 'analyst' in source_lower or 'senior' in source_lower:
         return 'analyst'
-    
+
     return None
 
 def _determine_approval_stage_from_source(source: str) -> str:
@@ -571,20 +586,20 @@ def _determine_approval_stage_from_source(source: str) -> str:
         return 'context'
     elif 'analyst' in source.lower():
         return 'analyst'
-    
+
     return 'unknown'
 
 def _determine_rejection_stage(content: str) -> str:
     """Determine which stage was rejected from content"""
     content_lower = content.lower()
-    
+
     if 'triage' in content_lower:
         return 'triage'
     elif 'context' in content_lower:
         return 'context'
     elif 'analyst' in content_lower or 'recommendation' in content_lower:
         return 'analyst'
-    
+
     return 'unknown'
 
 def _extract_function_name(content: str) -> str:
@@ -605,7 +620,7 @@ def _extract_function_name(content: str) -> str:
             return content[start:end].strip().strip('"\'')
         except:
             return 'unknown_function'
-    
+
     return 'unknown_function'
 
 def _is_system_message(content: str) -> bool:
@@ -616,14 +631,14 @@ def _is_system_message(content: str) -> bool:
         'TriageSpecialist: Begin initial triage',
         'Please analyze these OCSF',
     ]
-    
+
     return any(indicator in content for indicator in system_indicators)
 
 
 async def _parse_analyst_tool_outputs(message, final_results: Dict, sender: CleanMessageSender):
     """Parse tool outputs from analyst agent only - context parsing removed"""
     content = str(message.content)
-    
+
     try:
         # Extract detailed analysis from analyst agent tools only
         if "status" in content and "analysis_complete" in content:
@@ -633,10 +648,10 @@ async def _parse_analyst_tool_outputs(message, final_results: Dict, sender: Clea
                 tool_result = json.loads(json_match.group())
                 if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
                     final_results['detailed_analysis'] = tool_result['data']
-                    
+
                     # Send structured analysis recommendations
                     await sender.send_analysis_recommendations(tool_result['data'])
-                        
+
     except Exception as e:
         agent_logger.error(f"❌ CLEAN ARCH: Error parsing analyst tool outputs: {e}")
 
@@ -658,7 +673,7 @@ def _extract_function_name(content: str) -> str:
             return content[start:end].strip().strip('"\'')
         except:
             return 'unknown_function'
-    
+
     return 'unknown_function'
 
 # ============================================================================
@@ -670,44 +685,44 @@ async def _create_soc_team(
 ):
     """Create SOC team with proper termination conditions"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
-    
+
     # Create agents
     triage_agent = TriageAgent(model_client)
-    
+
     # Single approval agent that handles all stages
     approval_agent = UserProxyAgent(
         name="MultiStageApprovalAgent",
         input_func=user_input_func
     )
-    
+
     context_agent = ContextAgent(model_client)
     analyst_agent = AnalystAgent(model_client)
-    
+
     # FIXED: More specific termination conditions
-    
+
     # Normal completion when analyst finishes with specific phrase
     normal_completion = (
-        SourceMatchTermination("SeniorAnalyst") & 
+        SourceMatchTermination("SeniorAnalyst") &
         TextMentionTermination("ANALYSIS_COMPLETE - Senior SOC investigation finished")
     )
 
     # Rejection termination
     rejection_termination = (
-        SourceMatchTermination("MultiStageApprovalAgent") & 
+        SourceMatchTermination("MultiStageApprovalAgent") &
         TextMentionTermination("WORKFLOW_REJECTED")
     )
-    
+
     # Function-based completion - when analyst calls report_detailed_analysis
     function_completion = (
-        SourceMatchTermination("SeniorAnalyst") & 
+        SourceMatchTermination("SeniorAnalyst") &
         FunctionCallTermination("report_detailed_analysis")
     )
-    
+
     # Backup termination conditions - REDUCED limits
     max_messages = MaxMessageTermination(30)  # REDUCED from 50
     token_limit = TokenUsageTermination(max_total_token=60000)  # REDUCED from 80000
     timeout = TimeoutTermination(timeout_seconds=600)  # REDUCED from 900 (10 minutes)
-    
+
     # FIXED: Combined termination - should stop after analyst function call OR normal completion
     termination = (
         function_completion |
@@ -717,7 +732,7 @@ async def _create_soc_team(
         token_limit |
         timeout
     )
-    
+
     # Create team
     team = RoundRobinGroupChat(
         [triage_agent, approval_agent, context_agent, analyst_agent],
@@ -728,9 +743,9 @@ async def _create_soc_team(
             StructuredMessage[ContextResearchResult]
         ],
     )
-    
+
     agent_logger.info("SOC team created with improved termination conditions")
-    
+
     return team, model_client
 
 # ============================================================================
@@ -747,11 +762,11 @@ async def run_analysis_workflow(
     Execute SOC analysis workflow using clean message architecture
     """
     agent_logger.info(f"🚀 CLEAN ARCH: Starting SOC analysis workflow for session {session_id}")
-    
+
     # Initialize clean message sender and progress tracker
     sender = CleanMessageSender(session_id, message_callback)
     progress_tracker = WorkflowProgressTracker(sender)
-    
+
     # Initialize results tracking
     final_results = {
         'priority_findings': None,
@@ -761,11 +776,11 @@ async def run_analysis_workflow(
         'was_rejected': False,
         'workflow_complete': False
     }
-    
+
     # Start workflow progress
     await progress_tracker.update_stage("initializing")
     start_time = datetime.now()
-    
+
     # Define the user input function with clean architecture
     async def _user_input_func(prompt: str, cancellation_token: Optional[CancellationToken]) -> str:
         """Handle user input requests with clean messaging"""
@@ -773,10 +788,10 @@ async def run_analysis_workflow(
             try:
                 user_response = await user_input_callback(prompt, session_id)
                 agent_logger.info(f"👤 CLEAN ARCH: User response for session {session_id}: {user_response}")
-                
+
                 # CLEAR APPROVAL STATE WHEN RESPONSE IS RECEIVED
                 sender.clear_approval_state()
-                
+
                 # Process response based on content
                 if user_response.lower() in ['approve', 'approved', 'yes', 'continue']:
                     if 'triage' in prompt.lower() or 'priority threat' in prompt.lower():
@@ -790,17 +805,17 @@ async def run_analysis_workflow(
                         return "APPROVED - Recommended actions authorized. Please conclude with the completion phrase."
                     else:
                         return "APPROVED - Proceeding to next stage of analysis."
-                        
+
                 elif user_response.lower() in ['reject', 'rejected', 'no', 'stop', 'cancel']:
                     return "REJECTED - Analysis workflow rejected by human operator. WORKFLOW_REJECTED"
-                    
+
                 elif user_response.lower().startswith('custom:'):
                     custom_instructions = user_response[7:].strip()
                     return f"CUSTOM INSTRUCTIONS - {custom_instructions}. Please incorporate these modifications and continue."
-                    
+
                 else:
                     return f"USER RESPONSE - {user_response}. Please consider this feedback and continue appropriately."
-                    
+
             except asyncio.TimeoutError:
                 agent_logger.warning(f"User input timeout for session {session_id}")
                 sender.clear_approval_state()  # Clear state on timeout too
@@ -813,11 +828,11 @@ async def run_analysis_workflow(
         else:
             agent_logger.info(f"No user input callback for session {session_id}, auto-approving")
             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
-    
+
     try:
         # Create the SOC team
         team, model_client = await _create_soc_team(user_input_func=_user_input_func)
-        
+
         # Create the enhanced analysis task
         task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE
 
@@ -831,7 +846,7 @@ MULTI-STAGE WORKFLOW:
    - Wait for user decision on investigation
 
 2. **CONTEXT STAGE**: ContextAgent searches historical incidents (if approved)
-   - After research: Request validation with historical findings summary  
+   - After research: Request validation with historical findings summary
    - Wait for user validation of context relevance
 
 3. **ANALYSIS STAGE**: SeniorAnalyst performs deep analysis (if context approved)
@@ -847,30 +862,30 @@ APPROVAL POINTS:
 - Handle custom instructions and modifications
 
 TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, request approval to proceed with the investigation."""
-        
+
         agent_logger.info(f"Starting clean architecture team execution for session {session_id}")
-        
+
         # Use run_stream for real-time message processing
         stream = team.run_stream(task=task, cancellation_token=CancellationToken())
-        
+
         # Process messages in real-time as they arrive
         async for message in stream:
             await _process_clean_streaming_message(message, sender, progress_tracker, final_results)
-            
+
             # Break early if workflow is complete
             if final_results.get('workflow_complete'):
                 agent_logger.info(f"🎉 CLEAN ARCH: Workflow completed early for session {session_id}")
                 break
-        
+
         await model_client.close()
-        
+
         # Calculate duration
         duration = (datetime.now() - start_time).total_seconds()
-        
+
         # Send final completion update if not already sent
         if not final_results.get('workflow_complete'):
             success = not final_results.get('was_rejected', False)
-            
+
             await sender.send_analysis_complete(
                 success=success,
                 results_summary={
@@ -881,17 +896,17 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                 },
                 duration_seconds=duration
             )
-        
+
         agent_logger.info(f"Clean architecture SOC analysis workflow completed for session {session_id}")
         agent_logger.info(f"Final status - Duration: {duration:.1f}s")
-        
+
         return not final_results.get('was_rejected', False)
-        
+
     except Exception as e:
         agent_logger.error(f"Clean architecture SOC analysis workflow error for session {session_id}: {e}")
         agent_logger.error(f"Full traceback: {traceback.format_exc()}")
-        
+
         # Send error via clean messaging
         await sender.send_error(f"Analysis workflow error: {str(e)}")
-        
+
         return False
