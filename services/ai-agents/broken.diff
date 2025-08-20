@@ -1,0 +1,3578 @@
+commit 8b616df72cbc2902e7b78bc5ee78549fa320c3db
+Author: Chris Snow <chris.snow@vastdata.com>
+Date:   Wed Aug 20 11:53:21 2025 +0000
+
+    broken build
+
+diff --git a/services/ai-agents/src/api/routes/websocket.py b/services/ai-agents/src/api/routes/websocket.py
+index be21194..40553ee 100644
+--- a/services/ai-agents/src/api/routes/websocket.py
++++ b/services/ai-agents/src/api/routes/websocket.py
+@@ -1,5 +1,7 @@
+-# services/ai-agents/src/api/routes/websocket.py - THIRD UPDATE
+-# Remove complex AnalysisProgress class - use simplified session management
++# services/ai-agents/src/api/routes/websocket.py - CLEAN ARCHITECTURE VERSION
++"""
++WebSocket routes with clean message architecture and type advertisement
++"""
+ 
+ import asyncio
+ import uuid
+@@ -9,23 +11,112 @@ from core.services.agent_service import run_analysis_workflow
+ from infrastructure.trino_db_reader import get_logs
+ import logging
+ 
++# Import clean message architecture
++from core.messaging.registry import (
++    MessageRegistry,
++    ResultMessageType,
++    StatusMessageType,
++    InteractionMessageType,
++    ControlMessageType,
++    validate_message_type,
++    get_message_category,
++    MessageTypesAdvertisementMessage,
++    ConnectionEstablishedMessage,
++    LogsRetrievedMessage,
++    ErrorMessage,
++    PongMessage
++)
++
+ router = APIRouter()
+ ws_logger = logging.getLogger("websocket_server")
+ 
+-# Store active WebSocket sessions - much simpler now
++# Store active WebSocket sessions with clean architecture
+ active_sessions = {}
+ 
+-class SimplifiedSession:
++class CleanSession:
++    """Clean session management with type-safe messaging"""
++    
+     def __init__(self, session_id: str, websocket: WebSocket):
+         self.session_id = session_id
+         self.websocket = websocket
+         self.user_input_future = None
+         self.current_approval_stage = None
+         self.approval_history = []
++        self.message_count = 0
++        self.supported_types = MessageRegistry.get_supported_types()
++        
++    async def send_typed_message(self, message) -> bool:
++        """Send a typed message with validation"""
++        try:
++            # Convert Pydantic model to dict if needed
++            if hasattr(message, 'model_dump'):
++                message_data = message.model_dump()
++            else:
++                message_data = message
++            
++            # Validate message type
++            message_type = message_data.get('type')
++            if not validate_message_type(message_type):
++                ws_logger.error(f"❌ Invalid message type: {message_type} for session {self.session_id}")
++                return False
++            
++            # Send message
++            await self.websocket.send_json(message_data)
++            self.message_count += 1
++            
++            category = get_message_category(message_type)
++            ws_logger.debug(f"✅ CLEAN ARCH: Sent {category}/{message_type} to session {self.session_id}")
++            
++            return True
++            
++        except WebSocketDisconnect:
++            ws_logger.info(f"Client disconnected while sending message to session {self.session_id}")
++            return False
++        except Exception as e:
++            ws_logger.error(f"❌ Error sending typed message to session {self.session_id}: {e}")
++            return False
++
++# ============================================================================
++# MESSAGE TYPE ADVERTISEMENT
++# ============================================================================
++
++async def send_connection_established(session: CleanSession):
++    """Send connection established message with features and type advertisement"""
++    try:
++        # Create connection established message
++        connection_msg = MessageRegistry.create_message(
++            ControlMessageType.CONNECTION_ESTABLISHED,
++            session_id=session.session_id,
++            features=["clean_message_architecture", "type_validation", "multi_stage_approval", "real_time_streaming"],
++            server_info={
++                "version": "2.0.0-clean",
++                "architecture": "clean_messaging",
++                "supported_agents": ["triage", "context", "analyst"]
++            }
++        )
++        
++        await session.send_typed_message(connection_msg)
++        
++        # Send message types advertisement
++        advertisement_msg = MessageRegistry.create_message(
++            ControlMessageType.MESSAGE_TYPES_ADVERTISEMENT,
++            session_id=session.session_id
++        )
++        
++        await session.send_typed_message(advertisement_msg)
++        
++        ws_logger.info(f"📢 CLEAN ARCH: Advertised {len(session.supported_types['all_types'])} message types to session {session.session_id}")
++        
++    except Exception as e:
++        ws_logger.error(f"❌ Error sending connection established to session {session.session_id}: {e}")
++
++# ============================================================================
++# USER APPROVAL WORKFLOW
++# ============================================================================
+ 
+ async def request_user_approval(prompt: str, session_id: str) -> str:
+-    """Simplified user approval function"""
+-    ws_logger.info(f"Requesting user approval for session {session_id}")
++    """Clean user approval function with typed messaging"""
++    ws_logger.info(f"👤 CLEAN ARCH: Requesting user approval for session {session_id}")
+     
+     if session_id not in active_sessions:
+         ws_logger.error(f"Session {session_id} not found in active sessions")
+@@ -38,23 +129,25 @@ async def request_user_approval(prompt: str, session_id: str) -> str:
+         approval_stage = determine_approval_stage(prompt)
+         session.current_approval_stage = approval_stage
+         
+-        ws_logger.info(f"Approval stage determined as: {approval_stage} for session {session_id}")
++        ws_logger.info(f"📋 CLEAN ARCH: Approval stage determined as: {approval_stage} for session {session_id}")
+         
+         # Create a future to wait for user input
+         session.user_input_future = asyncio.Future()
+         
+-        # Send approval request - simplified format
+-        user_input_event = {
+-            "type": "UserInputRequestedEvent",
+-            "content": prompt,
+-            "source": f"{approval_stage.title()}Agent" if approval_stage != "unknown" else "ApprovalAgent",
+-            "approval_stage": approval_stage,
+-            "timestamp": datetime.now().isoformat(),
+-            "session_id": session_id
+-        }
++        # Send clean approval request message
++        approval_msg = MessageRegistry.create_message(
++            InteractionMessageType.APPROVAL_REQUEST,
++            session_id=session_id,
++            stage=approval_stage,
++            prompt=prompt,
++            context={
++                "timestamp": datetime.now().isoformat(),
++                "stage_description": get_stage_description(approval_stage)
++            },
++            timeout_seconds=300
++        )
+         
+-        ws_logger.info(f"Sending approval request: {user_input_event}")
+-        await session.websocket.send_json(user_input_event)
++        await session.send_typed_message(approval_msg)
+         
+         # Wait for user response with timeout
+         try:
+@@ -71,22 +164,42 @@ async def request_user_approval(prompt: str, session_id: str) -> str:
+                 "timestamp": datetime.now().isoformat()
+             })
+             
+-            ws_logger.info(f"User response received for {approval_stage} stage in session {session_id}: {user_response}")
++            ws_logger.info(f"✅ CLEAN ARCH: User response received for {approval_stage} stage in session {session_id}: {user_response}")
+             return user_response
+             
+         except asyncio.TimeoutError:
+-            ws_logger.warning(f"User approval timeout for {approval_stage} stage in session {session_id}")
++            ws_logger.warning(f"⏰ User approval timeout for {approval_stage} stage in session {session_id}")
++            
++            # Send timeout message
++            timeout_msg = MessageRegistry.create_message(
++                InteractionMessageType.APPROVAL_TIMEOUT,
++                session_id=session_id,
++                stage=approval_stage,
++                default_action="auto_approve"
++            )
++            await session.send_typed_message(timeout_msg)
++            
+             return "approve"  # Auto-approve on timeout
+             
+     except WebSocketDisconnect:
+         ws_logger.info("WebSocket disconnected while waiting for user input")
+         raise
+     except Exception as e:
+-        ws_logger.error(f"Error requesting user approval: {e}")
++        ws_logger.error(f"❌ Error requesting user approval: {e}")
++        
++        # Send error message
++        error_msg = MessageRegistry.create_message(
++            ControlMessageType.ERROR,
++            session_id=session_id,
++            message=f"Approval request error: {str(e)}",
++            error_code="APPROVAL_ERROR"
++        )
++        await session.send_typed_message(error_msg)
++        
+         return "approve"
+ 
+ def determine_approval_stage(prompt: str) -> str:
+-    """Determine which approval stage based on the prompt content."""
++    """Determine which approval stage based on the prompt content"""
+     prompt_lower = prompt.lower()
+     
+     # Triage stage indicators
+@@ -112,46 +225,59 @@ def determine_approval_stage(prompt: str) -> str:
+     
+     return "unknown"
+ 
++def get_stage_description(stage: str) -> str:
++    """Get a human-readable description for an approval stage"""
++    descriptions = {
++        "triage": "Initial threat assessment and prioritization",
++        "context": "Historical incident correlation and pattern analysis",
++        "analyst": "Deep analysis and actionable recommendations",
++        "unknown": "General approval required"
++    }
++    return descriptions.get(stage, "Unknown stage")
++
++# ============================================================================
++# REAL-TIME MESSAGE CALLBACK
++# ============================================================================
++
+ async def real_time_message_callback(message_data: dict):
+     """
+-    Simplified callback function to handle real-time agent messages.
++    Clean callback function to handle real-time agent messages with type validation
+     """
+     session_id = message_data.get('session_id')
+     if not session_id or session_id not in active_sessions:
+-        ws_logger.error(f"Invalid session ID in real-time callback: {session_id}")
++        ws_logger.error(f"❌ CLEAN ARCH: Invalid session ID in callback: {session_id}")
+         return
+     
+     session = active_sessions[session_id]
+     message_type = message_data.get('type')
+     
+     try:
+-        ws_logger.debug(f"Real-time message callback: {message_type} for session {session_id}")
++        ws_logger.debug(f"📨 CLEAN ARCH: Real-time callback - {message_type} for session {session_id}")
+         
+-        # Send all real-time messages directly to frontend
+-        if message_type in [
+-            'real_time_agent_output',
+-            'function_call_detected', 
+-            'priority_findings_update',
+-            'context_results',
+-            'analysis_complete',
+-            'workflow_rejected',
+-            'analysis_complete_final',
+-            'UserInputRequestedEvent'
+-        ]:
+-            await session.websocket.send_json(message_data)
+-            ws_logger.debug(f"Sent {message_type} to session {session_id}")
++        # Validate message type
++        if not validate_message_type(message_type):
++            ws_logger.error(f"❌ CLEAN ARCH: Invalid message type in callback: {message_type}")
++            return
++        
++        # Send all clean architecture messages directly to frontend
++        await session.send_typed_message(message_data)
++        ws_logger.debug(f"✅ CLEAN ARCH: Sent {message_type} to session {session_id}")
+         
+     except Exception as e:
+-        ws_logger.error(f"Error in real-time message callback for session {session_id}: {e}")
++        ws_logger.error(f"❌ CLEAN ARCH: Error in real-time callback for session {session_id}: {e}")
++
++# ============================================================================
++# ANALYSIS WORKFLOW RUNNER
++# ============================================================================
+ 
+-async def run_simplified_analysis(log_batch: str, session_id: str):
++async def run_clean_analysis(log_batch: str, session_id: str):
+     """
+-    Simplified analysis runner - no complex progress object needed.
++    Clean analysis runner using the new message architecture
+     """
+     try:
+-        ws_logger.info(f"Starting simplified analysis for session {session_id}")
++        ws_logger.info(f"🚀 CLEAN ARCH: Starting analysis for session {session_id}")
+         
+-        # Run analysis workflow - it will send specific events via callback
++        # Run analysis workflow with clean messaging
+         success = await run_analysis_workflow(
+             log_batch=log_batch,
+             session_id=session_id,
+@@ -159,36 +285,35 @@ async def run_simplified_analysis(log_batch: str, session_id: str):
+             message_callback=real_time_message_callback
+         )
+         
+-        # Send simple completion message
+-        if session_id in active_sessions:
+-            await active_sessions[session_id].websocket.send_json({
+-                "type": "analysis_workflow_complete", 
+-                "was_rejected": not success,
+-                "timestamp": datetime.now().isoformat(),
+-                "session_id": session_id
+-            })
+-        
+-        ws_logger.info(f"Simplified analysis completed for session {session_id} - Success: {success}")
++        ws_logger.info(f"✅ CLEAN ARCH: Analysis completed for session {session_id} - Success: {success}")
+         
+     except Exception as e:
+-        ws_logger.error(f"Simplified analysis failed for session {session_id}: {str(e)}")
++        ws_logger.error(f"❌ CLEAN ARCH: Analysis failed for session {session_id}: {str(e)}")
++        
+         if session_id in active_sessions:
++            error_msg = MessageRegistry.create_message(
++                ControlMessageType.ERROR,
++                session_id=session_id,
++                message=f"Analysis error: {str(e)}",
++                error_code="ANALYSIS_ERROR",
++                details={"session_id": session_id}
++            )
++            
+             try:
+-                await active_sessions[session_id].websocket.send_json({
+-                    "type": "error",
+-                    "content": f"Analysis error: {str(e)}",
+-                    "timestamp": datetime.now().isoformat(),
+-                    "session_id": session_id
+-                })
++                await active_sessions[session_id].send_typed_message(error_msg)
+             except Exception as send_error:
+-                ws_logger.error(f"Failed to send error message: {send_error}")
++                ws_logger.error(f"❌ Failed to send error message: {send_error}")
++
++# ============================================================================
++# MESSAGE HANDLERS
++# ============================================================================
+ 
+ async def handle_user_input_response(data: dict, session_id: str):
+-    """Simplified user input response handler."""
++    """Clean user input response handler"""
+     content = data.get("content", "")
+     target_agent = data.get("target_agent", "")
+     
+-    ws_logger.info(f"User input response for session {session_id}, target: {target_agent}, content: {content}")
++    ws_logger.info(f"👤 CLEAN ARCH: User input response for session {session_id}, target: {target_agent}, content: {content}")
+     
+     if session_id not in active_sessions:
+         ws_logger.error(f"Session {session_id} not found for user input")
+@@ -200,12 +325,12 @@ async def handle_user_input_response(data: dict, session_id: str):
+         # Process the response based on current approval stage
+         processed_response = process_approval_response(content, target_agent, session.current_approval_stage)
+         session.user_input_future.set_result(processed_response)
+-        ws_logger.info(f"User input processed for session {session_id}")
++        ws_logger.info(f"✅ CLEAN ARCH: User input processed for session {session_id}")
+     else:
+-        ws_logger.warning(f"No pending user input request for session {session_id}")
++        ws_logger.warning(f"⚠️ No pending user input request for session {session_id}")
+ 
+ def process_approval_response(content: str, target_agent: str, approval_stage: str) -> str:
+-    """Process approval response based on the stage and content."""
++    """Process approval response based on the stage and content"""
+     content_lower = content.lower().strip()
+     
+     # Handle standard responses
+@@ -221,102 +346,151 @@ def process_approval_response(content: str, target_agent: str, approval_stage: s
+         return f"CUSTOM - User response for {approval_stage} stage: {content}"
+ 
+ async def handle_start_analysis(data: dict, session_id: str, websocket: WebSocket):
+-    """Simplified start analysis handler"""
++    """Clean start analysis handler"""
+     log_batch = data.get("logs")
+     if not log_batch:
+-        await websocket.send_json({
+-            "type": "error",
+-            "message": "No logs provided for analysis"
+-        })
++        error_msg = MessageRegistry.create_message(
++            ControlMessageType.ERROR,
++            session_id=session_id,
++            message="No logs provided for analysis",
++            error_code="MISSING_LOGS"
++        )
++        await active_sessions[session_id].send_typed_message(error_msg)
+         return
+ 
+-    ws_logger.info(f"Starting simplified analysis workflow for session {session_id}")
++    ws_logger.info(f"🚀 CLEAN ARCH: Starting analysis workflow for session {session_id}")
+ 
+-    # Start analysis task - no complex progress object needed
+-    asyncio.create_task(run_simplified_analysis(log_batch, session_id))
++    # Start analysis task with clean architecture
++    asyncio.create_task(run_clean_analysis(log_batch, session_id))
+ 
+ async def handle_retrieve_logs(session_id: str, websocket: WebSocket):
+-    """Handle log retrieval request"""
+-    ws_logger.info(f"Log retrieval requested via WebSocket: {session_id}")
++    """Handle log retrieval request with clean messaging"""
++    ws_logger.info(f"📥 CLEAN ARCH: Log retrieval requested via WebSocket: {session_id}")
++    
+     try:
+         logs = get_logs()
+-        await websocket.send_json({
+-            "type": "logs_retrieved",
+-            "logs": logs,
+-            "message": f"Retrieved {len(logs)} log entries successfully"
+-        })
+-        ws_logger.info(f"Successfully sent {len(logs)} logs to session {session_id}")
++        
++        logs_msg = MessageRegistry.create_message(
++            ControlMessageType.LOGS_RETRIEVED,
++            session_id=session_id,
++            logs=logs,
++            count=len(logs),
++            message=f"Retrieved {len(logs)} log entries successfully"
++        )
++        
++        await active_sessions[session_id].send_typed_message(logs_msg)
++        ws_logger.info(f"✅ CLEAN ARCH: Successfully sent {len(logs)} logs to session {session_id}")
++        
+     except Exception as e:
+-        ws_logger.error(f"Error retrieving logs for session {session_id}: {e}")
+-        await websocket.send_json({
+-            "type": "error",
+-            "message": f"Server error: {str(e)}"
+-        })
+-
+-async def handle_ping(websocket: WebSocket):
+-    """Handle ping request"""
++        ws_logger.error(f"❌ Error retrieving logs for session {session_id}: {e}")
++        
++        error_msg = MessageRegistry.create_message(
++            ControlMessageType.ERROR,
++            session_id=session_id,
++            message=f"Log retrieval error: {str(e)}",
++            error_code="LOG_RETRIEVAL_ERROR"
++        )
++        await active_sessions[session_id].send_typed_message(error_msg)
++
++async def handle_ping(session_id: str, websocket: WebSocket):
++    """Handle ping request with clean messaging"""
+     try:
+-        await websocket.send_json({
+-            "type": "pong",
+-            "timestamp": datetime.now().isoformat()
+-        })
+-        ws_logger.debug("Sent pong response")
++        pong_msg = MessageRegistry.create_message(
++            ControlMessageType.PONG,
++            session_id=session_id
++        )
++        await active_sessions[session_id].send_typed_message(pong_msg)
++        ws_logger.debug(f"🏓 CLEAN ARCH: Sent pong response to session {session_id}")
+     except Exception as e:
+-        ws_logger.error(f"Error sending pong response: {e}")
++        ws_logger.error(f"❌ Error sending pong response to session {session_id}: {e}")
+ 
+ async def handle_get_approval_history(session_id: str, websocket: WebSocket):
+-    """Get approval history for the session"""
++    """Get approval history for the session with clean messaging"""
+     try:
+         session = active_sessions.get(session_id)
+         if session:
+-            await websocket.send_json({
+-                "type": "approval_history",
++            # Send as a custom message (could be added to registry if needed frequently)
++            history_data = {
++                "type": "approval_history_response",
++                "session_id": session_id,
++                "timestamp": datetime.now().isoformat(),
+                 "history": session.approval_history,
+-                "current_stage": session.current_approval_stage
+-            })
+-            ws_logger.info(f"Sent approval history for session {session_id}: {len(session.approval_history)} entries")
++                "current_stage": session.current_approval_stage,
++                "total_approvals": len(session.approval_history)
++            }
++            
++            await websocket.send_json(history_data)
++            ws_logger.info(f"📋 CLEAN ARCH: Sent approval history for session {session_id}: {len(session.approval_history)} entries")
+         else:
+-            await websocket.send_json({
+-                "type": "approval_history",
++            # Send empty response
++            empty_response = {
++                "type": "approval_history_response",
++                "session_id": session_id,
++                "timestamp": datetime.now().isoformat(),
+                 "history": [],
+-                "current_stage": None
+-            })
+-            ws_logger.warning(f"No session found for approval history request: {session_id}")
++                "current_stage": None,
++                "total_approvals": 0
++            }
++            await websocket.send_json(empty_response)
++            ws_logger.warning(f"⚠️ No session found for approval history request: {session_id}")
++            
+     except Exception as e:
+-        ws_logger.error(f"Error getting approval history for session {session_id}: {e}")
+-        await websocket.send_json({
+-            "type": "error",
+-            "message": f"Error retrieving approval history: {str(e)}"
+-        })
++        ws_logger.error(f"❌ Error getting approval history for session {session_id}: {e}")
++        
++        error_msg = MessageRegistry.create_message(
++            ControlMessageType.ERROR,
++            session_id=session_id,
++            message=f"Error retrieving approval history: {str(e)}",
++            error_code="APPROVAL_HISTORY_ERROR"
++        )
++        await active_sessions[session_id].send_typed_message(error_msg)
++
++async def handle_get_supported_types(session_id: str, websocket: WebSocket):
++    """Handle request for supported message types"""
++    try:
++        session = active_sessions.get(session_id)
++        if session:
++            # Send message types advertisement
++            advertisement_msg = MessageRegistry.create_message(
++                ControlMessageType.MESSAGE_TYPES_ADVERTISEMENT,
++                session_id=session_id
++            )
++            await session.send_typed_message(advertisement_msg)
++            ws_logger.info(f"📢 CLEAN ARCH: Re-sent message types to session {session_id}")
++        else:
++            ws_logger.warning(f"⚠️ Session not found for types request: {session_id}")
++            
++    except Exception as e:
++        ws_logger.error(f"❌ Error sending supported types to session {session_id}: {e}")
++
++# ============================================================================
++# MAIN WEBSOCKET ENDPOINT
++# ============================================================================
+ 
+-# Main WebSocket endpoint - simplified
+ @router.websocket("/ws/analysis")
+ async def websocket_analysis(websocket: WebSocket):
+-    """Simplified WebSocket endpoint for real-time analysis workflow."""
++    """Clean WebSocket endpoint with message type advertisement and validation"""
+     await websocket.accept()
+     session_id = str(uuid.uuid4())
+ 
+-    ws_logger.info(f"Simplified WebSocket connection established: {session_id}")
++    ws_logger.info(f"🔌 CLEAN ARCH: WebSocket connection established: {session_id}")
+ 
+-    # Send connection confirmation
+-    await websocket.send_json({
+-        "type": "connection_established",
+-        "session_id": session_id,
+-        "message": "Connected to Simplified SOC Analysis",
+-        "features": ["real_time_streaming", "multi_stage_approval", "simplified_progress"]
+-    })
++    # Create clean session
++    session = CleanSession(session_id, websocket)
++    active_sessions[session_id] = session
+ 
+-    # Create simplified session
+-    active_sessions[session_id] = SimplifiedSession(session_id, websocket)
++    # Send connection established and advertise message types
++    await send_connection_established(session)
+ 
+     try:
+         while True:
+             data = await websocket.receive_json()
+             message_type = data.get("type")
+ 
+-            ws_logger.debug(f"Received message type: {message_type} for session {session_id}")
++            ws_logger.debug(f"📨 CLEAN ARCH: Received message type: {message_type} for session {session_id}")
+ 
+             try:
++                # Route to appropriate handler
+                 if message_type == "start_analysis":
+                     await handle_start_analysis(data, session_id, websocket)
+ 
+@@ -332,39 +506,78 @@ async def websocket_analysis(websocket: WebSocket):
+                     await handle_retrieve_logs(session_id, websocket)
+ 
+                 elif message_type == "ping":
+-                    await handle_ping(websocket)
++                    await handle_ping(session_id, websocket)
+ 
+                 elif message_type == "get_approval_history":
+                     await handle_get_approval_history(session_id, websocket)
+ 
++                elif message_type == "get_supported_types":
++                    await handle_get_supported_types(session_id, websocket)
++
+                 else:
+-                    await websocket.send_json({
+-                        "type": "error",
+-                        "message": f"Unknown message type: {message_type}"
+-                    })
++                    # Send error for unknown message type
++                    error_msg = MessageRegistry.create_message(
++                        ControlMessageType.ERROR,
++                        session_id=session_id,
++                        message=f"Unknown message type: {message_type}",
++                        error_code="UNKNOWN_MESSAGE_TYPE",
++                        details={"received_type": message_type, "supported_types": session.supported_types['all_types']}
++                    )
++                    await session.send_typed_message(error_msg)
+ 
+             except WebSocketDisconnect:
+-                ws_logger.info(f"Client disconnected during message processing for session {session_id}")
++                ws_logger.info(f"🔌 Client disconnected during message processing for session {session_id}")
+                 break
+             except Exception as e:
+-                ws_logger.error(f"Error processing message for session {session_id}: {str(e)}")
+-                error_message = {
+-                    "type": "error",
+-                    "content": f"Error: {str(e)}",
+-                    "source": "system"
+-                }
++                ws_logger.error(f"❌ Error processing message for session {session_id}: {str(e)}")
++                
++                error_msg = MessageRegistry.create_message(
++                    ControlMessageType.ERROR,
++                    session_id=session_id,
++                    message=f"Message processing error: {str(e)}",
++                    error_code="MESSAGE_PROCESSING_ERROR"
++                )
++                
+                 try:
+-                    await websocket.send_json(error_message)
++                    await session.send_typed_message(error_msg)
+                 except WebSocketDisconnect:
+-                    ws_logger.info(f"Client disconnected while sending error for session {session_id}")
++                    ws_logger.info(f"🔌 Client disconnected while sending error for session {session_id}")
+                     break
+ 
+     except WebSocketDisconnect:
+-        ws_logger.info(f"Simplified WebSocket disconnected: {session_id}")
++        ws_logger.info(f"🔌 CLEAN ARCH: WebSocket disconnected: {session_id}")
+     except Exception as e:
+-        ws_logger.error(f"Unexpected WebSocket error for session {session_id}: {str(e)}")
++        ws_logger.error(f"❌ Unexpected WebSocket error for session {session_id}: {str(e)}")
+     finally:
+         # Clean up session
+         if session_id in active_sessions:
+             del active_sessions[session_id]
+-            ws_logger.info(f"Cleaned up simplified session {session_id}")
+\ No newline at end of file
++            ws_logger.info(f"🧹 CLEAN ARCH: Cleaned up session {session_id}")
++
++# ============================================================================
++# HEALTH CHECK WITH CLEAN ARCHITECTURE INFO
++# ============================================================================
++
++@router.get("/ws/health")
++async def websocket_health():
++    """Health check endpoint with clean architecture information"""
++    return {
++        "status": "healthy",
++        "architecture": "clean_messaging",
++        "active_sessions": len(active_sessions),
++        "supported_message_types": MessageRegistry.get_supported_types(),
++        "message_categories": {
++            "results": len([e.value for e in ResultMessageType]),
++            "status": len([e.value for e in StatusMessageType]),
++            "interaction": len([e.value for e in InteractionMessageType]),
++            "control": len([e.value for e in ControlMessageType])
++        },
++        "features": [
++            "type_validation",
++            "message_advertisement", 
++            "clean_architecture",
++            "structured_messaging",
++            "real_time_streaming"
++        ],
++        "timestamp": datetime.now().isoformat()
++    }
+\ No newline at end of file
+diff --git a/services/ai-agents/src/core/messaging/registry.py b/services/ai-agents/src/core/messaging/registry.py
+new file mode 100644
+index 0000000..0882bd0
+--- /dev/null
++++ b/services/ai-agents/src/core/messaging/registry.py
+@@ -0,0 +1,401 @@
++# services/ai-agents/src/core/messaging/registry.py
++"""
++Clean Message Architecture Registry
++Centralized message type definitions with Pydantic models for type safety
++"""
++from enum import Enum
++from typing import Any, Dict, List, Optional, Union, Literal
++from pydantic import BaseModel, Field
++from datetime import datetime
++
++# ============================================================================
++# MESSAGE TYPE ENUMS
++# ============================================================================
++
++class MessageCategory(str, Enum):
++    """High-level message categories"""
++    RESULTS = "results"
++    STATUS = "status" 
++    INTERACTION = "interaction"
++    CONTROL = "control"
++
++class ResultMessageType(str, Enum):
++    """Structured results from agent analysis"""
++    TRIAGE_FINDINGS = "triage_findings"
++    CONTEXT_RESEARCH = "context_research"
++    ANALYSIS_RECOMMENDATIONS = "analysis_recommendations"
++
++class StatusMessageType(str, Enum):
++    """Progress and state updates"""
++    AGENT_STATUS_UPDATE = "agent_status_update"
++    AGENT_FUNCTION_DETECTED = "agent_function_detected"
++    AGENT_OUTPUT_STREAM = "agent_output_stream"
++    WORKFLOW_PROGRESS = "workflow_progress"
++
++class InteractionMessageType(str, Enum):
++    """Human interaction workflow"""
++    APPROVAL_REQUEST = "approval_request"
++    APPROVAL_RESPONSE = "approval_response"
++    APPROVAL_TIMEOUT = "approval_timeout"
++
++class ControlMessageType(str, Enum):
++    """System-level control messages"""
++    CONNECTION_ESTABLISHED = "connection_established"
++    MESSAGE_TYPES_ADVERTISEMENT = "message_types_advertisement"
++    ANALYSIS_COMPLETE = "analysis_complete"
++    WORKFLOW_REJECTED = "workflow_rejected"
++    ERROR = "error"
++    LOGS_RETRIEVED = "logs_retrieved"
++    PING = "ping"
++    PONG = "pong"
++
++# Union of all message types for validation
++AllMessageTypes = Union[
++    ResultMessageType,
++    StatusMessageType, 
++    InteractionMessageType,
++    ControlMessageType
++]
++
++# ============================================================================
++# BASE MESSAGE MODELS
++# ============================================================================
++
++class BaseMessage(BaseModel):
++    """Base message structure for all WebSocket messages"""
++    type: str = Field(..., description="Message type identifier")
++    session_id: str = Field(..., description="WebSocket session identifier")
++    timestamp: datetime = Field(default_factory=datetime.now, description="Message timestamp")
++
++class BaseResultMessage(BaseMessage):
++    """Base for structured analysis results"""
++    category: Literal[MessageCategory.RESULTS] = MessageCategory.RESULTS
++    agent: str = Field(..., description="Agent that produced the result")
++    data: Dict[str, Any] = Field(..., description="Structured result data")
++
++class BaseStatusMessage(BaseMessage):
++    """Base for status and progress updates"""
++    category: Literal[MessageCategory.STATUS] = MessageCategory.STATUS
++    agent: Optional[str] = Field(None, description="Agent the status relates to")
++
++class BaseInteractionMessage(BaseMessage):
++    """Base for human interaction messages"""
++    category: Literal[MessageCategory.INTERACTION] = MessageCategory.INTERACTION
++    stage: Optional[str] = Field(None, description="Approval stage")
++
++class BaseControlMessage(BaseMessage):
++    """Base for system control messages"""
++    category: Literal[MessageCategory.CONTROL] = MessageCategory.CONTROL
++
++# ============================================================================
++# STRUCTURED RESULT MESSAGES
++# ============================================================================
++
++class TriageFindingsMessage(BaseResultMessage):
++    """Triage agent findings with structured threat data"""
++    type: Literal[ResultMessageType.TRIAGE_FINDINGS] = ResultMessageType.TRIAGE_FINDINGS
++    agent: Literal["triage"] = "triage"
++    
++    class TriageFindingsData(BaseModel):
++        priority: Literal["critical", "high", "medium", "low"]
++        threat_type: str
++        source_ip: str
++        target_hosts: List[str]
++        attack_pattern: str
++        timeline: Dict[str, str]  # start, end
++        indicators: List[str]
++        confidence_score: float = Field(ge=0.0, le=1.0)
++        event_count: int = Field(ge=1)
++        affected_services: List[str]
++        brief_summary: str
++        
++    data: TriageFindingsData
++
++class ContextResearchMessage(BaseResultMessage):
++    """Context agent research results"""
++    type: Literal[ResultMessageType.CONTEXT_RESEARCH] = ResultMessageType.CONTEXT_RESEARCH
++    agent: Literal["context"] = "context"
++    
++    class ContextResearchData(BaseModel):
++        search_queries: List[str]
++        total_documents_found: int
++        relevant_incidents: List[Dict[str, Any]]
++        pattern_analysis: str
++        recommendations: List[str]
++        confidence_assessment: str
++        
++    data: ContextResearchData
++
++class AnalysisRecommendationsMessage(BaseResultMessage):
++    """Analyst agent final recommendations"""
++    type: Literal[ResultMessageType.ANALYSIS_RECOMMENDATIONS] = ResultMessageType.ANALYSIS_RECOMMENDATIONS
++    agent: Literal["analyst"] = "analyst"
++    
++    class AnalysisRecommendationsData(BaseModel):
++        threat_assessment: Dict[str, Any]
++        attack_timeline: List[Dict[str, Any]]
++        attribution_indicators: List[str]
++        lateral_movement_evidence: List[str]
++        data_at_risk: List[str]
++        business_impact: str
++        recommended_actions: List[str]
++        investigation_notes: str
++        
++    data: AnalysisRecommendationsData
++
++# ============================================================================
++# STATUS UPDATE MESSAGES
++# ============================================================================
++
++class AgentStatusUpdateMessage(BaseStatusMessage):
++    """Agent status change notification"""
++    type: Literal[StatusMessageType.AGENT_STATUS_UPDATE] = StatusMessageType.AGENT_STATUS_UPDATE
++    agent: str = Field(..., description="Agent name")
++    status: Literal["pending", "active", "complete", "error", "awaiting-approval"] = Field(..., description="New status")
++    previous_status: Optional[str] = Field(None, description="Previous status")
++    message: Optional[str] = Field(None, description="Status change description")
++
++class AgentFunctionDetectedMessage(BaseStatusMessage):
++    """Agent function call detection"""
++    type: Literal[StatusMessageType.AGENT_FUNCTION_DETECTED] = StatusMessageType.AGENT_FUNCTION_DETECTED
++    agent: str = Field(..., description="Agent name")
++    function_name: str = Field(..., description="Function being called")
++    description: Optional[str] = Field(None, description="Function description")
++
++class AgentOutputStreamMessage(BaseStatusMessage):
++    """Real-time agent output streaming"""
++    type: Literal[StatusMessageType.AGENT_OUTPUT_STREAM] = StatusMessageType.AGENT_OUTPUT_STREAM
++    agent: str = Field(..., description="Agent name")
++    content: str = Field(..., description="Output content")
++    is_final: bool = Field(False, description="Whether this is final output")
++
++class WorkflowProgressMessage(BaseStatusMessage):
++    """Overall workflow progress update"""
++    type: Literal[StatusMessageType.WORKFLOW_PROGRESS] = StatusMessageType.WORKFLOW_PROGRESS
++    progress_percentage: int = Field(ge=0, le=100, description="Overall progress")
++    current_stage: str = Field(..., description="Current workflow stage")
++    completed_stages: List[str] = Field(default_factory=list, description="Completed stages")
++    estimated_time_remaining: Optional[int] = Field(None, description="Estimated seconds remaining")
++
++# ============================================================================
++# INTERACTION MESSAGES
++# ============================================================================
++
++class ApprovalRequestMessage(BaseInteractionMessage):
++    """Request for human approval"""
++    type: Literal[InteractionMessageType.APPROVAL_REQUEST] = InteractionMessageType.APPROVAL_REQUEST
++    stage: str = Field(..., description="Approval stage (triage, context, analyst)")
++    prompt: str = Field(..., description="Approval prompt text")
++    context: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
++    timeout_seconds: Optional[int] = Field(300, description="Approval timeout")
++    
++class ApprovalResponseMessage(BaseInteractionMessage):
++    """Human approval response"""
++    type: Literal[InteractionMessageType.APPROVAL_RESPONSE] = InteractionMessageType.APPROVAL_RESPONSE
++    stage: str = Field(..., description="Approval stage")
++    decision: Literal["approve", "reject", "custom"] = Field(..., description="Approval decision")
++    custom_instructions: Optional[str] = Field(None, description="Custom instructions if decision is custom")
++    
++class ApprovalTimeoutMessage(BaseInteractionMessage):
++    """Approval timeout notification"""
++    type: Literal[InteractionMessageType.APPROVAL_TIMEOUT] = InteractionMessageType.APPROVAL_TIMEOUT
++    stage: str = Field(..., description="Approval stage that timed out")
++    default_action: str = Field(..., description="Default action taken")
++
++# ============================================================================
++# CONTROL MESSAGES
++# ============================================================================
++
++class ConnectionEstablishedMessage(BaseControlMessage):
++    """WebSocket connection establishment"""
++    type: Literal[ControlMessageType.CONNECTION_ESTABLISHED] = ControlMessageType.CONNECTION_ESTABLISHED
++    features: List[str] = Field(default_factory=list, description="Enabled features")
++    server_info: Dict[str, str] = Field(default_factory=dict, description="Server information")
++
++class MessageTypesAdvertisementMessage(BaseControlMessage):
++    """Advertise supported message types to client"""
++    type: Literal[ControlMessageType.MESSAGE_TYPES_ADVERTISEMENT] = ControlMessageType.MESSAGE_TYPES_ADVERTISEMENT
++    
++    class SupportedMessageTypes(BaseModel):
++        results: List[str] = Field(default_factory=lambda: [e.value for e in ResultMessageType])
++        status: List[str] = Field(default_factory=lambda: [e.value for e in StatusMessageType])
++        interaction: List[str] = Field(default_factory=lambda: [e.value for e in InteractionMessageType])
++        control: List[str] = Field(default_factory=lambda: [e.value for e in ControlMessageType])
++        all_types: List[str] = Field(default_factory=lambda: [
++            *[e.value for e in ResultMessageType],
++            *[e.value for e in StatusMessageType], 
++            *[e.value for e in InteractionMessageType],
++            *[e.value for e in ControlMessageType]
++        ])
++        
++    supported_types: SupportedMessageTypes = Field(default_factory=SupportedMessageTypes)
++
++class AnalysisCompleteMessage(BaseControlMessage):
++    """Analysis workflow completion"""
++    type: Literal[ControlMessageType.ANALYSIS_COMPLETE] = ControlMessageType.ANALYSIS_COMPLETE
++    success: bool = Field(..., description="Whether analysis completed successfully")
++    results_summary: Dict[str, Any] = Field(default_factory=dict, description="Summary of results")
++    duration_seconds: Optional[float] = Field(None, description="Analysis duration")
++
++class WorkflowRejectedMessage(BaseControlMessage):
++    """Workflow rejection notification"""
++    type: Literal[ControlMessageType.WORKFLOW_REJECTED] = ControlMessageType.WORKFLOW_REJECTED
++    rejected_stage: str = Field(..., description="Stage where rejection occurred")
++    reason: Optional[str] = Field(None, description="Rejection reason")
++
++class ErrorMessage(BaseControlMessage):
++    """Error notification"""
++    type: Literal[ControlMessageType.ERROR] = ControlMessageType.ERROR
++    error_code: Optional[str] = Field(None, description="Error code")
++    message: str = Field(..., description="Error message")
++    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
++
++class LogsRetrievedMessage(BaseControlMessage):
++    """Logs retrieval notification"""
++    type: Literal[ControlMessageType.LOGS_RETRIEVED] = ControlMessageType.LOGS_RETRIEVED
++    logs: List[Dict[str, Any]] = Field(..., description="Retrieved log entries")
++    count: int = Field(..., description="Number of logs retrieved")
++    message: str = Field(..., description="Success message")
++
++class PingMessage(BaseControlMessage):
++    """Ping message for connection testing"""
++    type: Literal[ControlMessageType.PING] = ControlMessageType.PING
++
++class PongMessage(BaseControlMessage):
++    """Pong response to ping"""
++    type: Literal[ControlMessageType.PONG] = ControlMessageType.PONG
++
++# ============================================================================
++# MESSAGE REGISTRY AND FACTORY
++# ============================================================================
++
++class MessageRegistry:
++    """Central registry for all message types and their models"""
++    
++    # Map message types to their Pydantic models
++    TYPE_TO_MODEL = {
++        # Results
++        ResultMessageType.TRIAGE_FINDINGS: TriageFindingsMessage,
++        ResultMessageType.CONTEXT_RESEARCH: ContextResearchMessage,
++        ResultMessageType.ANALYSIS_RECOMMENDATIONS: AnalysisRecommendationsMessage,
++        
++        # Status
++        StatusMessageType.AGENT_STATUS_UPDATE: AgentStatusUpdateMessage,
++        StatusMessageType.AGENT_FUNCTION_DETECTED: AgentFunctionDetectedMessage,
++        StatusMessageType.AGENT_OUTPUT_STREAM: AgentOutputStreamMessage,
++        StatusMessageType.WORKFLOW_PROGRESS: WorkflowProgressMessage,
++        
++        # Interaction
++        InteractionMessageType.APPROVAL_REQUEST: ApprovalRequestMessage,
++        InteractionMessageType.APPROVAL_RESPONSE: ApprovalResponseMessage,
++        InteractionMessageType.APPROVAL_TIMEOUT: ApprovalTimeoutMessage,
++        
++        # Control
++        ControlMessageType.CONNECTION_ESTABLISHED: ConnectionEstablishedMessage,
++        ControlMessageType.MESSAGE_TYPES_ADVERTISEMENT: MessageTypesAdvertisementMessage,
++        ControlMessageType.ANALYSIS_COMPLETE: AnalysisCompleteMessage,
++        ControlMessageType.WORKFLOW_REJECTED: WorkflowRejectedMessage,
++        ControlMessageType.ERROR: ErrorMessage,
++        ControlMessageType.LOGS_RETRIEVED: LogsRetrievedMessage,
++        ControlMessageType.PING: PingMessage,
++        ControlMessageType.PONG: PongMessage,
++    }
++    
++    @classmethod
++    def get_model(cls, message_type: str) -> Optional[BaseMessage]:
++        """Get the Pydantic model for a message type"""
++        return cls.TYPE_TO_MODEL.get(message_type)
++    
++    @classmethod
++    def validate_message(cls, message_type: str, data: Dict[str, Any]) -> BaseMessage:
++        """Validate and parse a message using its registered model"""
++        model_class = cls.get_model(message_type)
++        if not model_class:
++            raise ValueError(f"Unknown message type: {message_type}")
++        
++        return model_class(**data)
++    
++    @classmethod
++    def get_supported_types(cls) -> Dict[str, List[str]]:
++        """Get all supported message types organized by category"""
++        return {
++            "results": [e.value for e in ResultMessageType],
++            "status": [e.value for e in StatusMessageType],
++            "interaction": [e.value for e in InteractionMessageType],
++            "control": [e.value for e in ControlMessageType],
++            "all_types": list(cls.TYPE_TO_MODEL.keys())
++        }
++    
++    @classmethod
++    def create_message(cls, message_type: str, session_id: str, **kwargs) -> BaseMessage:
++        """Factory method to create typed messages"""
++        model_class = cls.get_model(message_type)
++        if not model_class:
++            raise ValueError(f"Unknown message type: {message_type}")
++        
++        # Ensure required fields are provided
++        message_data = {
++            "type": message_type,
++            "session_id": session_id,
++            "timestamp": datetime.now(),
++            **kwargs
++        }
++        
++        return model_class(**message_data)
++
++# ============================================================================
++# MESSAGE VALIDATION UTILITIES
++# ============================================================================
++
++def validate_message_type(message_type: str) -> bool:
++    """Validate that a message type is supported"""
++    return message_type in MessageRegistry.TYPE_TO_MODEL
++
++def get_message_category(message_type: str) -> Optional[str]:
++    """Get the category for a message type"""
++    model_class = MessageRegistry.get_model(message_type)
++    if model_class and hasattr(model_class, 'category'):
++        return model_class.category.value if hasattr(model_class.category, 'value') else model_class.category
++    return None
++
++# ============================================================================
++# CONVENIENCE FUNCTIONS
++# ============================================================================
++
++def create_triage_findings(session_id: str, findings_data: Dict[str, Any]) -> TriageFindingsMessage:
++    """Convenience function to create triage findings message"""
++    return MessageRegistry.create_message(
++        ResultMessageType.TRIAGE_FINDINGS,
++        session_id=session_id,
++        data=TriageFindingsMessage.TriageFindingsData(**findings_data)
++    )
++
++def create_agent_status_update(session_id: str, agent: str, status: str, message: str = None) -> AgentStatusUpdateMessage:
++    """Convenience function to create agent status update"""
++    return MessageRegistry.create_message(
++        StatusMessageType.AGENT_STATUS_UPDATE,
++        session_id=session_id,
++        agent=agent,
++        status=status,
++        message=message
++    )
++
++def create_approval_request(session_id: str, stage: str, prompt: str, context: Dict[str, Any] = None) -> ApprovalRequestMessage:
++    """Convenience function to create approval request"""
++    return MessageRegistry.create_message(
++        InteractionMessageType.APPROVAL_REQUEST,
++        session_id=session_id,
++        stage=stage,
++        prompt=prompt,
++        context=context or {}
++    )
++
++def create_error_message(session_id: str, message: str, error_code: str = None, details: Dict[str, Any] = None) -> ErrorMessage:
++    """Convenience function to create error message"""
++    return MessageRegistry.create_message(
++        ControlMessageType.ERROR,
++        session_id=session_id,
++        message=message,
++        error_code=error_code,
++        details=details
++    )
+\ No newline at end of file
+diff --git a/services/ai-agents/src/core/services/agent_service.py b/services/ai-agents/src/core/services/agent_service.py
+index 5527101..e91d9e0 100644
+--- a/services/ai-agents/src/core/services/agent_service.py
++++ b/services/ai-agents/src/core/services/agent_service.py
+@@ -1,5 +1,8 @@
+-# services/ai-agents/src/core/services/agent_service.py - DEBUG VERSION
+-# Add extensive logging to debug callback issues
++# services/ai-agents/src/core/services/agent_service.py - CLEAN ARCHITECTURE VERSION
++"""
++Agent Service with Clean Message Architecture
++Uses the new message registry for type-safe, structured messaging
++"""
+ 
+ import json
+ import logging
+@@ -26,8 +29,563 @@ from autogen_core import CancellationToken
+ from core.models.analysis import SOCAnalysisResult, PriorityFindings
+ from utils.serialization import sanitize_chroma_results
+ 
++# Import the new message registry
++from core.messaging.registry import (
++    MessageRegistry,
++    ResultMessageType,
++    StatusMessageType,
++    InteractionMessageType,
++    ControlMessageType,
++    create_triage_findings,
++    create_agent_status_update,
++    create_approval_request,
++    create_error_message,
++    validate_message_type,
++    get_message_category
++)
++
+ agent_logger = logging.getLogger("agent_diagnostics")
+ 
++# ============================================================================
++# CLEAN MESSAGE SENDER
++# ============================================================================
++
++class CleanMessageSender:
++    """Type-safe message sender using the clean architecture"""
++    
++    def __init__(self, session_id: str, message_callback: Optional[Callable] = None):
++        self.session_id = session_id
++        self.message_callback = message_callback
++        
++    async def send_message(self, message) -> bool:
++        """Send a typed message through the callback"""
++        if not self.message_callback:
++            agent_logger.warning(f"No message callback available for session {self.session_id}")
++            return False
++            
++        try:
++            # Convert Pydantic model to dict for JSON serialization
++            if hasattr(message, 'model_dump'):
++                message_data = message.model_dump()
++            else:
++                message_data = message
++                
++            # Validate message type
++            message_type = message_data.get('type')
++            if not validate_message_type(message_type):
++                agent_logger.error(f"❌ Invalid message type: {message_type}")
++                return False
++                
++            agent_logger.debug(f"🚀 CLEAN ARCH: Sending {message_type} for session {self.session_id}")
++            await self.message_callback(message_data)
++            return True
++            
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send message: {e}")
++            agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
++            return False
++    
++    # ========================================================================
++    # STRUCTURED RESULTS
++    # ========================================================================
++    
++    async def send_triage_findings(self, findings_data: Dict[str, Any]) -> bool:
++        """Send structured triage findings"""
++        try:
++            message = create_triage_findings(self.session_id, findings_data)
++            agent_logger.info(f"✅ CLEAN ARCH: Sending triage findings - {findings_data.get('threat_type')} from {findings_data.get('source_ip')}")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to create triage findings message: {e}")
++            return False
++    
++    async def send_context_research(self, research_data: Dict[str, Any]) -> bool:
++        """Send structured context research results"""
++        try:
++            message = MessageRegistry.create_message(
++                ResultMessageType.CONTEXT_RESEARCH,
++                session_id=self.session_id,
++                data=research_data
++            )
++            agent_logger.info(f"✅ CLEAN ARCH: Sending context research - {research_data.get('total_documents_found', 0)} documents")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to create context research message: {e}")
++            return False
++    
++    async def send_analysis_recommendations(self, analysis_data: Dict[str, Any]) -> bool:
++        """Send structured analysis recommendations"""
++        try:
++            message = MessageRegistry.create_message(
++                ResultMessageType.ANALYSIS_RECOMMENDATIONS,
++                session_id=self.session_id,
++                data=analysis_data
++            )
++            actions_count = len(analysis_data.get('recommended_actions', []))
++            agent_logger.info(f"✅ CLEAN ARCH: Sending analysis recommendations - {actions_count} actions")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to create analysis recommendations message: {e}")
++            return False
++    
++    # ========================================================================
++    # STATUS UPDATES
++    # ========================================================================
++    
++    async def send_agent_status_update(self, agent: str, status: str, message: str = None, previous_status: str = None) -> bool:
++        """Send agent status update"""
++        try:
++            status_message = MessageRegistry.create_message(
++                StatusMessageType.AGENT_STATUS_UPDATE,
++                session_id=self.session_id,
++                agent=agent,
++                status=status,
++                message=message,
++                previous_status=previous_status
++            )
++            agent_logger.info(f"📊 CLEAN ARCH: Agent {agent} status: {previous_status} → {status}")
++            return await self.send_message(status_message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send agent status update: {e}")
++            return False
++    
++    async def send_function_detected(self, agent: str, function_name: str, description: str = None) -> bool:
++        """Send function call detection"""
++        try:
++            message = MessageRegistry.create_message(
++                StatusMessageType.AGENT_FUNCTION_DETECTED,
++                session_id=self.session_id,
++                agent=agent,
++                function_name=function_name,
++                description=description
++            )
++            agent_logger.info(f"🔧 CLEAN ARCH: Function detected - {function_name} from {agent}")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send function detection: {e}")
++            return False
++    
++    async def send_agent_output_stream(self, agent: str, content: str, is_final: bool = False) -> bool:
++        """Send real-time agent output"""
++        try:
++            message = MessageRegistry.create_message(
++                StatusMessageType.AGENT_OUTPUT_STREAM,
++                session_id=self.session_id,
++                agent=agent,
++                content=content,
++                is_final=is_final
++            )
++            agent_logger.debug(f"💬 CLEAN ARCH: Streaming output from {agent}: {content[:50]}...")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send agent output stream: {e}")
++            return False
++    
++    async def send_workflow_progress(self, progress_percentage: int, current_stage: str, completed_stages: List[str] = None, estimated_time_remaining: int = None) -> bool:
++        """Send workflow progress update"""
++        try:
++            message = MessageRegistry.create_message(
++                StatusMessageType.WORKFLOW_PROGRESS,
++                session_id=self.session_id,
++                progress_percentage=progress_percentage,
++                current_stage=current_stage,
++                completed_stages=completed_stages or [],
++                estimated_time_remaining=estimated_time_remaining
++            )
++            agent_logger.info(f"📈 CLEAN ARCH: Workflow progress: {progress_percentage}% - {current_stage}")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send workflow progress: {e}")
++            return False
++    
++    # ========================================================================
++    # INTERACTION MESSAGES
++    # ========================================================================
++    
++    async def send_approval_request(self, stage: str, prompt: str, context: Dict[str, Any] = None, timeout_seconds: int = 300) -> bool:
++        """Send approval request"""
++        try:
++            message = MessageRegistry.create_message(
++                InteractionMessageType.APPROVAL_REQUEST,
++                session_id=self.session_id,
++                stage=stage,
++                prompt=prompt,
++                context=context or {},
++                timeout_seconds=timeout_seconds
++            )
++            agent_logger.info(f"👤 CLEAN ARCH: Approval request for {stage} stage")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send approval request: {e}")
++            return False
++    
++    # ========================================================================
++    # CONTROL MESSAGES  
++    # ========================================================================
++    
++    async def send_analysis_complete(self, success: bool, results_summary: Dict[str, Any] = None, duration_seconds: float = None) -> bool:
++        """Send analysis completion notification"""
++        try:
++            message = MessageRegistry.create_message(
++                ControlMessageType.ANALYSIS_COMPLETE,
++                session_id=self.session_id,
++                success=success,
++                results_summary=results_summary or {},
++                duration_seconds=duration_seconds
++            )
++            agent_logger.info(f"🎉 CLEAN ARCH: Analysis complete - Success: {success}")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send analysis complete: {e}")
++            return False
++    
++    async def send_workflow_rejected(self, rejected_stage: str, reason: str = None) -> bool:
++        """Send workflow rejection notification"""
++        try:
++            message = MessageRegistry.create_message(
++                ControlMessageType.WORKFLOW_REJECTED,
++                session_id=self.session_id,
++                rejected_stage=rejected_stage,
++                reason=reason
++            )
++            agent_logger.info(f"❌ CLEAN ARCH: Workflow rejected at {rejected_stage} stage")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send workflow rejection: {e}")
++            return False
++    
++    async def send_error(self, error_message: str, error_code: str = None, details: Dict[str, Any] = None) -> bool:
++        """Send error notification"""
++        try:
++            message = create_error_message(
++                self.session_id,
++                error_message,
++                error_code,
++                details
++            )
++            agent_logger.error(f"💥 CLEAN ARCH: Sending error - {error_message}")
++            return await self.send_message(message)
++        except Exception as e:
++            agent_logger.error(f"❌ CLEAN ARCH: Failed to send error message: {e}")
++            return False
++
++# ============================================================================
++# WORKFLOW PROGRESS TRACKER
++# ============================================================================
++
++class WorkflowProgressTracker:
++    """Track workflow progress and calculate smart percentages"""
++    
++    def __init__(self, sender: CleanMessageSender):
++        self.sender = sender
++        self.start_time = datetime.now()
++        self.completed_stages = []
++        self.current_stage = "initializing"
++        
++        # Stage definitions with their completion percentages
++        self.stages = {
++            "initializing": 5,
++            "triage_active": 25,
++            "triage_complete": 35,
++            "context_active": 55,
++            "context_complete": 65,
++            "analyst_active": 85,
++            "analyst_complete": 95,
++            "finalizing": 100
++        }
++    
++    async def update_stage(self, new_stage: str) -> bool:
++        """Update current stage and send progress"""
++        if new_stage == self.current_stage:
++            return True
++            
++        # Mark previous stage as completed
++        if self.current_stage not in self.completed_stages:
++            self.completed_stages.append(self.current_stage)
++        
++        self.current_stage = new_stage
++        progress = self.stages.get(new_stage, 0)
++        
++        # Calculate estimated time remaining
++        elapsed = (datetime.now() - self.start_time).total_seconds()
++        if progress > 0 and progress < 100:
++            estimated_remaining = int((elapsed / progress) * (100 - progress))
++        else:
++            estimated_remaining = None
++        
++        return await self.sender.send_workflow_progress(
++            progress_percentage=progress,
++            current_stage=new_stage.replace('_', ' ').title(),
++            completed_stages=self.completed_stages.copy(),
++            estimated_time_remaining=estimated_remaining
++        )
++
++# ============================================================================
++# ENHANCED MESSAGE PROCESSOR
++# ============================================================================
++
++async def _process_clean_streaming_message(
++    message, 
++    sender: CleanMessageSender,
++    progress_tracker: WorkflowProgressTracker,
++    final_results: Dict[str, Any]
++):
++    """Process streaming messages using clean architecture"""
++    try:
++        if not hasattr(message, 'source') or not hasattr(message, 'content'):
++            return
++            
++        source = message.source
++        content = str(message.content)
++        
++        agent_logger.debug(f"🔍 CLEAN ARCH: Processing message from {source}: {type(message).__name__}")
++        
++        # ====================================================================
++        # STRUCTURED RESULTS PROCESSING
++        # ====================================================================
++        
++        # PRIORITY 1: Handle structured triage findings
++        if (source == "TriageSpecialist" and 
++            isinstance(message, StructuredMessage) and
++            isinstance(message.content, PriorityFindings)):
++            
++            findings = message.content.model_dump()
++            final_results['priority_findings'] = findings
++            
++            agent_logger.info(f"✅ CLEAN ARCH: Structured triage findings: {findings.get('threat_type')} from {findings.get('source_ip')}")
++            
++            # Send using clean architecture
++            await sender.send_triage_findings(findings)
++            await sender.send_agent_status_update("triage", "complete", "Triage analysis complete")
++            await progress_tracker.update_stage("triage_complete")
++            
++            return  # Don't send as output stream
++        
++        # PRIORITY 2: Handle structured analyst results  
++        elif (source == "SeniorAnalyst" and 
++              isinstance(message, StructuredMessage) and
++              isinstance(message.content, SOCAnalysisResult)):
++            
++            result = message.content.model_dump()
++            final_results['structured_result'] = result
++            
++            agent_logger.info(f"✅ CLEAN ARCH: Structured analyst results received")
++            
++            # Extract analysis data
++            if 'detailed_analysis' in result:
++                await sender.send_analysis_recommendations(result['detailed_analysis'])
++            
++            await sender.send_agent_status_update("analyst", "complete", "Deep analysis complete")
++            await progress_tracker.update_stage("analyst_complete")
++            
++            return  # Don't send as output stream
++        
++        # ====================================================================
++        # APPROVAL REQUEST PROCESSING
++        # ====================================================================
++        
++        elif isinstance(message, UserInputRequestedEvent):
++            agent_logger.info(f"👤 CLEAN ARCH: Approval request from {source}")
++            
++            # Determine stage from source
++            stage = _determine_approval_stage_from_source(source)
++            
++            await sender.send_approval_request(
++                stage=stage,
++                prompt=getattr(message, 'content', 'Approval required'),
++                context={"source": source, "timestamp": datetime.now().isoformat()}
++            )
++            
++            return  # Don't send as output stream
++        
++        # ====================================================================
++        # WORKFLOW STATUS PROCESSING
++        # ====================================================================
++        
++        elif (source == "MultiStageApprovalAgent" and 
++              ("WORKFLOW_REJECTED" in content or 
++               ("REJECTED" in content and "human operator" in content))):
++            
++            final_results['was_rejected'] = True
++            agent_logger.info(f"❌ CLEAN ARCH: Workflow rejected")
++            
++            await sender.send_workflow_rejected(
++                rejected_stage=_determine_rejection_stage(content),
++                reason="User rejected the workflow"
++            )
++            
++            return  # Don't send as output stream
++        
++        # ====================================================================
++        # FUNCTION CALL DETECTION
++        # ====================================================================
++        
++        if ('FunctionCall(' in content or 
++            'report_priority_findings' in content or 
++            'report_detailed_analysis' in content or
++            'search_historical_incidents' in content):
++            
++            agent_type = _determine_agent_type_from_source(source)
++            function_name = _extract_function_name(content)
++            
++            if agent_type:
++                await sender.send_function_detected(
++                    agent=agent_type,
++                    function_name=function_name,
++                    description=f"Function call detected in {source}"
++                )
++                
++                # Update progress for function calls
++                if agent_type == "triage":
++                    await progress_tracker.update_stage("triage_active")
++                elif agent_type == "context":
++                    await progress_tracker.update_stage("context_active")
++                elif agent_type == "analyst":
++                    await progress_tracker.update_stage("analyst_active")
++        
++        # ====================================================================
++        # AGENT OUTPUT STREAMING
++        # ====================================================================
++        
++        # Send as agent output stream for relevant agents
++        agent_type = _determine_agent_type_from_source(source)
++        if agent_type and source not in ['user', 'system']:
++            
++            # Filter out system messages but allow actual agent content
++            if not _is_system_message(content):
++                await sender.send_agent_output_stream(
++                    agent=agent_type,
++                    content=content,
++                    is_final=False
++                )
++        
++        # ====================================================================
++        # TOOL OUTPUT PARSING
++        # ====================================================================
++        
++        await _parse_clean_tool_outputs(message, final_results, sender)
++                
++    except Exception as e:
++        agent_logger.error(f"❌ CLEAN ARCH: Critical error processing message: {e}")
++        agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
++        await sender.send_error(f"Message processing error: {str(e)}")
++
++def _determine_agent_type_from_source(source: str) -> Optional[str]:
++    """Determine agent type from message source"""
++    source_lower = source.lower()
++    
++    if 'triage' in source_lower:
++        return 'triage'
++    elif 'context' in source_lower:
++        return 'context'
++    elif 'analyst' in source_lower or 'senior' in source_lower:
++        return 'analyst'
++    
++    return None
++
++def _determine_approval_stage_from_source(source: str) -> str:
++    """Determine approval stage from message source or content"""
++    if 'triage' in source.lower():
++        return 'triage'
++    elif 'context' in source.lower():
++        return 'context'
++    elif 'analyst' in source.lower():
++        return 'analyst'
++    
++    return 'unknown'
++
++def _determine_rejection_stage(content: str) -> str:
++    """Determine which stage was rejected from content"""
++    content_lower = content.lower()
++    
++    if 'triage' in content_lower:
++        return 'triage'
++    elif 'context' in content_lower:
++        return 'context'
++    elif 'analyst' in content_lower or 'recommendation' in content_lower:
++        return 'analyst'
++    
++    return 'unknown'
++
++def _extract_function_name(content: str) -> str:
++    """Extract function name from content"""
++    if 'report_priority_findings' in content:
++        return 'report_priority_findings'
++    elif 'report_detailed_analysis' in content:
++        return 'report_detailed_analysis'
++    elif 'search_historical_incidents' in content:
++        return 'search_historical_incidents'
++    elif 'FunctionCall(' in content:
++        # Try to extract function name from FunctionCall
++        try:
++            start = content.find('FunctionCall(') + len('FunctionCall(')
++            end = content.find(',', start)
++            if end == -1:
++                end = content.find(')', start)
++            return content[start:end].strip().strip('"\'')
++        except:
++            return 'unknown_function'
++    
++    return 'unknown_function'
++
++def _is_system_message(content: str) -> bool:
++    """Check if content is a system message that should be filtered"""
++    system_indicators = [
++        'ENHANCED SECURITY LOG ANALYSIS',
++        'MULTI-STAGE WORKFLOW',
++        'TriageSpecialist: Begin initial triage',
++        'Please analyze these OCSF',
++    ]
++    
++    return any(indicator in content for indicator in system_indicators)
++
++async def _parse_clean_tool_outputs(message, final_results: Dict, sender: CleanMessageSender):
++    """Parse and handle tool outputs using clean architecture"""
++    content = str(message.content)
++    
++    try:
++        # Extract context search results
++        if "status" in content and "search_complete" in content:
++            import re
++            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
++            if json_match:
++                tool_result = json.loads(json_match.group())
++                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
++                    sanitized_results = sanitize_chroma_results(tool_result['results'])
++                    final_results['chroma_context'] = sanitized_results
++                    
++                    # Send structured context research results
++                    research_data = {
++                        "search_queries": ["historical incidents"],
++                        "total_documents_found": len(tool_result['results'].get('documents', [])),
++                        "relevant_incidents": tool_result['results'].get('documents', []),
++                        "pattern_analysis": "Historical pattern analysis from ChromaDB search",
++                        "recommendations": ["Consider historical context in analysis"],
++                        "confidence_assessment": "High confidence in historical correlation"
++                    }
++                    
++                    await sender.send_context_research(research_data)
++                    await sender.send_agent_status_update("context", "complete", "Context research complete")
++        
++        # Extract detailed analysis from analyst agent tools
++        elif "status" in content and "analysis_complete" in content:
++            import re
++            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
++            if json_match:
++                tool_result = json.loads(json_match.group())
++                if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
++                    final_results['detailed_analysis'] = tool_result['data']
++                    
++                    # Send structured analysis recommendations
++                    await sender.send_analysis_recommendations(tool_result['data'])
++                        
++    except Exception as e:
++        agent_logger.error(f"❌ CLEAN ARCH: Error parsing tool outputs: {e}")
++
++# ============================================================================
++# TEAM CREATION
++# ============================================================================
++
+ async def _create_soc_team(
+     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
+ ):
+@@ -82,300 +640,16 @@ async def _create_soc_team(
+         custom_message_types=[
+             StructuredMessage[PriorityFindings],
+             StructuredMessage[SOCAnalysisResult],
+-            ],
++        ],
+     )
+     
+-    agent_logger.info("SOC team created for simplified streaming")
++    agent_logger.info("SOC team created for clean architecture workflow")
+     
+     return team, model_client
+ 
+-async def _process_streaming_message(
+-    message, 
+-    message_callback: Optional[Callable],
+-    session_id: str,
+-    final_results: Dict[str, Any]
+-):
+-    """Process a streaming message and send real-time updates - DEBUG VERSION"""
+-    try:
+-        if hasattr(message, 'source') and hasattr(message, 'content'):
+-            source = message.source
+-            content = str(message.content)
+-            
+-            agent_logger.debug(f"Processing streaming message from {source}: Type={type(message).__name__}")
+-            agent_logger.debug(f"Message callback available: {message_callback is not None}")
+-            
+-            # PRIORITY 1: Handle structured output from triage agent
+-            if (source == "TriageSpecialist" and 
+-                isinstance(message, StructuredMessage) and
+-                isinstance(message.content, PriorityFindings)):
+-                
+-                # Store structured findings
+-                priority_findings = message.content.model_dump()
+-                final_results['priority_findings'] = priority_findings
+-                agent_logger.info(f"✅ STRUCTURED TRIAGE: {priority_findings.get('threat_type')} from {priority_findings.get('source_ip')}")
+-                
+-                # Send priority findings update via callback - DEBUG VERSION
+-                if message_callback:
+-                    try:
+-                        agent_logger.info(f"🚀 ATTEMPTING to send priority_findings_update via callback for session {session_id}")
+-                        
+-                        callback_data = {
+-                            'type': 'priority_findings_update',
+-                            'data': priority_findings,
+-                            'session_id': session_id
+-                        }
+-                        
+-                        agent_logger.info(f"📤 Callback data prepared: type={callback_data['type']}, session={session_id}")
+-                        agent_logger.debug(f"📋 Full callback data: {json.dumps(callback_data, indent=2)}")
+-                        
+-                        await message_callback(callback_data)
+-                        
+-                        agent_logger.info(f"✅ SUCCESSFULLY SENT priority_findings_update for session {session_id}")
+-                        
+-                    except Exception as e:
+-                        agent_logger.error(f"❌ ERROR sending priority_findings_update: {e}")
+-                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-                else:
+-                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send priority_findings_update")
+-                
+-                # EARLY RETURN: Don't send this as real_time_agent_output since we sent structured version
+-                agent_logger.debug(f"⏭️ Early return for structured triage message - session {session_id}")
+-                return
+-            
+-            # PRIORITY 2: Handle structured results from analyst
+-            elif (source == "SeniorAnalyst" and 
+-                  isinstance(message, StructuredMessage) and
+-                  isinstance(message.content, SOCAnalysisResult)):
+-                
+-                final_results['structured_result'] = message.content.model_dump()
+-                agent_logger.info(f"✅ STRUCTURED ANALYST: Analysis complete")
+-                
+-                # Send structured analysis results
+-                if message_callback:
+-                    try:
+-                        agent_logger.info(f"🚀 ATTEMPTING to send detailed_analysis_update via callback for session {session_id}")
+-                        
+-                        await message_callback({
+-                            'type': 'detailed_analysis_update',
+-                            'data': message.content.model_dump(),
+-                            'session_id': session_id
+-                        })
+-                        
+-                        agent_logger.info(f"✅ SUCCESSFULLY SENT detailed_analysis_update for session {session_id}")
+-                        
+-                    except Exception as e:
+-                        agent_logger.error(f"❌ ERROR sending detailed_analysis_update: {e}")
+-                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-                else:
+-                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send detailed_analysis_update")
+-                
+-                # EARLY RETURN: Don't send this as real_time_agent_output since we sent structured version
+-                agent_logger.debug(f"⏭️ Early return for structured analyst message - session {session_id}")
+-                return
+-            
+-            # PRIORITY 3: Handle approval requests
+-            elif isinstance(message, UserInputRequestedEvent):
+-                agent_logger.info(f"👤 APPROVAL REQUEST: session {session_id}")
+-                
+-                if message_callback:
+-                    try:
+-                        agent_logger.info(f"🚀 ATTEMPTING to send UserInputRequestedEvent via callback for session {session_id}")
+-                        
+-                        await message_callback({
+-                            'type': 'UserInputRequestedEvent',
+-                            'content': getattr(message, 'content', 'Approval required'),
+-                            'source': source,
+-                            'session_id': session_id
+-                        })
+-                        
+-                        agent_logger.info(f"✅ SUCCESSFULLY SENT UserInputRequestedEvent for session {session_id}")
+-                        
+-                    except Exception as e:
+-                        agent_logger.error(f"❌ ERROR sending UserInputRequestedEvent: {e}")
+-                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-                else:
+-                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send UserInputRequestedEvent")
+-                
+-                # EARLY RETURN: Don't send approval requests as real_time_agent_output
+-                agent_logger.debug(f"⏭️ Early return for approval request - session {session_id}")
+-                return
+-            
+-            # PRIORITY 4: Handle workflow rejection
+-            elif (source == "MultiStageApprovalAgent" and 
+-                  ("WORKFLOW_REJECTED" in content or 
+-                   ("REJECTED" in content and "human operator" in content))):
+-                
+-                final_results['was_rejected'] = True
+-                agent_logger.info(f"❌ WORKFLOW REJECTED: session {session_id}")
+-                
+-                if message_callback:
+-                    try:
+-                        agent_logger.info(f"🚀 ATTEMPTING to send workflow_rejected via callback for session {session_id}")
+-                        
+-                        await message_callback({
+-                            'type': 'workflow_rejected',
+-                            'content': 'Analysis workflow was rejected by user',
+-                            'session_id': session_id
+-                        })
+-                        
+-                        agent_logger.info(f"✅ SUCCESSFULLY SENT workflow_rejected for session {session_id}")
+-                        
+-                    except Exception as e:
+-                        agent_logger.error(f"❌ ERROR sending workflow_rejected: {e}")
+-                        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-                else:
+-                    agent_logger.warning(f"⚠️ NO MESSAGE CALLBACK available for session {session_id} - cannot send workflow_rejected")
+-                
+-                # EARLY RETURN: Don't send rejection as real_time_agent_output
+-                agent_logger.debug(f"⏭️ Early return for workflow rejection - session {session_id}")
+-                return
+-            
+-            # DEFAULT: Send ALL OTHER messages as real_time_agent_output
+-            # This includes triage intermediate work, context outputs, analyst work, etc.
+-            if (message_callback and 
+-                source not in ['user', 'system']):
+-                try:
+-                    agent_type = determine_agent_type(source)
+-                    if agent_type:
+-                        agent_logger.debug(f"💬 SENDING real_time_agent_output: {agent_type} - {content[:50]}...")
+-                        
+-                        await message_callback({
+-                            'type': 'real_time_agent_output',
+-                            'agent': agent_type,
+-                            'content': content,
+-                            'source': source,
+-                            'timestamp': datetime.now().isoformat(),
+-                            'session_id': session_id
+-                        })
+-                        
+-                        agent_logger.debug(f"✅ SENT real_time_agent_output for {agent_type}")
+-                    else:
+-                        agent_logger.debug(f"⚠️ Could not determine agent type for source: {source}")
+-                except Exception as e:
+-                    agent_logger.error(f"❌ ERROR sending real_time_agent_output: {e}")
+-                    agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-            elif not message_callback:
+-                agent_logger.debug(f"⚠️ No callback available for real_time_agent_output from {source}")
+-            
+-            # Parse tool outputs for context and analyst agents
+-            await _parse_tool_outputs(message, final_results, message_callback, session_id)
+-                
+-    except Exception as e:
+-        agent_logger.error(f"❌ CRITICAL ERROR processing streaming message: {e}")
+-        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-
+-def determine_agent_type(agent_source: str) -> str:
+-    """Enhanced agent type determination"""
+-    agent_source_lower = agent_source.lower()
+-    
+-    # Enhanced mapping with more variations
+-    agent_mappings = {
+-        'triagespecialist': 'triage',
+-        'triage': 'triage',
+-        'contextAgent': 'context',
+-        'context': 'context', 
+-        'senioranalystspecialist': 'analyst',
+-        'senioranalyst': 'analyst',
+-        'analyst': 'analyst',
+-        'multistageapprovalagent': 'approval',
+-        'approval': 'approval'
+-    }
+-    
+-    for source_key, agent_type in agent_mappings.items():
+-        if source_key in agent_source_lower:
+-            return agent_type
+-    
+-    return None
+-
+-async def _parse_tool_outputs(message, final_results: Dict, message_callback: Optional[Callable], session_id: str):
+-    """Parse and handle tool outputs from agent messages"""
+-    content = str(message.content)
+-    
+-    try:
+-        # Extract context search results
+-        if "status" in content and "search_complete" in content:
+-            import re
+-            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+-            if json_match:
+-                tool_result = json.loads(json_match.group())
+-                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
+-                    final_results['chroma_context'] = sanitize_chroma_results(tool_result['results'])
+-                    
+-                    # Send context update
+-                    if message_callback:
+-                        try:
+-                            agent_logger.info(f"🚀 ATTEMPTING to send context_results_update via callback for session {session_id}")
+-                            
+-                            await message_callback({
+-                                'type': 'context_results_update',
+-                                'data': tool_result['results'],
+-                                'session_id': session_id
+-                            })
+-                            
+-                            agent_logger.info(f"✅ SUCCESSFULLY SENT context_results_update for session {session_id}")
+-                            
+-                        except Exception as e:
+-                            agent_logger.error(f"❌ ERROR sending context_results_update: {e}")
+-                            agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-        
+-        # Extract detailed analysis from analyst agent tools
+-        elif "status" in content and "analysis_complete" in content:
+-            import re
+-            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
+-            if json_match:
+-                tool_result = json.loads(json_match.group())
+-                if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
+-                    final_results['detailed_analysis'] = tool_result['data']
+-                    
+-                    # Send analysis complete update
+-                    if message_callback:
+-                        try:
+-                            agent_logger.info(f"🚀 ATTEMPTING to send detailed_analysis_update (tool) via callback for session {session_id}")
+-                            
+-                            await message_callback({
+-                                'type': 'detailed_analysis_update',
+-                                'data': tool_result['data'],
+-                                'session_id': session_id
+-                            })
+-                            
+-                            agent_logger.info(f"✅ SUCCESSFULLY SENT detailed_analysis_update (tool) for session {session_id}")
+-                            
+-                        except Exception as e:
+-                            agent_logger.error(f"❌ ERROR sending detailed_analysis_update (tool): {e}")
+-                            agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-        
+-        # Detect function calls
+-        if ('FunctionCall(' in content or 
+-            'report_priority_findings' in content or 
+-            'report_detailed_analysis' in content):
+-            
+-            agent_logger.info(f"🔧 FUNCTION CALL: {message.source}")
+-            
+-            if message_callback:
+-                try:
+-                    agent_type = determine_agent_type(message.source)
+-                    function_name = "priority_findings" if 'priority' in content else "detailed_analysis"
+-                    
+-                    agent_logger.info(f"🚀 ATTEMPTING to send function_call_detected via callback for session {session_id}")
+-                    
+-                    await message_callback({
+-                        'type': 'function_call_detected',
+-                        'agent': agent_type,
+-                        'function': function_name,
+-                        'content': content,
+-                        'timestamp': datetime.now().isoformat(),
+-                        'session_id': session_id
+-                    })
+-                    
+-                    agent_logger.info(f"✅ SUCCESSFULLY SENT function_call_detected for session {session_id}")
+-                    
+-                except Exception as e:
+-                    agent_logger.error(f"❌ ERROR sending function_call_detected: {e}")
+-                    agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
+-                        
+-    except Exception as e:
+-        agent_logger.error(f"❌ ERROR parsing tool outputs: {e}")
+-        agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
++# ============================================================================
++# MAIN WORKFLOW FUNCTION
++# ============================================================================
+ 
+ async def run_analysis_workflow(
+     log_batch: str,
+@@ -384,21 +658,15 @@ async def run_analysis_workflow(
+     message_callback: Optional[Callable] = None
+ ) -> bool:
+     """
+-    SIMPLIFIED: Execute SOC analysis workflow without progress parameter.
+-    
+-    Args:
+-        log_batch: Security logs to analyze
+-        session_id: WebSocket session ID
+-        user_input_callback: Function to handle user input requests
+-        message_callback: Function to handle real-time agent messages
+-    
+-    Returns:
+-        bool: True if analysis completed successfully, False otherwise
++    Execute SOC analysis workflow using clean message architecture
+     """
+-    agent_logger.info(f"Starting simplified SOC analysis workflow for session {session_id}")
+-    agent_logger.info(f"Callbacks available - user_input: {user_input_callback is not None}, message: {message_callback is not None}")
++    agent_logger.info(f"🚀 CLEAN ARCH: Starting SOC analysis workflow for session {session_id}")
+     
+-    # Initialize simple results tracking
++    # Initialize clean message sender and progress tracker
++    sender = CleanMessageSender(session_id, message_callback)
++    progress_tracker = WorkflowProgressTracker(sender)
++    
++    # Initialize results tracking
+     final_results = {
+         'priority_findings': None,
+         'chroma_context': {},
+@@ -407,21 +675,28 @@ async def run_analysis_workflow(
+         'was_rejected': False
+     }
+     
+-    # Define the user input function
++    # Start workflow progress
++    await progress_tracker.update_stage("initializing")
++    start_time = datetime.now()
++    
++    # Define the user input function with clean architecture
+     async def _user_input_func(prompt: str, cancellation_token: Optional[CancellationToken]) -> str:
+-        """Handle user input requests for multi-stage approval."""
++        """Handle user input requests with clean messaging"""
+         if user_input_callback:
+             try:
+                 user_response = await user_input_callback(prompt, session_id)
+-                agent_logger.info(f"User input received for session {session_id}: {user_response}")
++                agent_logger.info(f"👤 CLEAN ARCH: User response for session {session_id}: {user_response}")
+                 
+-                # Process the response based on content
++                # Process response based on content
+                 if user_response.lower() in ['approve', 'approved', 'yes', 'continue']:
+                     if 'triage' in prompt.lower() or 'priority threat' in prompt.lower():
++                        await progress_tracker.update_stage("context_active")
+                         return "APPROVED - Triage findings approved. ContextAgent, please search for similar historical incidents."
+                     elif 'historical' in prompt.lower() or 'context' in prompt.lower():
++                        await progress_tracker.update_stage("analyst_active")
+                         return "APPROVED - Historical context validated as relevant. SeniorAnalyst, please perform deep analysis."
+                     elif 'recommend' in prompt.lower() or 'action' in prompt.lower():
++                        await progress_tracker.update_stage("finalizing")
+                         return "APPROVED - Recommended actions authorized. Please proceed with implementation."
+                     else:
+                         return "APPROVED - Proceeding to next stage of analysis."
+@@ -441,16 +716,18 @@ async def run_analysis_workflow(
+                 return "TIMEOUT - No user response received. Auto-approving to continue analysis."
+             except Exception as e:
+                 agent_logger.error(f"Error getting user input for session {session_id}: {e}")
++                await sender.send_error(f"User input error: {str(e)}")
+                 return "ERROR - Failed to get user input. Auto-approving to continue analysis."
+         else:
+             agent_logger.info(f"No user input callback for session {session_id}, auto-approving")
+             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
+     
+     try:
++        # Create the SOC team
+         team, model_client = await _create_soc_team(user_input_func=_user_input_func)
+         
+-        # Create the analysis task
+-        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH MULTI-STAGE APPROVAL WORKFLOW
++        # Create the enhanced analysis task
++        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE
+ 
+ Please analyze these OCSF security log events for threats requiring immediate attention:
+ 
+@@ -479,55 +756,44 @@ APPROVAL POINTS:
+ 
+ TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, request approval to proceed with the investigation."""
+         
+-        agent_logger.info(f"Starting team execution for session {session_id}")
++        agent_logger.info(f"Starting clean architecture team execution for session {session_id}")
+         
+         # Use run_stream for real-time message processing
+         stream = team.run_stream(task=task, cancellation_token=CancellationToken())
+         
+         # Process messages in real-time as they arrive
+         async for message in stream:
+-            await _process_streaming_message(message, message_callback, session_id, final_results)
++            await _process_clean_streaming_message(message, sender, progress_tracker, final_results)
+         
+         await model_client.close()
+         
+-        # Send final completion update
+-        if message_callback:
+-            try:
+-                agent_logger.info(f"🚀 ATTEMPTING to send analysis_complete_final via callback for session {session_id}")
+-                
+-                await message_callback({
+-                    'type': 'analysis_complete_final',
+-                    'was_rejected': final_results.get('was_rejected', False),
+-                    'results': final_results,
+-                    'session_id': session_id
+-                })
+-                
+-                agent_logger.info(f"✅ SUCCESSFULLY SENT analysis_complete_final for session {session_id}")
+-                
+-            except Exception as e:
+-                agent_logger.error(f"❌ ERROR sending analysis_complete_final: {e}")
+-                agent_logger.error(f"❌ Full error traceback: {traceback.format_exc()}")
++        # Calculate duration
++        duration = (datetime.now() - start_time).total_seconds()
+         
++        # Send final completion update
+         success = not final_results.get('was_rejected', False)
+         
+-        agent_logger.info(f"Simplified SOC analysis workflow completed for session {session_id}")
+-        agent_logger.info(f"Final status - Was rejected: {final_results.get('was_rejected', False)}")
++        await sender.send_analysis_complete(
++            success=success,
++            results_summary={
++                "has_priority_findings": final_results.get('priority_findings') is not None,
++                "has_context_data": bool(final_results.get('chroma_context')),
++                "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
++                "was_rejected": final_results.get('was_rejected', False)
++            },
++            duration_seconds=duration
++        )
++        
++        agent_logger.info(f"Clean architecture SOC analysis workflow completed for session {session_id}")
++        agent_logger.info(f"Final status - Success: {success}, Duration: {duration:.1f}s")
+         
+         return success
+         
+     except Exception as e:
+-        agent_logger.error(f"Simplified SOC analysis workflow error for session {session_id}: {e}")
++        agent_logger.error(f"Clean architecture SOC analysis workflow error for session {session_id}: {e}")
+         agent_logger.error(f"Full traceback: {traceback.format_exc()}")
+         
+-        # Send error via callback
+-        if message_callback:
+-            try:
+-                await message_callback({
+-                    'type': 'error',
+-                    'content': f"Analysis error: {str(e)}",
+-                    'session_id': session_id
+-                })
+-            except Exception as callback_error:
+-                agent_logger.error(f"❌ ERROR sending error via callback: {callback_error}")
++        # Send error via clean messaging
++        await sender.send_error(f"Analysis workflow error: {str(e)}")
+         
+         return False
+\ No newline at end of file
+diff --git a/services/ai-agents/src/static/js/websocket.js b/services/ai-agents/src/static/js/websocket.js
+index fe075db..4ba1be7 100644
+--- a/services/ai-agents/src/static/js/websocket.js
++++ b/services/ai-agents/src/static/js/websocket.js
+@@ -1,5 +1,5 @@
+-// services/ai-agents/src/static/js/websocket.js - DEBUG VERSION
+-// Complete file with debug logging for priority_findings_update issue
++// services/ai-agents/src/static/js/websocket.js - CLEAN ARCHITECTURE VERSION
++// WebSocket client with message type validation and clean architecture support
+ 
+ // Import other modules
+ import * as debugLogger from './debugLogger.js';
+@@ -7,75 +7,127 @@ import * as ui from './ui.js';
+ import * as approvalWorkflow from './approvalWorkflow.js';
+ import * as progressManager from './progressManager.js';
+ 
+-// WebSocket Management and Real-time Streaming
++// ============================================================================
++// CLEAN MESSAGE ARCHITECTURE GLOBALS
++// ============================================================================
++
+ var websocket = null;
+-var wsStats = { connected: false, messages_sent: 0, messages_received: 0, reconnects: 0 };
++var wsStats = { connected: false, messages_sent: 0, messages_received: 0, reconnects: 0, type_validation_errors: 0 };
+ var reconnectAttempts = 0;
+ var maxReconnectAttempts = 5;
+ var currentSessionId = null;
+ 
+-// Real-time agent output buffers
+-var agentOutputBuffers = {
+-    triage: [],
+-    context: [],
+-    analyst: []
++// Clean Architecture State
++var supportedMessageTypes = {
++    results: [],
++    status: [],
++    interaction: [],
++    control: [],
++    all_types: []
+ };
+-
+-// Function call tracking
+-var functionCallsDetected = {
+-    triage: false,
+-    context: false,
+-    analyst: false
++var messageTypeValidationEnabled = false;
++var cleanArchitectureEnabled = false;
++
++// Agent state tracking
++var agentStates = {
++    triage: { status: 'pending', has_findings: false },
++    context: { status: 'pending', has_research: false },
++    analyst: { status: 'pending', has_recommendations: false }
+ };
+ 
+-// NEW: Simple progress tracking based on specific events
++// Workflow progress tracking
+ var workflowProgress = {
+-    triage: 0,     // 0 = pending, 1 = active, 2 = complete
+-    context: 0,    
+-    analyst: 0,
+-    overall: 0     // Calculated from stages: 0-100%
++    current_stage: 'initializing',
++    progress_percentage: 0,
++    completed_stages: [],
++    estimated_time_remaining: null
+ };
+ 
++// ============================================================================
++// MESSAGE TYPE VALIDATION
++// ============================================================================
++
++function validateMessageType(messageType) {
++    // Validate that a message type is supported by the server
++    if (!messageTypeValidationEnabled) {
++        debugLogger.debugLog('🔧 Message type validation disabled, accepting: ' + messageType);
++        return true;
++    }
++    
++    if (!supportedMessageTypes.all_types.includes(messageType)) {
++        debugLogger.debugLog('❌ CLEAN ARCH: Unsupported message type: ' + messageType, 'ERROR');
++        wsStats.type_validation_errors++;
++        
++        ui.showStatus('⚠️ Received unsupported message type: ' + messageType, 'warning');
++        return false;
++    }
++    
++    debugLogger.debugLog('✅ CLEAN ARCH: Valid message type: ' + messageType);
++    return true;
++}
++
++function getMessageCategory(messageType) {
++    // Get the category for a message type
++    for (const [category, types] of Object.entries(supportedMessageTypes)) {
++        if (category !== 'all_types' && types.includes(messageType)) {
++            return category;
++        }
++    }
++    return 'unknown';
++}
++
++function logMessageTypeStats() {
++    // Log statistics about message type validation
++    console.log('📊 CLEAN ARCH: Message Type Statistics:', {
++        validation_enabled: messageTypeValidationEnabled,
++        supported_types_count: supportedMessageTypes.all_types.length,
++        validation_errors: wsStats.type_validation_errors,
++        categories: {
++            results: supportedMessageTypes.results.length,
++            status: supportedMessageTypes.status.length,
++            interaction: supportedMessageTypes.interaction.length,
++            control: supportedMessageTypes.control.length
++        }
++    });
++}
++
++// ============================================================================
++// WEBSOCKET INITIALIZATION
++// ============================================================================
++
+ function initWebSocket() {
+-    console.log('initWebSocket called with enhanced real-time streaming support');
+-    var protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:';
++    console.log('🚀 CLEAN ARCH: Initializing WebSocket with clean message architecture support');
++    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+     var wsUrl = protocol + '//' + window.location.host + '/ws/analysis';
+ 
+-    debugLogger.debugLog('Connecting to Enhanced Real-time WebSocket: ' + wsUrl);
++    debugLogger.debugLog('🔌 CLEAN ARCH: Connecting to WebSocket: ' + wsUrl);
+     progressManager.updateConnectionStatus('connecting');
+ 
+     websocket = new WebSocket(wsUrl);
+ 
+     websocket.onopen = function(event) {
+-        debugLogger.debugLog('Enhanced Real-time WebSocket connection established');
++        debugLogger.debugLog('✅ CLEAN ARCH: WebSocket connection established');
+         progressManager.updateConnectionStatus('connected');
+         wsStats.connected = true;
+         reconnectAttempts = 0;
+-        ui.showStatus('Connected to Real-time SOC Analysis WebSocket', 'success');
++        ui.showStatus('🔌 Connected to Clean Architecture SOC Analysis WebSocket', 'success');
++        
++        // Reset clean architecture state
++        cleanArchitectureEnabled = false;
++        messageTypeValidationEnabled = false;
+     };
+ 
+-    // 👈 MODIFIED: Add extensive debug logging to existing onmessage handler
+     websocket.onmessage = function(event) {
+         wsStats.messages_received++;
+         
+         try {
+             var data = JSON.parse(event.data);
+             
+-            // 🚀 DEBUG LOGGING: Log every raw WebSocket message
+-            debugLogger.debugLog('📨 RAW WebSocket message received - Type: ' + data.type);
+-            console.log('📨 RAW WebSocket message:', data);
+-            
+-            // 🎯 SPECIFIC CHECK: Look for our missing message type
+-            if (data.type === 'priority_findings_update') {
+-                console.log('🎯 RAW MESSAGE: priority_findings_update detected in raw WebSocket data!');
+-                console.log('🎯 RAW DATA:', JSON.stringify(data, null, 2));
+-                debugLogger.debugLog('🎯 CRITICAL: priority_findings_update message received via WebSocket');
+-            } else {
+-                console.log('📝 RAW MESSAGE: Type "' + data.type + '" (not priority_findings_update)');
+-            }
++            debugLogger.debugLog('📨 CLEAN ARCH: Raw WebSocket message received - Type: ' + data.type);
++            console.log('📨 CLEAN ARCH: Raw message:', data);
+             
+-            // Call the existing message handler
+-            handleEnhancedRealtimeWebSocketMessage(data);
++            // Handle the message using clean architecture
++            handleCleanArchitectureMessage(data);
+             
+         } catch (e) {
+             console.error('❌ Error parsing WebSocket message:', e);
+@@ -85,283 +137,255 @@ function initWebSocket() {
+     };
+ 
+     websocket.onclose = function(event) {
+-        debugLogger.debugLog('Enhanced Real-time WebSocket connection closed: ' + event.code + ' - ' + event.reason);
++        debugLogger.debugLog('🔌 CLEAN ARCH: WebSocket connection closed: ' + event.code + ' - ' + event.reason);
+         progressManager.updateConnectionStatus('disconnected');
+         wsStats.connected = false;
+ 
+         if (!event.wasClean && reconnectAttempts < maxReconnectAttempts) {
+             reconnectAttempts++;
+-            ui.showStatus('Connection lost. Reconnecting... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')', 'warning');
++            ui.showStatus('🔄 Connection lost. Reconnecting... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')', 'warning');
+             setTimeout(function() {
+                 initWebSocket();
+                 wsStats.reconnects++;
+             }, 2000 * reconnectAttempts);
+         } else if (reconnectAttempts >= maxReconnectAttempts) {
+-            ui.showStatus('Connection failed. Please refresh the page.', 'error');
++            ui.showStatus('❌ Connection failed. Please refresh the page.', 'error');
+         }
+     };
+ 
+     websocket.onerror = function(error) {
+-        debugLogger.debugLog('Enhanced Real-time WebSocket error: ' + error, 'ERROR');
++        debugLogger.debugLog('❌ CLEAN ARCH: WebSocket error: ' + error, 'ERROR');
+         progressManager.updateConnectionStatus('error');
+-        ui.showStatus('Enhanced Real-time WebSocket connection error', 'error');
++        ui.showStatus('❌ Clean Architecture WebSocket connection error', 'error');
+     };
+ }
+ 
+-// NEW: Smart progress calculation based on completed stages
+-function updateOverallProgress() {
+-    var progress = 0;
+-    var statusText = 'Initializing';
+-    
+-    // Each stage contributes to overall progress
+-    if (workflowProgress.triage >= 1) {
+-        progress += 30;  // Triage active/complete
+-        statusText = 'Analyzing Threats';
+-    }
+-    if (workflowProgress.triage >= 2) {
+-        progress += 10;  // Triage complete
+-        statusText = 'Triage Complete';
+-    }
+-    if (workflowProgress.context >= 1) {
+-        progress += 20; // Context active  
+-        statusText = 'Researching Historical Context';
+-    }
+-    if (workflowProgress.context >= 2) {
+-        progress += 10; // Context complete
+-        statusText = 'Context Research Complete';
+-    }
+-    if (workflowProgress.analyst >= 1) {
+-        progress += 20; // Analysis active
+-        statusText = 'Deep Analysis in Progress';
+-    }
+-    if (workflowProgress.analyst >= 2) {
+-        progress += 10; // Analysis complete
+-        statusText = 'Analysis Complete';
+-    }
+-    
+-    workflowProgress.overall = progress;
++// ============================================================================
++// CLEAN ARCHITECTURE MESSAGE HANDLER
++// ============================================================================
++
++function handleCleanArchitectureMessage(data) {
++    // Main message handler for clean architecture messages
++    var messageType = data.type;
++    var category = getMessageCategory(messageType);
+     
+-    // Update UI with calculated progress
+-    ui.updateProgress(progress, statusText);
++    debugLogger.debugLog('🔍 CLEAN ARCH: Processing ' + category + '/' + messageType + ' message');
+     
+-    debugLogger.debugLog('Smart progress calculated: ' + progress + '% - ' + statusText);
+-}
+-
+-// NEW: Reset workflow progress for new analysis
+-function resetWorkflowProgress() {
+-    workflowProgress = { triage: 0, context: 0, analyst: 0, overall: 0 };
+-    functionCallsDetected = { triage: false, context: false, analyst: false };
+-    agentOutputBuffers = { triage: [], context: [], analyst: [] };
+-    debugLogger.debugLog('Workflow progress reset');
+-}
+-
+-// 👈 MODIFIED: Add extensive debug logging to message handler
+-function handleEnhancedRealtimeWebSocketMessage(data) {
+-    // 🚀 DEBUG LOGGING: Log every message that enters the handler
+-    debugLogger.debugLog('🔍 FRONTEND: Processing message type: ' + data.type);
+-    console.log('🔍 FRONTEND DEBUG: Full message entering handler:', data);
+-    
+-    // 🎯 SPECIFIC CHECK: Critical logging for our target message
+-    if (data.type === 'priority_findings_update') {
+-        console.log('🎯 FRONTEND DEBUG: priority_findings_update message received in handler!', data);
+-        console.log('🎯 FRONTEND DEBUG: About to call handleEnhancedPriorityFindingsUpdate');
+-        debugLogger.debugLog('🎯 CRITICAL: priority_findings_update entering switch statement');
+-    } else {
+-        console.log('📝 FRONTEND DEBUG: Message type "' + data.type + '" - not priority_findings_update');
++    // Validate message type if validation is enabled
++    if (!validateMessageType(messageType)) {
++        return; // Skip invalid message types
+     }
+     
+-    switch (data.type) {
+-        case 'connection_established':
+-            currentSessionId = data.session_id;
+-            debugLogger.debugLog('Connected with session ID: ' + data.session_id);
++    // Route to appropriate handler based on category and type
++    switch (category) {
++        case 'control':
++            handleControlMessage(data);
++            break;
+             
+-            // Reset progress for new session
+-            resetWorkflowProgress();
++        case 'results':
++            handleResultsMessage(data);
++            break;
+             
+-            // Show enhanced real-time features notification
+-            ui.showStatus('Real-time streaming enabled - agent outputs will appear live', 'info');
++        case 'status':
++            handleStatusMessage(data);
+             break;
+-
+-        case 'function_call_detected':
+-            // Handle detected function calls
+-            handleFunctionCallDetected(data);
++            
++        case 'interaction':
++            handleInteractionMessage(data);
+             break;
+-
+-        case 'real_time_agent_output':
+-            // Handle real-time agent output as it arrives
+-            handleEnhancedRealtimeAgentOutput(data);
++            
++        default:
++            // Handle unknown categories (might be custom or new message types)
++            handleUnknownMessage(data);
+             break;
++    }
++}
+ 
+-        case 'priority_findings_update':
+-            console.log('🎯 FRONTEND: Handling priority_findings_update in switch case');
+-            debugLogger.debugLog('🎯 CRITICAL: priority_findings_update switch case triggered');
+-            // Handle immediate priority findings
+-            handleEnhancedPriorityFindingsUpdate(data);
+-            break;
++// ============================================================================
++// CATEGORY-SPECIFIC MESSAGE HANDLERS
++// ============================================================================
+ 
+-        case 'context_results_update':
+-            // Handle immediate context results
+-            handleEnhancedContextResultsUpdate(data);
++function handleControlMessage(data) {
++    // Handle control category messages
++    var messageType = data.type;
++    
++    debugLogger.debugLog('🎛️ CLEAN ARCH: Handling control message: ' + messageType);
++    
++    switch (messageType) {
++        case 'connection_established':
++            handleConnectionEstablished(data);
+             break;
+-
+-        case 'detailed_analysis_update':
+-            // Handle immediate detailed analysis
+-            handleEnhancedDetailedAnalysisUpdate(data);
++            
++        case 'message_types_advertisement':
++            handleMessageTypesAdvertisement(data);
+             break;
+-
+-        case 'analysis_workflow_complete':
+-            // Handle final workflow completion
+-            handleEnhancedWorkflowComplete(data);
++            
++        case 'analysis_complete':
++            handleAnalysisComplete(data);
+             break;
+-
++            
+         case 'workflow_rejected':
+-            // Handle workflow rejection
+-            handleEnhancedWorkflowRejected(data);
+-            break;
+-
+-        case 'real_time_error':
+-            // Handle real-time errors
+-            debugLogger.debugLog('Real-time error: ' + data.content, 'ERROR');
+-            ui.showStatus('Real-time error: ' + data.content, 'error');
++            handleWorkflowRejected(data);
+             break;
+-
+-        case 'UserInputRequestedEvent':
+-            // Handle AutoGen-style user input request (approval request)
+-            debugLogger.debugLog('User input requested (approval request) - Enhanced Real-time');
+-            console.log('Real-time user input request data:', data);
+-            approvalWorkflow.handleApprovalRequest(data);
++            
++        case 'error':
++            handleErrorMessage(data);
+             break;
+-
++            
+         case 'logs_retrieved':
+-            debugLogger.debugLog('Logs retrieved message received');
+-            progressManager.handleLogsRetrieved(data);
++            handleLogsRetrieved(data);
+             break;
+-
+-        case 'error':
+-            debugLogger.debugLog('Server error received: ' + data.message, 'ERROR');
+-            console.log('Server error data:', data);
+-            ui.showStatus('Error: ' + (data.message || data.content || 'Unknown error'), 'error');
+-            break;
+-
++            
+         case 'pong':
+-            debugLogger.debugLog('Received pong from server');
++            handlePongMessage(data);
+             break;
+-
++            
+         default:
+-            debugLogger.debugLog('🚨 FRONTEND: Unknown enhanced real-time message type: ' + data.type, 'WARNING');
+-            console.log('🚨 FRONTEND: Unknown enhanced real-time message data:', data);
++            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown control message type: ' + messageType, 'WARNING');
++            break;
+     }
+ }
+ 
+-function handleFunctionCallDetected(data) {
+-    var agent = data.agent;
+-    var functionName = data.function;
+-    var content = data.content;
++function handleResultsMessage(data) {
++    // Handle results category messages
++    var messageType = data.type;
+     
+-    debugLogger.debugLog('🔧 FUNCTION CALL DETECTED: ' + functionName + ' from ' + agent);
+-    console.log('🔧 Function call details:', data);
++    debugLogger.debugLog('📊 CLEAN ARCH: Handling results message: ' + messageType);
+     
+-    // Mark function call as detected
+-    functionCallsDetected[agent] = true;
++    switch (messageType) {
++        case 'triage_findings':
++            handleTriageFindings(data);
++            break;
++            
++        case 'context_research':
++            handleContextResearch(data);
++            break;
++            
++        case 'analysis_recommendations':
++            handleAnalysisRecommendations(data);
++            break;
++            
++        default:
++            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown results message type: ' + messageType, 'WARNING');
++            break;
++    }
++}
++
++function handleStatusMessage(data) {
++    // Handle status category messages
++    var messageType = data.type;
+     
+-    // Show immediate feedback
+-    ui.showStatus('🔧 Function call detected: ' + functionName + ' from ' + agent, 'info');
++    debugLogger.debugLog('📈 CLEAN ARCH: Handling status message: ' + messageType);
+     
+-    // Update agent output to show function is being called
+-    var outputElement = document.getElementById(agent + 'Output');
+-    if (outputElement) {
+-        var timestamp = new Date().toLocaleTimeString();
+-        var functionCallText = '[' + timestamp + '] 🔧 FUNCTION CALL DETECTED: ' + functionName + '\n' +
+-            '⚡ Processing structured findings...\n' +
+-            '📊 Validating data and preparing results...\n';
+-        
+-        // Clear waiting text and show function call status
+-        if (outputElement.textContent.includes('Waiting for') || 
+-            outputElement.textContent.includes('waiting') ||
+-            outputElement.textContent.length < 100) {
+-            outputElement.textContent = functionCallText;
+-        } else {
+-            outputElement.textContent += '\n\n' + functionCallText;
+-        }
+-        
+-        // Auto-scroll
+-        outputElement.scrollTop = outputElement.scrollHeight;
++    switch (messageType) {
++        case 'agent_status_update':
++            handleAgentStatusUpdate(data);
++            break;
++            
++        case 'agent_function_detected':
++            handleAgentFunctionDetected(data);
++            break;
++            
++        case 'agent_output_stream':
++            handleAgentOutputStream(data);
++            break;
++            
++        case 'workflow_progress':
++            handleWorkflowProgress(data);
++            break;
++            
++        default:
++            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown status message type: ' + messageType, 'WARNING');
++            break;
+     }
++}
++
++function handleInteractionMessage(data) {
++    // Handle interaction category messages
++    var messageType = data.type;
+     
+-    // Update agent status to show it's processing function call
+-    ui.updateAgentStatus(agent, 'active');
+-    ui.showAgentSpinner(agent, true);
++    debugLogger.debugLog('👤 CLEAN ARCH: Handling interaction message: ' + messageType);
+     
+-    // Add special styling to indicate function call
+-    var agentCard = document.getElementById(agent + 'Card');
+-    if (agentCard) {
+-        agentCard.classList.add('function-calling');
+-        agentCard.style.borderLeft = '4px solid #f39c12';
+-        agentCard.style.boxShadow = '0 0 20px rgba(243, 156, 18, 0.4)';
++    switch (messageType) {
++        case 'approval_request':
++            handleApprovalRequest(data);
++            break;
++            
++        case 'approval_timeout':
++            handleApprovalTimeout(data);
++            break;
++            
++        default:
++            debugLogger.debugLog('⚠️ CLEAN ARCH: Unknown interaction message type: ' + messageType, 'WARNING');
++            break;
+     }
+ }
+ 
+-function handleEnhancedRealtimeAgentOutput(data) {
+-    var agent = data.agent;
+-    var content = data.content;
+-    var timestamp = data.timestamp;
+-    var source = data.source;
++function handleUnknownMessage(data) {
++    // Handle messages with unknown categories
++    debugLogger.debugLog('❓ CLEAN ARCH: Unknown message category for type: ' + data.type, 'WARNING');
+     
+-    // Enhanced filtering and processing
+-    if (!agent || agent === 'unknown' || !agentOutputBuffers[agent]) {
+-        debugLogger.debugLog('Skipping unknown or invalid agent output: ' + agent);
+-        return;
++    // Try to handle as legacy message for backward compatibility
++    if (handleLegacyMessage && typeof handleLegacyMessage === 'function') {
++        handleLegacyMessage(data);
++    } else {
++        ui.showStatus('⚠️ Received unknown message type: ' + data.type, 'warning');
+     }
++}
++
++// ============================================================================
++// SPECIFIC MESSAGE HANDLERS
++// ============================================================================
++
++function handleConnectionEstablished(data) {
++    // Handle connection established message
++    currentSessionId = data.session_id;
++    var features = data.features || [];
++    var serverInfo = data.server_info || {};
+     
+-    // Skip system messages but be more permissive for actual agent content
+-    if (content.includes('ENHANCED SECURITY LOG ANALYSIS') || 
+-        content.includes('MULTI-STAGE WORKFLOW') ||
+-        content.includes('TriageSpecialist: Begin initial triage')) {
+-        debugLogger.debugLog('Skipping task description message from: ' + agent);
+-        return;
+-    }
++    debugLogger.debugLog('✅ CLEAN ARCH: Connected with session ID: ' + currentSessionId);
++    debugLogger.debugLog('🔧 CLEAN ARCH: Server features: ' + features.join(', '));
++    debugLogger.debugLog('📋 CLEAN ARCH: Server info: ' + JSON.stringify(serverInfo));
+     
+-    // NEW: Mark agent as active when receiving output
+-    if (workflowProgress[agent] === 0) {
+-        workflowProgress[agent] = 1;
+-        ui.updateAgentStatus(agent, 'active');
+-        ui.showAgentSpinner(agent, true);
+-        updateOverallProgress();
++    // Check if clean architecture is enabled
++    if (features.includes('clean_message_architecture')) {
++        cleanArchitectureEnabled = true;
++        debugLogger.debugLog('✅ CLEAN ARCH: Clean message architecture enabled');
+     }
+     
+-    // Enhanced function call result detection
+-    if ((content.includes('status') && content.includes('priority_identified')) ||
+-        (content.includes('status') && content.includes('analysis_complete')) ||
+-        content.includes('FUNCTION CALLED') ||
+-        content.includes('FUNCTION EXECUTED')) {
+-        debugLogger.debugLog('🎯 Function call result detected for: ' + agent);
+-        handleEnhancedFunctionCallResult(agent, content, timestamp);
+-        return;
++    if (features.includes('type_validation')) {
++        // Don't enable validation yet - wait for message types advertisement
++        debugLogger.debugLog('🔧 CLEAN ARCH: Type validation available, waiting for type advertisement');
+     }
+     
+-    debugLogger.debugLog('Processing enhanced real-time output from ' + agent + ': ' + content.substring(0, 100) + '...');
+-    
+-    // Add to buffer
+-    agentOutputBuffers[agent].push({
+-        content: content,
+-        timestamp: timestamp,
+-        source: source
+-    });
+-    
+-    // Keep only last 20 messages
+-    if (agentOutputBuffers[agent].length > 20) {
+-        agentOutputBuffers[agent].shift();
++    ui.showStatus('🚀 Connected to Clean Architecture SOC Analysis (v' + (serverInfo.version || 'unknown') + ')', 'success');
++}
++
++function handleMessageTypesAdvertisement(data) {
++    // Handle message types advertisement
++    if (data.supported_types) {
++        supportedMessageTypes = data.supported_types;
++        messageTypeValidationEnabled = true;
++        
++        debugLogger.debugLog('📢 CLEAN ARCH: Received ' + supportedMessageTypes.all_types.length + ' supported message types');
++        debugLogger.debugLog('📋 CLEAN ARCH: Message categories: ' + Object.keys(supportedMessageTypes).join(', '));
++        
++        // Log type breakdown
++        console.log('📊 CLEAN ARCH: Supported Message Types:', supportedMessageTypes);
++        
++        ui.showStatus('📢 Message types advertised - ' + supportedMessageTypes.all_types.length + ' types supported', 'info');
++        
++        // Now enable full clean architecture features
++        if (cleanArchitectureEnabled) {
++            ui.showStatus('✅ Clean Architecture fully enabled with type validation', 'success');
++        }
++    } else {
++        debugLogger.debugLog('⚠️ CLEAN ARCH: No supported_types in advertisement message', 'WARNING');
+     }
+-    
+-    // Update agent display with enhanced formatting
+-    updateEnhancedAgentOutput(agent, content, timestamp);
+ }
+ 
+-// 👈 MODIFIED: Add extensive debug logging to priority findings handler
+-function handleEnhancedPriorityFindingsUpdate(data) {
+-    console.log('🎯 FRONTEND: handleEnhancedPriorityFindingsUpdate called with data:', data);
+-    debugLogger.debugLog('🎯 CRITICAL: handleEnhancedPriorityFindingsUpdate function executing');
+-    
++function handleTriageFindings(data) {
++    // Handle structured triage findings
+     var findings = data.data;
+     
+     if (findings && findings.threat_type && findings.source_ip) {
+@@ -373,16 +397,18 @@ function handleEnhancedPriorityFindingsUpdate(data) {
+         var confidence = findings.confidence_score || 0;
+         var eventCount = findings.event_count || 0;
+         
+-        console.log('🎯 FRONTEND: Processing priority findings - ' + threatType + ' from ' + sourceIp);
+-        debugLogger.debugLog('🎯 CRITICAL: Processing priority findings: ' + threatType);
++        debugLogger.debugLog('🎯 CLEAN ARCH: Triage findings - ' + threatType + ' from ' + sourceIp);
+         
+-        // Show enhanced immediate notification
++        // Update agent state
++        agentStates.triage.status = 'complete';
++        agentStates.triage.has_findings = true;
++        
++        // Show notification
+         ui.showStatus('🚨 Priority ' + priority.toUpperCase() + ' threat: ' + threatType + ' from ' + sourceIp, 'warning');
+         
+-        // 👈 CRITICAL: Update the triage agent card with structured findings
++        // Update triage agent display
+         var triageOutput = document.getElementById('triageOutput');
+         if (triageOutput) {
+-            console.log('🎯 FRONTEND: Updating triageOutput element');
+             var timestamp = new Date().toLocaleTimeString();
+             var structuredOutput = '[' + timestamp + '] ✅ TRIAGE ANALYSIS COMPLETE:\n' +
+                 '🎯 Threat Type: ' + threatType + '\n' +
+@@ -397,99 +423,276 @@ function handleEnhancedPriorityFindingsUpdate(data) {
+             
+             triageOutput.textContent = structuredOutput;
+             triageOutput.scrollTop = triageOutput.scrollHeight;
+-            
+-            console.log('🎯 FRONTEND: triageOutput updated successfully');
+-            debugLogger.debugLog('🎯 CRITICAL: triageOutput element updated with structured findings');
+-        } else {
+-            console.error('❌ FRONTEND: triageOutput element not found!');
+-            debugLogger.debugLog('❌ CRITICAL: triageOutput element not found', 'ERROR');
+         }
+         
+-        // Update progress tracking
+-        workflowProgress.triage = 2; // Complete
++        // Update UI
+         ui.updateAgentStatus('triage', 'complete');
+-        ui.showAgentSpinner('triage', false);
+-        updateOverallProgress();
+-        
+-        // Add visual feedback to triage card
+         var triageCard = document.getElementById('triageCard');
+         if (triageCard) {
+             triageCard.classList.add('active');
+-            triageCard.style.borderLeft = '4px solid #56ab2f'; // Success color
+-            
+-            // Highlight effect
+-            triageCard.classList.add('new-content');
+-            setTimeout(function() {
+-                triageCard.classList.remove('new-content');
+-            }, 1500);
+-            
+-            console.log('🎯 FRONTEND: triageCard visual feedback applied');
+-        } else {
+-            console.error('❌ FRONTEND: triageCard element not found!');
++            triageCard.style.borderLeft = '4px solid #56ab2f';
+         }
+         
+-        console.log('🎯 FRONTEND: Priority findings processing completed successfully');
+-        debugLogger.debugLog('🎯 CRITICAL: Priority findings processed and displayed: ' + threatType + ' from ' + sourceIp);
++        debugLogger.debugLog('✅ CLEAN ARCH: Triage findings processed and displayed');
+     } else {
+-        console.error('❌ FRONTEND: Invalid findings data structure:', findings);
+-        debugLogger.debugLog('❌ CRITICAL: Invalid findings data in handleEnhancedPriorityFindingsUpdate', 'ERROR');
++        debugLogger.debugLog('❌ CLEAN ARCH: Invalid triage findings data', 'ERROR');
+     }
+ }
+ 
+-function handleEnhancedContextResultsUpdate(data) {
+-    debugLogger.debugLog('Enhanced context results update received in real-time');
+-    var results = data.data;
++function handleContextResearch(data) {
++    // Handle structured context research results
++    var research = data.data;
+     
+-    if (results && results.documents) {
+-        var documentCount = results.documents.length;
++    if (research) {
++        var documentCount = research.total_documents_found || 0;
++        var queries = research.search_queries || [];
++        
++        debugLogger.debugLog('📚 CLEAN ARCH: Context research - ' + documentCount + ' documents found');
+         
+-        // Show immediate notification
++        // Update agent state
++        agentStates.context.status = 'complete';
++        agentStates.context.has_research = true;
++        
++        // Show notification
+         ui.showStatus('🔎 Found ' + documentCount + ' related historical incidents', 'info');
+         
+-        // NEW: Update progress tracking
+-        workflowProgress.context = 2; // Complete
++        // Update context agent display
++        var contextOutput = document.getElementById('contextOutput');
++        if (contextOutput) {
++            var timestamp = new Date().toLocaleTimeString();
++            var researchOutput = '[' + timestamp + '] ✅ CONTEXT RESEARCH COMPLETE:\n' +
++                '🔍 Search Queries: ' + queries.join(', ') + '\n' +
++                '📚 Documents Found: ' + documentCount + '\n' +
++                '📊 Pattern Analysis: ' + (research.pattern_analysis || 'None provided') + '\n' +
++                '💡 Recommendations: ' + (research.recommendations || []).join(', ') + '\n' +
++                '🎯 Confidence: ' + (research.confidence_assessment || 'Unknown');
++            
++            contextOutput.textContent = researchOutput;
++            contextOutput.scrollTop = contextOutput.scrollHeight;
++        }
++        
++        // Update UI
+         ui.updateAgentStatus('context', 'complete');
+-        ui.showAgentSpinner('context', false);
+-        updateOverallProgress();
++        var contextCard = document.getElementById('contextCard');
++        if (contextCard) {
++            contextCard.classList.add('active');
++            contextCard.style.borderLeft = '4px solid #56ab2f';
++        }
+         
+-        debugLogger.debugLog('Enhanced context results processed: ' + documentCount + ' documents');
++        debugLogger.debugLog('✅ CLEAN ARCH: Context research processed and displayed');
++    } else {
++        debugLogger.debugLog('❌ CLEAN ARCH: Invalid context research data', 'ERROR');
+     }
+ }
+ 
+-function handleEnhancedDetailedAnalysisUpdate(data) {
+-    debugLogger.debugLog('Enhanced detailed analysis update received in real-time');
++function handleAnalysisRecommendations(data) {
++    // Handle structured analysis recommendations
+     var analysis = data.data;
+     
+-    if (analysis && analysis.recommended_actions) {
+-        var actionCount = analysis.recommended_actions.length;
++    if (analysis) {
++        var actionCount = (analysis.recommended_actions || []).length;
++        var businessImpact = analysis.business_impact || 'Under assessment';
++        
++        debugLogger.debugLog('👨‍💼 CLEAN ARCH: Analysis recommendations - ' + actionCount + ' actions');
++        
++        // Update agent state
++        agentStates.analyst.status = 'complete';
++        agentStates.analyst.has_recommendations = true;
+         
+-        // Show immediate notification
++        // Show notification
+         ui.showStatus('👨‍💼 Analysis complete with ' + actionCount + ' recommendations', 'success');
+         
+-        // NEW: Update progress tracking
+-        workflowProgress.analyst = 2; // Complete
++        // Update analyst agent display
++        var analystOutput = document.getElementById('analystOutput');
++        if (analystOutput) {
++            var timestamp = new Date().toLocaleTimeString();
++            var analysisOutput = '[' + timestamp + '] ✅ DETAILED ANALYSIS COMPLETE:\n' +
++                '🎯 Threat Assessment: ' + (analysis.threat_assessment?.severity || 'Unknown') + '\n' +
++                '📋 Recommendations: ' + actionCount + ' actions\n' +
++                '💼 Business Impact: ' + businessImpact + '\n' +
++                '🔒 Confidence: ' + (analysis.threat_assessment?.confidence || 'Unknown') + '\n' +
++                '📝 Notes: ' + (analysis.investigation_notes || 'None provided') + '\n' +
++                '⚡ Actions: ' + (analysis.recommended_actions || []).join(', ');
++            
++            analystOutput.textContent = analysisOutput;
++            analystOutput.scrollTop = analystOutput.scrollHeight;
++        }
++        
++        // Update UI
+         ui.updateAgentStatus('analyst', 'complete');
+-        ui.showAgentSpinner('analyst', false);
+-        updateOverallProgress();
++        var analystCard = document.getElementById('analystCard');
++        if (analystCard) {
++            analystCard.classList.add('active');
++            analystCard.style.borderLeft = '4px solid #56ab2f';
++        }
+         
+-        debugLogger.debugLog('Enhanced detailed analysis processed: ' + actionCount + ' recommendations');
++        debugLogger.debugLog('✅ CLEAN ARCH: Analysis recommendations processed and displayed');
++    } else {
++        debugLogger.debugLog('❌ CLEAN ARCH: Invalid analysis recommendations data', 'ERROR');
+     }
+ }
+ 
+-function handleEnhancedWorkflowComplete(data) {
+-    debugLogger.debugLog('Enhanced real-time workflow completion received');
++function handleAgentStatusUpdate(data) {
++    // Handle agent status update messages
++    var agent = data.agent;
++    var status = data.status;
++    var message = data.message;
++    var previousStatus = data.previous_status;
+     
+-    if (data.was_rejected) {
+-        ui.showStatus('❌ Analysis workflow was rejected by user', 'warning');
+-        ui.updateProgress(100, 'Workflow rejected');
+-    } else {
++    debugLogger.debugLog('📊 CLEAN ARCH: Agent status update - ' + agent + ': ' + previousStatus + ' → ' + status);
++    
++    // Update agent state
++    if (agentStates[agent]) {
++        agentStates[agent].status = status;
++    }
++    
++    // Update UI
++    ui.updateAgentStatus(agent, status);
++    
++    if (message) {
++        ui.showStatus(agent.charAt(0).toUpperCase() + agent.slice(1) + ': ' + message, 'info');
++    }
++}
++
++function handleAgentFunctionDetected(data) {
++    // Handle agent function detection messages
++    var agent = data.agent;
++    var functionName = data.function_name;
++    var description = data.description;
++    
++    debugLogger.debugLog('🔧 CLEAN ARCH: Function detected - ' + functionName + ' from ' + agent);
++    
++    // Show notification
++    ui.showStatus('🔧 Function call: ' + functionName + ' from ' + agent, 'info');
++    
++    // Update agent status to show it's processing
++    ui.updateAgentStatus(agent, 'active');
++    
++    // Add visual feedback
++    var agentCard = document.getElementById(agent + 'Card');
++    if (agentCard) {
++        agentCard.style.borderLeft = '4px solid #f39c12';
++        agentCard.style.boxShadow = '0 0 20px rgba(243, 156, 18, 0.4)';
++    }
++}
++
++function handleAgentOutputStream(data) {
++    // Handle real-time agent output streaming
++    var agent = data.agent;
++    var content = data.content;
++    var isFinal = data.is_final;
++    
++    debugLogger.debugLog('💬 CLEAN ARCH: Agent output stream from ' + agent + ': ' + content.substring(0, 50) + '...');
++    
++    // Update agent output
++    var outputElement = document.getElementById(agent + 'Output');
++    if (outputElement) {
++        var timestamp = new Date().toLocaleTimeString();
++        var formattedContent = '[' + timestamp + '] ' + content;
++        
++        // Smart content management
++        var existingContent = outputElement.textContent;
++        
++        if (existingContent.includes('Waiting for') || 
++            existingContent.includes('waiting') ||
++            existingContent.length < 50) {
++            // Replace placeholder text
++            outputElement.textContent = formattedContent;
++        } else {
++            // Append new content
++            outputElement.textContent = existingContent + '\n\n' + formattedContent;
++        }
++        
++        // Auto-scroll
++        outputElement.scrollTop = outputElement.scrollHeight;
++    }
++    
++    // Mark as active if not already
++    if (agentStates[agent] && agentStates[agent].status === 'pending') {
++        ui.updateAgentStatus(agent, 'active');
++    }
++}
++
++function handleWorkflowProgress(data) {
++    // Handle workflow progress updates
++    var progressPercentage = data.progress_percentage;
++    var currentStage = data.current_stage;
++    var completedStages = data.completed_stages || [];
++    var estimatedTimeRemaining = data.estimated_time_remaining;
++    
++    debugLogger.debugLog('📈 CLEAN ARCH: Workflow progress - ' + progressPercentage + '% - ' + currentStage);
++    
++    // Update global progress state
++    workflowProgress.current_stage = currentStage;
++    workflowProgress.progress_percentage = progressPercentage;
++    workflowProgress.completed_stages = completedStages;
++    workflowProgress.estimated_time_remaining = estimatedTimeRemaining;
++    
++    // Update UI progress
++    ui.updateProgress(progressPercentage, currentStage);
++    
++    // Show stage transition notifications
++    if (currentStage !== workflowProgress.current_stage) {
++        ui.showStatus('📈 Stage: ' + currentStage, 'info');
++    }
++}
++
++function handleApprovalRequest(data) {
++    // Handle approval request messages
++    var stage = data.stage;
++    var prompt = data.prompt;
++    var context = data.context || {};
++    var timeoutSeconds = data.timeout_seconds || 300;
++    
++    debugLogger.debugLog('👤 CLEAN ARCH: Approval request for ' + stage + ' stage');
++    
++    // Create approval request data for the approval workflow
++    var approvalData = {
++        type: 'approval_request',
++        content: prompt,
++        source: stage + 'Agent',
++        stage: stage,
++        context: context,
++        timeout_seconds: timeoutSeconds,
++        session_id: currentSessionId
++    };
++    
++    // Use the existing approval workflow handler
++    approvalWorkflow.handleApprovalRequest(approvalData);
++}
++
++function handleApprovalTimeout(data) {
++    // Handle approval timeout messages
++    var stage = data.stage;
++    var defaultAction = data.default_action;
++    
++    debugLogger.debugLog('⏰ CLEAN ARCH: Approval timeout for ' + stage + ' stage');
++    
++    ui.showStatus('⏰ Approval timeout for ' + stage + ' - ' + defaultAction, 'warning');
++    
++    // Use the existing approval workflow timeout handler
++    approvalWorkflow.handleApprovalTimeout(data);
++}
++
++function handleAnalysisComplete(data) {
++    // Handle analysis completion messages
++    var success = data.success;
++    var resultsSummary = data.results_summary || {};
++    var duration = data.duration_seconds;
++    
++    debugLogger.debugLog('🎉 CLEAN ARCH: Analysis complete - Success: ' + success + ', Duration: ' + duration + 's');
++    
++    if (success) {
+         ui.showStatus('🎉 Multi-agent analysis completed successfully!', 'success');
+         ui.updateProgress(100, 'Analysis complete');
+         
+-        // Show enhanced final results if available
++        // Show final results summary
+         setTimeout(function() {
+-            showEnhancedRealtimeResultsSummary();
++            showCleanArchitectureResultsSummary(resultsSummary);
+         }, 1000);
++    } else {
++        ui.showStatus('⚠️ Analysis completed with issues', 'warning');
++        ui.updateProgress(100, 'Completed with issues');
+     }
+     
+     // Reset analysis state
+@@ -501,15 +704,16 @@ function handleEnhancedWorkflowComplete(data) {
+     if (analyzeBtn) {
+         analyzeBtn.disabled = false;
+     }
+-    
+-    // Reset for next analysis
+-    setTimeout(resetWorkflowProgress, 2000);
+ }
+ 
+-function handleEnhancedWorkflowRejected(data) {
+-    debugLogger.debugLog('Enhanced real-time workflow rejection received');
++function handleWorkflowRejected(data) {
++    // Handle workflow rejection messages
++    var rejectedStage = data.rejected_stage;
++    var reason = data.reason;
+     
+-    ui.showStatus('❌ ' + (data.content || 'Analysis workflow rejected'), 'error');
++    debugLogger.debugLog('❌ CLEAN ARCH: Workflow rejected at ' + rejectedStage + ' stage');
++    
++    ui.showStatus('❌ Workflow rejected at ' + rejectedStage + ' stage: ' + (reason || 'User decision'), 'error');
+     ui.updateProgress(100, 'Rejected');
+     
+     // Reset analysis state
+@@ -521,280 +725,161 @@ function handleEnhancedWorkflowRejected(data) {
+     if (analyzeBtn) {
+         analyzeBtn.disabled = false;
+     }
+-    
+-    // Reset for next analysis
+-    setTimeout(resetWorkflowProgress, 2000);
+-}
+-
+-// Keep all the other existing functions unchanged...
+-function handleEnhancedFunctionCallResult(agent, content, timestamp) {
+-    debugLogger.debugLog('🎯 Processing enhanced function call result for: ' + agent);
+-    
+-    try {
+-        // Multiple strategies to extract function call results
+-        var result_data = null;
+-        
+-        // Strategy 1: Look for JSON with status
+-        var jsonPatterns = [
+-            /\{[^}]*"status"[^}]*"priority_identified"[^}]*\}/g,
+-            /\{.*?"status".*?"priority_identified".*?\}/g,
+-            /\{[^}]*"status"[^}]*"analysis_complete"[^}]*\}/g,
+-            /\{.*?"status".*?"analysis_complete".*?\}/g
+-        ];
+-        
+-        for (var i = 0; i < jsonPatterns.length; i++) {
+-            var matches = content.match(jsonPatterns[i]);
+-            if (matches) {
+-                try {
+-                    result_data = JSON.parse(matches[0]);
+-                    break;
+-                } catch (e) {
+-                    continue;
+-                }
+-            }
+-        }
+-        
+-        // Strategy 2: Look for FUNCTION EXECUTED messages
+-        if (!result_data && content.includes('FUNCTION EXECUTED')) {
+-            debugLogger.debugLog('📊 Function execution confirmed for: ' + agent);
+-            showFunctionExecutionConfirmation(agent, content, timestamp);
+-            return;
+-        }
+-        
+-        if (result_data && (result_data.status === 'priority_identified' || result_data.status === 'analysis_complete')) {
+-            var data = result_data.data || {};
+-            var displayTime = new Date(timestamp).toLocaleTimeString();
+-            
+-            var resultText = '';
+-            if (result_data.status === 'priority_identified') {
+-                resultText = '[' + displayTime + '] ✅ PRIORITY FINDINGS GENERATED:\n' +
+-                    '🎯 Threat: ' + (data.threat_type || 'Unknown') + '\n' +
+-                    '📍 Source: ' + (data.source_ip || 'Unknown') + '\n' +
+-                    '⚠️ Priority: ' + (data.priority || 'Unknown').toUpperCase() + '\n' +
+-                    '📊 Confidence: ' + (data.confidence_score || 'Unknown') + '\n' +
+-                    '📈 Events: ' + (data.event_count || 'Unknown') + '\n' +
+-                    '🎯 Pattern: ' + (data.attack_pattern || 'Not specified') + '\n' +
+-                    '⏰ Timeline: ' + (data.timeline ? data.timeline.start + ' → ' + data.timeline.end : 'Unknown');
+-            } else if (result_data.status === 'analysis_complete') {
+-                var actionCount = data.recommended_actions ? data.recommended_actions.length : 0;
+-                resultText = '[' + displayTime + '] ✅ DETAILED ANALYSIS COMPLETE:\n' +
+-                    '🎯 Threat Assessment: ' + (data.threat_assessment?.severity || 'Unknown') + '\n' +
+-                    '📋 Recommendations: ' + actionCount + ' actions\n' +
+-                    '💼 Business Impact: ' + (data.business_impact || 'Under review') + '\n' +
+-                    '🔒 Confidence: ' + (data.threat_assessment?.confidence || 'Unknown') + '\n' +
+-                    '📝 Notes: ' + (data.investigation_notes || 'None provided');
+-            }
+-            
+-            updateEnhancedAgentOutput(agent, resultText, timestamp);
+-            
+-            // Update status to complete
+-            ui.updateAgentStatus(agent, 'complete');
+-            ui.showAgentSpinner(agent, false);
+-            
+-            // Remove function-calling style and add success style
+-            var agentCard = document.getElementById(agent + 'Card');
+-            if (agentCard) {
+-                agentCard.classList.remove('function-calling');
+-                agentCard.style.borderLeft = '4px solid #56ab2f'; // Success color
+-                agentCard.style.boxShadow = '0 0 20px rgba(86, 171, 47, 0.4)';
+-                
+-                // Reset after animation
+-                setTimeout(function() {
+-                    agentCard.style.boxShadow = '';
+-                }, 3000);
+-            }
+-            
+-            // Show success notification
+-            var successMessage = agent.charAt(0).toUpperCase() + agent.slice(1) + ' analysis complete';
+-            if (result_data.status === 'priority_identified') {
+-                successMessage += ': ' + (data.threat_type || 'Threat detected');
+-            } else {
+-                successMessage += ': ' + actionCount + ' recommendations';
+-            }
+-            ui.showStatus('✅ ' + successMessage, 'success');
+-            
+-            // Trigger appropriate update handler
+-            if (result_data.status === 'priority_identified') {
+-                handleEnhancedPriorityFindingsUpdate({
+-                    data: data,
+-                    timestamp: timestamp
+-                });
+-            } else if (result_data.status === 'analysis_complete') {
+-                handleEnhancedDetailedAnalysisUpdate({
+-                    data: data,
+-                    timestamp: timestamp
+-                });
+-            }
+-        } else {
+-            debugLogger.debugLog('Could not extract structured results, showing raw content');
+-            updateEnhancedAgentOutput(agent, content, timestamp);
+-        }
+-    } catch (e) {
+-        debugLogger.debugLog('Error parsing enhanced function call result: ' + e, 'ERROR');
+-        // Fallback to normal output handling
+-        updateEnhancedAgentOutput(agent, content, timestamp);
+-    }
+ }
+ 
+-function showFunctionExecutionConfirmation(agent, content, timestamp) {
+-    var displayTime = new Date(timestamp).toLocaleTimeString();
+-    var confirmationText = '[' + displayTime + '] ✅ FUNCTION EXECUTION CONFIRMED\n' +
+-        '🔧 Function successfully called and executed\n' +
+-        '📊 Processing results and preparing structured output...\n';
++function handleErrorMessage(data) {
++    // Handle error messages
++    var errorMessage = data.message;
++    var errorCode = data.error_code;
++    var details = data.details;
+     
+-    updateEnhancedAgentOutput(agent, confirmationText, timestamp);
++    debugLogger.debugLog('💥 CLEAN ARCH: Error received - ' + errorMessage, 'ERROR');
+     
+-    // Show notification
+-    ui.showStatus('✅ ' + agent + ' function executed successfully', 'success');
+-}
+-
+-function updateEnhancedAgentOutput(agent, content, timestamp) {
+-    var outputElement = document.getElementById(agent + 'Output');
+-    if (!outputElement) return;
+-    
+-    var displayTime = new Date(timestamp).toLocaleTimeString();
+-    var formattedContent = '[' + displayTime + '] ' + content;
++    var displayMessage = errorMessage;
++    if (errorCode) {
++        displayMessage = '[' + errorCode + '] ' + errorMessage;
++    }
+     
+-    // Smart content management with enhanced logic
+-    var existingContent = outputElement.textContent;
++    ui.showStatus('❌ ' + displayMessage, 'error');
+     
+-    if (existingContent.includes('Waiting for') || 
+-        existingContent.includes('waiting') ||
+-        existingContent.length < 50) {
+-        // Replace placeholder text
+-        outputElement.textContent = formattedContent;
+-    } else {
+-        // Append new content with separator
+-        outputElement.textContent = existingContent + '\n\n' + formattedContent;
++    if (details) {
++        console.error('Error details:', details);
+     }
++};
++
++function handleLogsRetrieved(data) {
++    // Handle logs retrieved messages
++    var logs = data.logs;
++    var count = data.count;
++    var message = data.message;
+     
+-    // Auto-scroll
+-    outputElement.scrollTop = outputElement.scrollHeight;
++    debugLogger.debugLog('📥 CLEAN ARCH: Logs retrieved - ' + count + ' entries');
+     
+-    // Enhanced visual feedback
+-    var agentCard = document.getElementById(agent + 'Card');
+-    if (agentCard) {
+-        agentCard.classList.add('active');
+-        
+-        // Enhanced highlight effect for new content
+-        agentCard.classList.add('new-content');
+-        setTimeout(function() {
+-            agentCard.classList.remove('new-content');
+-        }, 1500);
+-    }
+-}
++    progressManager.handleLogsRetrieved({
++        logs: logs,
++        message: message
++    });
++};
++
++function handlePongMessage(data) {
++    // Handle pong response messages
++    debugLogger.debugLog('🏓 CLEAN ARCH: Received pong from server');
++    ui.showStatus('🏓 Server responded to ping', 'info');
++};
++
++// ============================================================================
++// RESULTS SUMMARY
++// ============================================================================
+ 
+-function showEnhancedRealtimeResultsSummary() {
+-    debugLogger.debugLog('Showing enhanced real-time results summary');
++function showCleanArchitectureResultsSummary(resultsSummary) {
++    debugLogger.debugLog('📊 CLEAN ARCH: Showing results summary');
+     
+-    // Create an enhanced summary from the real-time data we've collected
+     var findings = [];
+     
+-    // Check what we learned from each agent
+-    var triageBuffer = agentOutputBuffers.triage || [];
+-    var contextBuffer = agentOutputBuffers.context || [];
+-    var analystBuffer = agentOutputBuffers.analyst || [];
+-    
+-    if (triageBuffer.length > 0 || functionCallsDetected.triage) {
++    // Check agent states and build findings
++    if (agentStates.triage.has_findings) {
+         findings.push({
+             title: '🚨 Triage Results',
+             content: 'Priority threat assessment completed with structured findings, threat classification, and source identification.'
+         });
+     }
+     
+-    if (contextBuffer.length > 0 || functionCallsDetected.context) {
++    if (agentStates.context.has_research) {
+         findings.push({
+             title: '📚 Historical Context',
+             content: 'Related historical incidents analyzed for pattern matching, threat correlation, and lessons learned integration.'
+         });
+     }
+     
+-    if (analystBuffer.length > 0 || functionCallsDetected.analyst) {
++    if (agentStates.analyst.has_recommendations) {
+         findings.push({
+             title: '🎯 Deep Analysis Complete',
+             content: 'Comprehensive analysis completed with actionable recommendations, business impact assessment, and implementation timeline.'
+         });
+     }
+     
+-    // Show the enhanced findings
++    // Add clean architecture specific findings
++    findings.push({
++        title: '🔧 Clean Architecture',
++        content: 'Analysis completed using clean message architecture with ' + supportedMessageTypes.all_types.length + ' validated message types and type-safe communication.'
++    });
++    
++    // Show the findings
+     if (findings.length > 0) {
+         ui.displayFinalResults({
+             structured_findings: {
+                 priority_threat: {
+                     priority: 'high',
+-                    threat_type: 'Enhanced Multi-stage Analysis',
+-                    brief_summary: 'Real-time analysis completed successfully with smart progress tracking'
++                    threat_type: 'Clean Architecture Multi-stage Analysis',
++                    brief_summary: 'Real-time analysis completed successfully with clean message architecture'
+                 }
+             },
+             chroma_context: {}
+         });
+     }
+-}
++};
++
++// ============================================================================
++// MESSAGE SENDING WITH VALIDATION
++// ============================================================================
+ 
+-// Enhanced WebSocket message sending with retry logic
+ function sendWebSocketMessage(message) {
+-    if (websocket && websocket.readyState == WebSocket.OPEN) {
++    // Send WebSocket message with type validation
++    if (websocket && websocket.readyState === WebSocket.OPEN) {
+         var messageString = JSON.stringify(message);
+         websocket.send(messageString);
+         wsStats.messages_sent++;
+-        debugLogger.debugLog('Enhanced Real-time WebSocket message sent - Type: ' + message.type);
+-        console.log('Sent enhanced real-time WebSocket message:', message);
++        
++        debugLogger.debugLog('📤 CLEAN ARCH: WebSocket message sent - Type: ' + message.type);
++        console.log('📤 CLEAN ARCH: Sent message:', message);
+         return true;
+     } else {
+-        debugLogger.debugLog('Enhanced Real-time WebSocket not connected, cannot send message - ReadyState: ' + (websocket ? websocket.readyState : 'null'), 'ERROR');
+-        ui.showStatus('Not connected to server', 'error');
++        debugLogger.debugLog('❌ CLEAN ARCH: WebSocket not connected, cannot send message - ReadyState: ' + (websocket ? websocket.readyState : 'null'), 'ERROR');
++        ui.showStatus('❌ Not connected to server', 'error');
+         return false;
+     }
+-}
++};
++
++// ============================================================================
++// UTILITY FUNCTIONS
++// ============================================================================
+ 
+ function showWebSocketStats() {
+-    var bufferSizes = Object.keys(agentOutputBuffers).map(function(agent) {
+-        return agent + ': ' + agentOutputBuffers[agent].length + ' messages';
+-    }).join(', ');
+-    
+-    var functionCallStatus = Object.keys(functionCallsDetected).map(function(agent) {
+-        return agent + ': ' + (functionCallsDetected[agent] ? 'DETECTED' : 'none');
++    // Show WebSocket statistics including clean architecture info
++    var agentStatesStr = Object.keys(agentStates).map(function(agent) {
++        var state = agentStates[agent];
++        return agent + ': ' + state.status + (state.has_findings || state.has_research || state.has_recommendations ? ' (has_data)' : '');
+     }).join(', ');
+     
+-    var progressStatus = Object.keys(workflowProgress).map(function(stage) {
+-        return stage + ': ' + workflowProgress[stage];
+-    }).join(', ');
+-    
+-    var stats = 'Enhanced Real-time WebSocket Statistics:\n' +
++    var stats = 'Clean Architecture WebSocket Statistics:\n' +
+         'Connected: ' + wsStats.connected + '\n' +
+         'Messages Sent: ' + wsStats.messages_sent + '\n' +
+         'Messages Received: ' + wsStats.messages_received + '\n' +
++        'Type Validation Errors: ' + wsStats.type_validation_errors + '\n' +
+         'Reconnects: ' + wsStats.reconnects + '\n' +
+         'Connection State: ' + (websocket ? websocket.readyState : 'No connection') + '\n' +
+         'Session ID: ' + (currentSessionId || 'None') + '\n' +
+-        'Smart Progress: ' + progressStatus + '\n' +
+-        'Real-time Buffers: ' + bufferSizes + '\n' +
+-        'Function Calls: ' + functionCallStatus;
++        'Clean Architecture: ' + (cleanArchitectureEnabled ? 'Enabled' : 'Disabled') + '\n' +
++        'Type Validation: ' + (messageTypeValidationEnabled ? 'Enabled' : 'Disabled') + '\n' +
++        'Supported Types: ' + supportedMessageTypes.all_types.length + '\n' +
++        'Workflow Progress: ' + workflowProgress
++        'Agent States: ' + agentStatesStr;
+ 
+     debugLogger.debugLog(stats);
+-    console.log('Enhanced Real-time WebSocket Stats:', {
+-        connected: wsStats.connected,
+-        messages_sent: wsStats.messages_sent,
+-        messages_received: wsStats.messages_received,
+-        reconnects: wsStats.reconnects,
+-        connection_state: websocket ? websocket.readyState : 'No connection',
+-        session_id: currentSessionId,
+-        smart_progress: workflowProgress,
+-        agent_buffers: agentOutputBuffers,
+-        function_calls_detected: functionCallsDetected
+-    });
+-    ui.showStatus('Enhanced Real-time WebSocket stats logged to debug console', 'info');
++    logMessageTypeStats();
++    ui.showStatus('📊 Clean Architecture WebSocket stats logged to console', 'info');
+ }
+ 
+ function testConnection() {
+-    debugLogger.debugLog('Testing enhanced real-time WebSocket connection');
++    // Test WebSocket connection
++    debugLogger.debugLog('🔍 Testing clean architecture WebSocket connection');
+     if (websocket && websocket.readyState === WebSocket.OPEN) {
+-        if (sendWebSocketMessage({ type: 'ping' })) {
+-            ui.showStatus('Ping sent to enhanced real-time server', 'info');
++        if (sendWebSocketMessage({ type: 'ping', session_id: currentSessionId })) {
++            ui.showStatus('🏓 Ping sent to clean architecture server', 'info');
+         }
+     } else {
+-        debugLogger.debugLog('Cannot test connection - Enhanced Real-time WebSocket not ready. State: ' + (websocket ? websocket.readyState : 'null'), 'WARNING');
+-        ui.showStatus('Enhanced Real-time WebSocket not connected', 'warning');
++        debugLogger.debugLog('❌ Cannot test connection - WebSocket not ready. State: ' + (websocket ? websocket.readyState : 'null'), 'WARNING');
++        ui.showStatus('❌ Clean Architecture WebSocket not connected', 'warning');
+     }
+ }
+ 
+@@ -807,20 +892,18 @@ function getWebSocket() {
+ }
+ 
+ function getConnectionStats() {
+-    return wsStats;
+-}
+-
+-function getAgentOutputBuffers() {
+-    return agentOutputBuffers;
+-}
+-
+-function getFunctionCallsDetected() {
+-    return functionCallsDetected;
++    return {
++        ...wsStats,
++        clean_architecture_enabled: cleanArchitectureEnabled,
++        type_validation_enabled: messageTypeValidationEnabled,
++        supported_types_count: supportedMessageTypes.all_types.length,
++        agent_states: agentStates,
++        workflow_progress: workflowProgress
++    };
+ }
+ 
+-// NEW: Export workflow progress for debugging
+-function getWorkflowProgress() {
+-    return workflowProgress;
++function getSupportedMessageTypes() {
++    return supportedMessageTypes;
+ }
+ 
+ // Handle page unload
+@@ -838,7 +921,8 @@ export {
+     getCurrentSessionId, 
+     getWebSocket, 
+     getConnectionStats,
+-    getAgentOutputBuffers,
+-    getFunctionCallsDetected,
+-    getWorkflowProgress
+-};
+\ No newline at end of file
++    getSupportedMessageTypes,
++    validateMessageType,
++    getMessageCategory,
++    logMessageTypeStats
++};

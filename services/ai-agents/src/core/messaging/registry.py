@@ -210,7 +210,7 @@ class ConnectionEstablishedMessage(BaseControlMessage):
     """WebSocket connection establishment"""
     type: Literal[ControlMessageType.CONNECTION_ESTABLISHED] = ControlMessageType.CONNECTION_ESTABLISHED
     features: List[str] = Field(default_factory=list, description="Enabled features")
-    server_info: Dict[str, str] = Field(default_factory=dict, description="Server information")
+    server_info: Dict[str, Any] = Field(default_factory=dict, description="Server information")
 
 class MessageTypesAdvertisementMessage(BaseControlMessage):
     """Advertise supported message types to client"""

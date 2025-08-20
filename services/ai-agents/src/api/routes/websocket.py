@@ -45,12 +45,14 @@ class CleanSession:
         self.message_count = 0
         self.supported_types = MessageRegistry.get_supported_types()
         
+
     async def send_typed_message(self, message) -> bool:
         """Send a typed message with validation"""
         try:
             # Convert Pydantic model to dict if needed
             if hasattr(message, 'model_dump'):
-                message_data = message.model_dump()
+                # Use mode='json' to ensure datetime objects are serialized properly
+                message_data = message.model_dump(mode='json')
             else:
                 message_data = message
             
@@ -75,6 +77,7 @@ class CleanSession:
         except Exception as e:
             ws_logger.error(f"❌ Error sending typed message to session {self.session_id}: {e}")
             return False
+
 
 # ============================================================================
 # MESSAGE TYPE ADVERTISEMENT

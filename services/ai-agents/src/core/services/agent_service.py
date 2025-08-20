@@ -66,7 +66,8 @@ class CleanMessageSender:
         try:
             # Convert Pydantic model to dict for JSON serialization
             if hasattr(message, 'model_dump'):
-                message_data = message.model_dump()
+                # Use mode='json' to ensure datetime objects are serialized properly
+                message_data = message.model_dump(mode='json')
             else:
                 message_data = message
                 
