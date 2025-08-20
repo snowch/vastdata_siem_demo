@@ -27,7 +27,8 @@ from autogen_agentchat.conditions import (
 )
 from autogen_core import CancellationToken
 from core.models.analysis import SOCAnalysisResult, PriorityFindings
-from utils.serialization import sanitize_chroma_results
+# from utils.serialization import sanitize_chroma_results
+from core.models.analysis import SOCAnalysisResult, PriorityFindings, ContextResearchResult
 
 # Import the new message registry
 from core.messaging.registry import (
@@ -331,13 +332,14 @@ class WorkflowProgressTracker:
 # ENHANCED MESSAGE PROCESSOR
 # ============================================================================
 
+
 async def _process_clean_streaming_message(
     message, 
     sender: CleanMessageSender,
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any]
 ):
-    """Process streaming messages using clean architecture"""
+    """Process streaming messages using clean architecture - SIMPLIFIED CONTEXT HANDLING"""
     try:
         if not hasattr(message, 'source') or not hasattr(message, 'content'):
             return
@@ -359,7 +361,7 @@ async def _process_clean_streaming_message(
                 success=True,
                 results_summary={
                     "has_priority_findings": final_results.get('priority_findings') is not None,
-                    "has_context_data": bool(final_results.get('chroma_context')),
+                    "has_context_data": final_results.get('context_research') is not None,
                     "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
                     "workflow_complete": True
                 }
@@ -367,10 +369,10 @@ async def _process_clean_streaming_message(
             return  # Stop processing further messages
         
         # ====================================================================
-        # PREVENT DUPLICATE STRUCTURED RESULTS
+        # HANDLE STRUCTURED RESULTS (DOMAIN OBJECTS)
         # ====================================================================
         
-        # PRIORITY 1: Handle structured triage findings (but prevent duplicates)
+        # PRIORITY 1: Handle structured triage findings (prevent duplicates)
         if (source == "TriageSpecialist" and 
             isinstance(message, StructuredMessage) and
             isinstance(message.content, PriorityFindings)):
@@ -392,7 +394,38 @@ async def _process_clean_streaming_message(
             
             return  # Don't send as output stream
         
-        # PRIORITY 2: Handle structured analyst results (but prevent duplicates)
+        # PRIORITY 2: Handle structured context research results (NEW - SIMPLIFIED)
+        elif (source == "ContextAgent" and 
+              isinstance(message, StructuredMessage) and
+              isinstance(message.content, ContextResearchResult)):
+            
+            # Check if we already processed context results
+            if final_results.get('context_research') is not None:
+                agent_logger.warning(f"⚠️ CLEAN ARCH: Ignoring duplicate context research")
+                return  # Skip duplicate context research
+            
+            context_result = message.content.model_dump()
+            final_results['context_research'] = context_result
+            
+            agent_logger.info(f"✅ CLEAN ARCH: Structured context research: {context_result.get('total_documents_found')} documents")
+            
+            # Send structured context research results
+            research_data = {
+                "search_queries": context_result.get('search_queries_executed', []),
+                "total_documents_found": context_result.get('total_documents_found', 0),
+                "relevant_incidents": context_result.get('related_incidents', []),
+                "pattern_analysis": context_result.get('pattern_analysis', ''),
+                "recommendations": context_result.get('recommended_actions', []),
+                "confidence_assessment": context_result.get('confidence_assessment', 'unknown')
+            }
+            
+            await sender.send_context_research(research_data)
+            await sender.send_agent_status_update("context", "complete", "Context research complete")
+            await progress_tracker.update_stage("context_complete")
+            
+            return  # Don't send as output stream
+        
+        # PRIORITY 3: Handle structured analyst results (prevent duplicates)
         elif (source == "SeniorAnalyst" and 
               isinstance(message, StructuredMessage) and
               isinstance(message.content, SOCAnalysisResult)):
@@ -459,13 +492,13 @@ async def _process_clean_streaming_message(
             return  # Don't send as output stream
         
         # ====================================================================
-        # FUNCTION CALL DETECTION
+        # FUNCTION CALL DETECTION (for progress tracking)
         # ====================================================================
         
         if ('FunctionCall(' in content or 
             'report_priority_findings' in content or 
             'report_detailed_analysis' in content or
-            'search_historical_incidents' in content):
+            'analyze_historical_incidents' in content):  # Updated function name
             
             agent_type = _determine_agent_type_from_source(source)
             function_name = _extract_function_name(content)
@@ -486,7 +519,7 @@ async def _process_clean_streaming_message(
                     await progress_tracker.update_stage("analyst_active")
         
         # ====================================================================
-        # AGENT OUTPUT STREAMING
+        # AGENT OUTPUT STREAMING (for non-structured content)
         # ====================================================================
         
         # Send as agent output stream for relevant agents
@@ -502,15 +535,20 @@ async def _process_clean_streaming_message(
                 )
         
         # ====================================================================
-        # TOOL OUTPUT PARSING
+        # LEGACY TOOL OUTPUT PARSING (REMOVED FOR CONTEXT)
         # ====================================================================
         
-        await _parse_clean_tool_outputs(message, final_results, sender)
+        # REMOVED: Complex context parsing logic since ContextAgent now returns structured objects
+        # The context agent tool output parsing has been eliminated
+        
+        # Still handle analyst tool outputs for detailed analysis
+        await _parse_analyst_tool_outputs(message, final_results, sender)
                 
     except Exception as e:
         agent_logger.error(f"❌ CLEAN ARCH: Critical error processing message: {e}")
         agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         await sender.send_error(f"Message processing error: {str(e)}")
+
 
 def _determine_agent_type_from_source(source: str) -> Optional[str]:
     """Determine agent type from message source"""
@@ -581,36 +619,14 @@ def _is_system_message(content: str) -> bool:
     
     return any(indicator in content for indicator in system_indicators)
 
-async def _parse_clean_tool_outputs(message, final_results: Dict, sender: CleanMessageSender):
-    """Parse and handle tool outputs using clean architecture"""
+
+async def _parse_analyst_tool_outputs(message, final_results: Dict, sender: CleanMessageSender):
+    """Parse tool outputs from analyst agent only - context parsing removed"""
     content = str(message.content)
     
     try:
-        # Extract context search results
-        if "status" in content and "search_complete" in content:
-            import re
-            json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
-            if json_match:
-                tool_result = json.loads(json_match.group())
-                if tool_result.get('status') == 'search_complete' and 'results' in tool_result:
-                    sanitized_results = sanitize_chroma_results(tool_result['results'])
-                    final_results['chroma_context'] = sanitized_results
-                    
-                    # Send structured context research results
-                    research_data = {
-                        "search_queries": ["historical incidents"],
-                        "total_documents_found": len(tool_result['results'].get('documents', [])),
-                        "relevant_incidents": tool_result['results'].get('documents', []),
-                        "pattern_analysis": "Historical pattern analysis from ChromaDB search",
-                        "recommendations": ["Consider historical context in analysis"],
-                        "confidence_assessment": "High confidence in historical correlation"
-                    }
-                    
-                    await sender.send_context_research(research_data)
-                    await sender.send_agent_status_update("context", "complete", "Context research complete")
-        
-        # Extract detailed analysis from analyst agent tools
-        elif "status" in content and "analysis_complete" in content:
+        # Extract detailed analysis from analyst agent tools only
+        if "status" in content and "analysis_complete" in content:
             import re
             json_match = re.search(r'\{.*"status".*\}', content, re.DOTALL)
             if json_match:
@@ -622,7 +638,28 @@ async def _parse_clean_tool_outputs(message, final_results: Dict, sender: CleanM
                     await sender.send_analysis_recommendations(tool_result['data'])
                         
     except Exception as e:
-        agent_logger.error(f"❌ CLEAN ARCH: Error parsing tool outputs: {e}")
+        agent_logger.error(f"❌ CLEAN ARCH: Error parsing analyst tool outputs: {e}")
+
+def _extract_function_name(content: str) -> str:
+    """Extract function name from content - updated for new context function"""
+    if 'report_priority_findings' in content:
+        return 'report_priority_findings'
+    elif 'report_detailed_analysis' in content:
+        return 'report_detailed_analysis'
+    elif 'analyze_historical_incidents' in content:  # Updated function name
+        return 'analyze_historical_incidents'
+    elif 'FunctionCall(' in content:
+        # Try to extract function name from FunctionCall
+        try:
+            start = content.find('FunctionCall(') + len('FunctionCall(')
+            end = content.find(',', start)
+            if end == -1:
+                end = content.find(')', start)
+            return content[start:end].strip().strip('"\'')
+        except:
+            return 'unknown_function'
+    
+    return 'unknown_function'
 
 # ============================================================================
 # TEAM CREATION WITH FIXED TERMINATION
@@ -688,6 +725,7 @@ async def _create_soc_team(
         custom_message_types=[
             StructuredMessage[PriorityFindings],
             StructuredMessage[SOCAnalysisResult],
+            StructuredMessage[ContextResearchResult]
         ],
     )
     

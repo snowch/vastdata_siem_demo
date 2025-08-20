@@ -1,4 +1,4 @@
-from typing import List, Literal
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 class Timeline(BaseModel):
@@ -29,6 +29,25 @@ class PriorityFindings(BaseModel):
     affected_services: List[str] = Field(default_factory=list, description="List of affected services")
     brief_summary: str = Field(description="Brief summary of findings")
 
+class SearchEffectiveness(BaseModel):
+    query: str = Field(description="Search query executed")
+    results_count: int = Field(description="Number of results returned")
+    avg_relevance: float = Field(description="Average relevance score")
+
+class ContextResearchResult(BaseModel):
+    """Structured domain result for historical security context analysis"""
+    total_documents_found: int = Field(description="Total number of historical documents analyzed")
+    search_queries_executed: List[str] = Field(description="List of search queries that were executed")
+    search_effectiveness: List[SearchEffectiveness] = Field(description="Effectiveness metrics for each search")
+    pattern_analysis: str = Field(description="Summary of security patterns identified in historical data")
+    threat_correlations: List[str] = Field(description="List of threat correlations found across incidents")
+    attack_progression_insights: List[str] = Field(description="Insights about how similar attacks typically progress")
+    recommended_actions: List[str] = Field(description="Recommended actions based on historical incident outcomes")
+    confidence_assessment: Literal["high", "medium", "low"] = Field(description="Confidence level in the analysis")
+    historical_timeline: str = Field(description="Timeline insights from historical incidents")
+    related_incidents: List[str] = Field(description="Most relevant historical incident summaries")
+    analysis_timestamp: str = Field(description="When this analysis was performed")
+
 class DetailedAnalysis(BaseModel):
     threat_assessment: ThreatAssessment = Field(description="Detailed threat assessment")
     attack_timeline: List[AttackEvent] = Field(default_factory=list, description="Chronological attack timeline")
@@ -43,6 +62,7 @@ class SOCAnalysisResult(BaseModel):
     """Final structured output for SOC analysis"""
     executive_summary: str = Field(description="Executive summary of the analysis")
     priority_findings: PriorityFindings = Field(description="Priority threat findings")
+    context_research: Optional[ContextResearchResult] = Field(None, description="Historical context research results")
     detailed_analysis: DetailedAnalysis = Field(description="Detailed analysis results")
     historical_context: str = Field(description="Historical context from similar incidents")
     confidence_level: Literal["high", "medium", "low"] = Field(description="Overall confidence in analysis")
