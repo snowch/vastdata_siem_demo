@@ -33,7 +33,7 @@
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
-    border-left: 4px solid var(--light-blue);
+    /* border-left: 4px solid var(--light-blue); */
     transition: var(--transition-fast);
     position: relative;
     overflow: hidden;

@@ -26,10 +26,6 @@
     transform: scale(1.02) translateY(0) rotate(0deg);
 }
 
-.agent-card.approval-active .agent-icon {
-    animation: bounce 2s infinite;
-}
-
 /* Agent Header Layout */
 .agent-header {
     display: flex;
@@ -61,22 +57,7 @@
     line-height: 1.3;
 }
 
-/* Agent Icons */
-.agent-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: var(--radius-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    font-weight: bold;
-    color: white;
-    flex-shrink: 0;
-    position: relative;
-}
-
-.triage-icon {
+/* .triage-icon {
     background: var(--triage-gradient);
 }
 
@@ -86,7 +67,7 @@
 
 .analyst-icon {
     background: var(--analyst-gradient);
-}
+} */
 
 /* Agent Content Area */
 .agent-content {
@@ -127,7 +108,7 @@
 .agent-card[data-status="pending"] {
     opacity: 0.7;
 }
-
+/* 
 .agent-card[data-status="active"] {
     border-left: 4px solid var(--light-blue);
 }
@@ -138,10 +119,10 @@
 
 .agent-card[data-status="error"] {
     border-left: 4px solid var(--dark-red);
-}
+} */
 
 .agent-card[data-status="awaiting-approval"] {
-    border-left: 4px solid var(--dark-yellow);
+    /* border-left: 4px solid var(--dark-yellow); */
     animation: pulseCard 2s infinite;
 }
 
@@ -288,7 +269,7 @@
 
 /* Real-time streaming indicators */
 .agent-card.streaming {
-    border-left: 4px solid var(--light-blue);
+    /* border-left: 4px solid var(--light-blue); */
     position: relative;
     overflow: hidden;
 }
@@ -367,18 +348,6 @@
     }
 }
 
-/* Typing indicator for active agents */
-.agent-card.typing .agent-icon::after {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    width: 8px;
-    height: 8px;
-    background: var(--light-blue);
-    border-radius: 50%;
-    animation: typingIndicator 1.5s infinite;
-}
 
 @keyframes typingIndicator {
     0%, 60%, 100% {
@@ -436,8 +405,7 @@
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
     .agent-card.streaming::before,
-    .agent-output.streaming::after,
-    .agent-card.typing .agent-icon::after {
+    .agent-output.streaming::after {
         animation: none;
     }
     

@@ -31,22 +31,23 @@
     line-height: 1.4;
 }
 
-/* Toast Types */
+/* Toast Types - UPDATED COLORS */
 .toast.success {
-    background: linear-gradient(45deg, #56ab2f, #a8e6cf);
+    background: linear-gradient(45deg, #E86B38, #B34A2F); /* VAST Orange Gradient */
 }
 
 .toast.error {
-    background: linear-gradient(45deg, #ff416c, #ff4757);
+    background: linear-gradient(45deg, #E86B38, #B34A2F); /* VAST Orange Gradient */
 }
 
 .toast.warning {
-    background: linear-gradient(45deg, #ffa726, #fb8c00);
+    background: linear-gradient(45deg, #E86B38, #B34A2F); /* VAST Orange Gradient */
 }
 
 .toast.info {
-    background: linear-gradient(45deg, #667eea, #764ba2);
+    background: linear-gradient(45deg, #071B33, #6B8899); /* VAST Blue Gradient */
 }
+
 
 /* Toast Progress Bar */
 .toast::after {
@@ -168,7 +169,7 @@
 
 /* Loading Notifications */
 .loading-notification {
-    background: linear-gradient(45deg, #667eea, #764ba2);
+    background: linear-gradient(45deg, #071B33, #6B8899); /* VAST Blue Gradient */
     color: white;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
@@ -195,7 +196,7 @@
 
 /* Approval Notifications */
 .approval-notification {
-    background: linear-gradient(45deg, #ffa726, #fb8c00);
+    background: linear-gradient(45deg, #E86B38, #B34A2F); /* VAST Orange Gradient */
     color: white;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
@@ -230,12 +231,12 @@
 
 /* System Notifications */
 .system-notification {
-    background: linear-gradient(45deg, #2c3e50, #34495e);
+    background: linear-gradient(45deg, #071B33, #6B8899); /* VAST Blue Gradient */
     color: #ecf0f1;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
     animation: slideInRight 0.3s ease;
-    border-left: 4px solid #3498db;
+    /* border-left: 4px solid #3498db; */
 }
 
 .system-notification-title {
@@ -253,7 +254,7 @@
 
 /* Progress Notifications */
 .progress-notification {
-    background: linear-gradient(45deg, #667eea, #764ba2);
+    background: linear-gradient(45deg, #071B33, #6B8899); /* VAST Blue Gradient */
     color: white;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-radius: var(--radius-md);
@@ -331,12 +332,12 @@
         top: var(--spacing-lg);
         max-width: none;
     }
-    
+
     .toast {
         padding: var(--spacing-md) var(--spacing-lg);
         font-size: 13px;
     }
-    
+
     .loading-notification,
     .approval-notification,
     .system-notification,
@@ -344,11 +345,11 @@
         padding: var(--spacing-md) var(--spacing-lg);
         font-size: 0.9em;
     }
-    
+
     .progress-notification {
         min-width: auto;
     }
-    
+
     .toast-close {
         top: var(--spacing-xs);
         right: var(--spacing-xs);
@@ -374,11 +375,11 @@
         border: 2px solid currentColor;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
     }
-    
+
     .toast::after {
         background: currentColor;
     }
-    
+
     .notification-badge {
         border: 3px solid white;
     }
@@ -389,19 +390,19 @@
     .toast {
         animation: none;
     }
-    
+
     .toast::after {
         animation: none;
     }
-    
+
     .approval-notification {
         animation: none;
     }
-    
+
     .loading-notification .spinner {
         animation: none;
     }
-    
+
     .notification-badge.pulse {
         animation: none;
     }
