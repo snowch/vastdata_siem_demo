@@ -91,9 +91,8 @@ function initWebSocket() {
         progressManager.updateConnectionStatus('connected');
         wsStats.connected = true;
         reconnectAttempts = 0;
-        ui.showStatus('🔌 Connected to SOC Security Analysis', 'success');
-        
-        // ENHANCED: Reset agent state on new connection
+
+        // Reset agent state on new connection
         resetAgentStates();
     };
 
