@@ -1,6 +1,7 @@
 # services/ai-agents/src/core/services/agent_service.py
 """
-Agent Service with Clean Message Architecture and FIXED Analyst Results Processing
+Agent Service with Clean Message Architecture - SIMPLIFIED VERSION
+Removed redundant fallback parsing since we use StructuredMessage[SOCAnalysisResult]
 """
 
 import json
@@ -89,8 +90,6 @@ class CleanMessageSender:
         """Clear the approval waiting state"""
         self._awaiting_approval = False
         agent_logger.debug(f"🔄 CLEAN ARCH: Cleared approval state for session {self.session_id}")
-
-    # ... (other methods remain the same as in original file)
 
     async def send_triage_findings(self, findings_data: Dict[str, Any]) -> bool:
         """Send structured triage findings"""
@@ -312,7 +311,7 @@ class WorkflowProgressTracker:
         )
 
 # ============================================================================
-# ENHANCED MESSAGE PROCESSOR - FIXED ANALYST HANDLING
+# SIMPLIFIED MESSAGE PROCESSOR - REMOVED COMPLEX FALLBACK PARSING
 # ============================================================================
 
 async def _process_clean_streaming_message(
@@ -321,7 +320,7 @@ async def _process_clean_streaming_message(
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any]
 ):
-    """Process streaming messages using clean architecture - FIXED ANALYST HANDLING"""
+    """Process streaming messages using clean architecture - SIMPLIFIED VERSION"""
     try:
         if not hasattr(message, 'source') or not hasattr(message, 'content'):
             return
@@ -351,7 +350,7 @@ async def _process_clean_streaming_message(
             return  # Stop processing further messages
 
         # ====================================================================
-        # HANDLE STRUCTURED RESULTS (DOMAIN OBJECTS)
+        # HANDLE STRUCTURED RESULTS (DOMAIN OBJECTS) - SIMPLIFIED
         # ====================================================================
 
         # PRIORITY 1: Handle structured triage findings (prevent duplicates)
@@ -444,7 +443,7 @@ async def _process_clean_streaming_message(
 
             return  # Don't send as output stream
 
-        # PRIORITY 3: Handle structured analyst results (FIXED)
+        # PRIORITY 3: Handle structured analyst results - SIMPLIFIED
         elif (source == "SeniorAnalystSpecialist" and
               isinstance(message, StructuredMessage) and
               isinstance(message.content, SOCAnalysisResult)):
@@ -541,17 +540,24 @@ async def _process_clean_streaming_message(
             agent_logger.info(f"👤 CLEAN ARCH: Analyst agent approval request detected in text message")
             sender._awaiting_approval = True
 
-            # Extract recommendations from the message
-            analyst_info = _extract_analyst_info(content)
+            # Use structured data if available, otherwise create simple prompt
+            structured_result = final_results.get('structured_result', {})
+            detailed_analysis = structured_result.get('detailed_analysis', {})
+            
+            recommendations_count = len(detailed_analysis.get('recommended_actions', []))
+            business_impact = detailed_analysis.get('business_impact', 'Analysis completed')
+            
+            prompt = f"Security analysis complete with {recommendations_count} recommendations. Do you approve these actions?" if recommendations_count > 0 else "Do you approve these recommended actions?"
             
             await sender.send_approval_request(
                 stage="analyst",
-                prompt=analyst_info.get('prompt', 'Do you approve these recommended actions?'),
+                prompt=prompt,
                 context={
                     "source": source, 
                     "timestamp": datetime.now().isoformat(),
-                    "recommendations_count": analyst_info.get('recommendations_count', 0),
-                    "business_impact": analyst_info.get('business_impact', '')
+                    "recommendations_count": recommendations_count,
+                    "business_impact": business_impact,
+                    "uses_structured_data": True
                 }
             )
 
@@ -618,20 +624,13 @@ async def _process_clean_streaming_message(
                     is_final=False
                 )
 
-        # ====================================================================
-        # ENHANCED TOOL OUTPUT PARSING (FOR ANALYST FUNCTION CALLS)
-        # ====================================================================
-
-        # FIXED: Better analyst function call detection and processing
-        await _parse_analyst_tool_outputs_enhanced(message, final_results, sender)
-
     except Exception as e:
         agent_logger.error(f"❌ CLEAN ARCH: Critical error processing message: {e}")
         agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         await sender.send_error(f"Message processing error: {str(e)}")
 
 # ============================================================================
-# ENHANCED HELPER FUNCTIONS
+# HELPER FUNCTIONS (unchanged)
 # ============================================================================
 
 def _is_context_approval_request(content: str) -> bool:
@@ -733,29 +732,7 @@ def _extract_context_info(content: str) -> Dict[str, Any]:
     
     return context_info
 
-def _extract_analyst_info(content: str) -> Dict[str, Any]:
-    """Extract analyst information from approval request content"""
-    analyst_info = {
-        'prompt': 'Do you approve these recommended actions?',
-        'recommendations_count': 0,
-        'business_impact': ''
-    }
-    
-    # Try to extract number of recommendations
-    import re
-    
-    # Look for patterns like "3 actions", "5 recommendations", etc.
-    actions_match = re.search(r'(\d+)\s+(?:action|recommendation)', content, re.IGNORECASE)
-    if actions_match:
-        analyst_info['recommendations_count'] = int(actions_match.group(1))
-        analyst_info['prompt'] = f"I've generated {analyst_info['recommendations_count']} security recommendations. Do you approve these actions?"
-    
-    # Extract business impact
-    impact_match = re.search(r'business impact[:\s]*([^\n]+)', content, re.IGNORECASE)
-    if impact_match:
-        analyst_info['business_impact'] = impact_match.group(1).strip()
-    
-    return analyst_info
+
 
 def _determine_agent_type_from_source(source: str) -> Optional[str]:
     """Determine agent type from message source"""
@@ -826,277 +803,8 @@ def _is_system_message(content: str) -> bool:
 
     return any(indicator in content for indicator in system_indicators)
 
-async def _parse_analyst_tool_outputs_enhanced(message, final_results: Dict, sender: CleanMessageSender):
-    """FIXED: Parse tool outputs from analyst agent with proper validation and fallback"""
-    content = str(message.content)
-    source = message.source
-
-    # Only process analyst messages
-    if source != "SeniorAnalystSpecialist":
-        return
-
-    try:
-        agent_logger.debug(f"🔧 ANALYST PARSER: Processing content from {source}")
-        
-        # ENHANCED: Multiple patterns to detect analyst function results
-        patterns_to_check = [
-            # Pattern 1: Direct JSON with status - more flexible
-            r'\{\s*"status"\s*:\s*"analysis_complete".*?\}',
-            # Pattern 2: Function result format - look for FUNCTION_RESULT
-            r'FUNCTION_RESULT:\s*\{.*?"status".*?\}',
-            # Pattern 3: Look for report_detailed_analysis function call result
-            r'report_detailed_analysis.*?\{.*?"status".*?"data".*?\}',
-            # Pattern 4: Just look for analysis_complete in JSON context
-            r'\{[^}]*"status"[^}]*"analysis_complete"[^}]*\}',
-        ]
-        
-        import re
-        
-        for i, pattern in enumerate(patterns_to_check):
-            json_match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if json_match:
-                agent_logger.info(f"🎯 ANALYST PARSER: Found analyst result pattern {i+1}: {pattern[:50]}...")
-                
-                try:
-                    # Try to extract the JSON part
-                    matched_text = json_match.group()
-                    
-                    # Handle FUNCTION_RESULT: prefix
-                    if matched_text.startswith('FUNCTION_RESULT:'):
-                        json_str = matched_text[len('FUNCTION_RESULT:'):].strip()
-                    elif matched_text.find('{') != -1:
-                        # Find the JSON part
-                        json_start = matched_text.find('{')
-                        json_str = matched_text[json_start:]
-                    else:
-                        json_str = matched_text
-                    
-                    # Clean up the JSON string - remove any trailing non-JSON content
-                    brace_count = 0
-                    json_end = 0
-                    for j, char in enumerate(json_str):
-                        if char == '{':
-                            brace_count += 1
-                        elif char == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                json_end = j + 1
-                                break
-                    
-                    if json_end > 0:
-                        json_str = json_str[:json_end]
-                    
-                    agent_logger.debug(f"🔍 ANALYST PARSER: Attempting to parse JSON: {json_str[:200]}...")
-                    
-                    # Parse the JSON
-                    tool_result = json.loads(json_str)
-                    
-                    if tool_result.get('status') == 'analysis_complete' and 'data' in tool_result:
-                        agent_logger.info(f"✅ ANALYST PARSER: Successfully parsed analyst function results")
-                        
-                        # Validate and fix the data structure
-                        analysis_data = tool_result['data']
-                        validated_data = validate_and_fix_analysis_data(analysis_data)
-                        
-                        # Store the results
-                        final_results['detailed_analysis'] = validated_data
-
-                        # Send structured analysis recommendations
-                        await sender.send_analysis_recommendations(validated_data)
-                        
-                        agent_logger.info(f"📤 ANALYST PARSER: Sent validated analysis recommendations to frontend")
-                        return  # Success - stop processing
-                        
-                except json.JSONDecodeError as e:
-                    agent_logger.warning(f"⚠️ ANALYST PARSER: JSON decode error for pattern {i+1}: {e}")
-                    agent_logger.debug(f"Failed JSON content: {matched_text[:200]}...")
-                    continue
-                except Exception as e:
-                    agent_logger.error(f"❌ ANALYST PARSER: Error processing pattern {i+1}: {e}")
-                    continue
-        
-        # ENHANCED: Alternative detection - look for key phrases that indicate analysis completion
-        if any(phrase in content.lower() for phrase in ['analysis_complete', 'recommendations generated', 'recommended actions']):
-            agent_logger.info(f"🔍 ANALYST PARSER: Found analysis completion indicators, creating structured fallback")
-            
-            # Extract what we can from the text content
-            extracted_data = extract_analysis_from_text(content)
-            
-            # Create a properly structured analysis result with all required fields
-            structured_analysis = create_structured_analysis_fallback(extracted_data)
-            
-            final_results['detailed_analysis'] = structured_analysis
-            await sender.send_analysis_recommendations(structured_analysis)
-            agent_logger.info(f"📤 ANALYST PARSER: Sent structured fallback analysis recommendations")
-
-    except Exception as e:
-        agent_logger.error(f"❌ ANALYST PARSER: Critical error parsing analyst outputs: {e}")
-        agent_logger.error(f"❌ Full content was: {content[:500]}...")
-
-def validate_and_fix_analysis_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and fix analysis data to ensure all required fields are present"""
-    
-    # Ensure all required fields exist with proper defaults
-    validated_data = {
-        "threat_assessment": data.get("threat_assessment", {
-            "severity": "medium",
-            "confidence": 0.8,
-            "threat_type": "Security threat analysis complete"
-        }),
-        "attack_timeline": data.get("attack_timeline", []),
-        "attribution_indicators": data.get("attribution_indicators", []),
-        "lateral_movement_evidence": data.get("lateral_movement_evidence", []),
-        "data_at_risk": data.get("data_at_risk", []),
-        "business_impact": data.get("business_impact", "Analysis completed - impact assessment under review"),
-        "recommended_actions": data.get("recommended_actions", []),
-        "investigation_notes": data.get("investigation_notes", "Security analysis completed successfully")
-    }
-    
-    # Ensure attack_timeline is a list of properly formatted events
-    if not isinstance(validated_data["attack_timeline"], list):
-        validated_data["attack_timeline"] = []
-    
-    # Ensure all other list fields are actually lists
-    for field in ["attribution_indicators", "lateral_movement_evidence", "data_at_risk", "recommended_actions"]:
-        if not isinstance(validated_data[field], list):
-            validated_data[field] = []
-    
-    # Ensure threat_assessment has required fields
-    if not isinstance(validated_data["threat_assessment"], dict):
-        validated_data["threat_assessment"] = {
-            "severity": "medium",
-            "confidence": 0.8,
-            "threat_type": "Security analysis complete"
-        }
-    else:
-        # Fill in missing threat assessment fields
-        validated_data["threat_assessment"].setdefault("severity", "medium")
-        validated_data["threat_assessment"].setdefault("confidence", 0.8)
-        validated_data["threat_assessment"].setdefault("threat_type", "Security analysis complete")
-    
-    agent_logger.info(f"✅ ANALYST PARSER: Data validation complete - {len(validated_data['recommended_actions'])} actions")
-    
-    return validated_data
-
-def extract_analysis_from_text(content: str) -> Dict[str, Any]:
-    """Extract analysis information from text content using pattern matching"""
-    
-    import re
-    
-    extracted = {
-        "severity": "medium",
-        "confidence": 0.8,
-        "threat_type": "Security Analysis Complete",
-        "business_impact": "Analysis completed",
-        "recommended_actions": [],
-        "investigation_notes": "Analysis completed successfully"
-    }
-    
-    # Extract severity
-    severity_match = re.search(r'severity[:\s]*(\w+)', content, re.IGNORECASE)
-    if severity_match:
-        extracted["severity"] = severity_match.group(1).lower()
-    
-    # Extract confidence  
-    confidence_match = re.search(r'confidence[:\s]*(\d+(?:\.\d+)?)', content, re.IGNORECASE)
-    if confidence_match:
-        try:
-            conf_value = float(confidence_match.group(1))
-            if conf_value > 1:  # Handle percentage format
-                conf_value = conf_value / 100
-            extracted["confidence"] = conf_value
-        except ValueError:
-            pass
-    
-    # Extract threat type
-    threat_match = re.search(r'threat[_ ]type[:\s]*([^\n]+)', content, re.IGNORECASE)
-    if threat_match:
-        extracted["threat_type"] = threat_match.group(1).strip()
-    
-    # Extract business impact
-    impact_match = re.search(r'business[_ ]impact[:\s]*([^\n]+)', content, re.IGNORECASE)
-    if impact_match:
-        extracted["business_impact"] = impact_match.group(1).strip()
-    
-    # Extract recommended actions - look for numbered lists or bullet points
-    actions_section = re.search(r'recommended[_ ]actions?[:\s]*\n?((?:(?:\d+\.|\-|\•).+\n?)+)', content, re.IGNORECASE | re.MULTILINE)
-    if actions_section:
-        actions_text = actions_section.group(1)
-        # Split by lines and clean up
-        actions = []
-        for line in actions_text.split('\n'):
-            line = line.strip()
-            if line and (line.startswith(('1.', '2.', '3.', '-', '•')) or 'action' in line.lower()):
-                # Clean up the action text
-                clean_action = re.sub(r'^\d+\.\s*|\-\s*|\•\s*', '', line).strip()
-                if clean_action:
-                    actions.append(clean_action)
-        extracted["recommended_actions"] = actions
-    
-    # Extract investigation notes
-    notes_match = re.search(r'investigation[_ ]notes?[:\s]*([^\n]+)', content, re.IGNORECASE)
-    if notes_match:
-        extracted["investigation_notes"] = notes_match.group(1).strip()
-    
-    agent_logger.info(f"🔍 ANALYST PARSER: Extracted {len(extracted['recommended_actions'])} actions from text")
-    
-    return extracted
-
-def create_structured_analysis_fallback(extracted_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a properly structured analysis result with all required fields"""
-    
-    from datetime import datetime
-    
-    current_time = datetime.now().isoformat()
-    
-    # Create structured analysis with all required fields
-    structured_analysis = {
-        "threat_assessment": {
-            "severity": extracted_data.get("severity", "medium"),
-            "confidence": extracted_data.get("confidence", 0.8),
-            "threat_type": extracted_data.get("threat_type", "Security Analysis Complete")
-        },
-        "attack_timeline": [
-            {
-                "timestamp": current_time,
-                "event_type": "analysis_initiated",
-                "description": "Security analysis initiated based on context research",
-                "severity": extracted_data.get("severity", "medium")
-            },
-            {
-                "timestamp": current_time,
-                "event_type": "analysis_complete",
-                "description": f"Analysis completed: {extracted_data.get('threat_type', 'Security review')}",
-                "severity": extracted_data.get("severity", "medium")
-            }
-        ],
-        "attribution_indicators": [
-            "Analysis based on context research",
-            "Threat patterns identified from historical data"
-        ],
-        "lateral_movement_evidence": [
-            "Movement patterns analyzed",
-            "Access patterns reviewed"
-        ],
-        "data_at_risk": [
-            "Potentially compromised systems identified",
-            "Data exposure assessment completed"
-        ],
-        "business_impact": extracted_data.get("business_impact", "Analysis completed - impact assessment available"),
-        "recommended_actions": extracted_data.get("recommended_actions", [
-            "Review analysis findings",
-            "Implement recommended security measures",
-            "Monitor for additional threats"
-        ]),
-        "investigation_notes": extracted_data.get("investigation_notes", "Security analysis completed successfully based on available evidence and historical context")
-    }
-    
-    agent_logger.info(f"✅ ANALYST PARSER: Created structured fallback with {len(structured_analysis['recommended_actions'])} actions")
-    
-    return structured_analysis
-
 # ============================================================================
-# TEAM CREATION AND WORKFLOW FUNCTIONS (unchanged from original)
+# TEAM CREATION AND WORKFLOW FUNCTIONS (unchanged)
 # ============================================================================
 
 async def _create_soc_team(
@@ -1189,7 +897,7 @@ def _create_termination_conditions():
     return termination
 
 # ============================================================================
-# MAIN WORKFLOW FUNCTION (updated with enhanced message processing)
+# MAIN WORKFLOW FUNCTION (simplified)
 # ============================================================================
 
 async def run_analysis_workflow(
@@ -1199,7 +907,7 @@ async def run_analysis_workflow(
     message_callback: Optional[Callable] = None
 ) -> bool:
     """
-    Execute SOC analysis workflow using clean message architecture with FIXED analyst handling
+    Execute SOC analysis workflow using clean message architecture - SIMPLIFIED VERSION
     """
     agent_logger.info(f"🚀 CLEAN ARCH: Starting SOC analysis workflow for session {session_id}")
 
