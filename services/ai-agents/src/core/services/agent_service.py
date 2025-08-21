@@ -23,7 +23,8 @@ from autogen_agentchat.conditions import (
     MaxMessageTermination,
     TokenUsageTermination,
     TimeoutTermination,
-    SourceMatchTermination
+    SourceMatchTermination,
+    ExternalTermination
 )
 from autogen_core import CancellationToken
 from core.models.analysis import SOCAnalysisResult, PriorityFindings, ContextResearchResult
@@ -423,7 +424,8 @@ async def _process_clean_streaming_message(
     sender: CleanMessageSender,
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any],
-    workflow_state: WorkflowState
+    workflow_state: WorkflowState,
+    external_termination: ExternalTermination  # ADD: external termination parameter
 ):
     """Process streaming messages using structured data instead of regex parsing"""
     try:
@@ -436,6 +438,62 @@ async def _process_clean_streaming_message(
         agent_logger.debug(f"🔍 STRUCTURED: Processing message from {source}: {type(message).__name__}")
 
         # ====================================================================
+        # NEW: CHECK FOR ANY APPROVAL AGENT TERMINATION CONDITIONS
+        # ====================================================================
+        
+        # Check for any approval agent response that should terminate workflow
+        approval_agents = ["TriageApprovalAgent", "ContextApprovalAgent", "AnalystApprovalAgent"]
+        
+        if source in approval_agents:
+            should_terminate = False
+            termination_reason = ""
+            
+            # Check for workflow rejection
+            if ("WORKFLOW_REJECTED" in content or 
+                ("REJECTED" in content and "human operator" in content)):
+                should_terminate = True
+                termination_reason = "User rejected workflow"
+                final_results['was_rejected'] = True
+                
+            # Check for user cancellation/rejection at any stage
+            elif ("REJECTED" in content or 
+                  "rejected" in content.lower() or
+                  "cancel" in content.lower() or
+                  "stop" in content.lower()):
+                should_terminate = True
+                termination_reason = f"User cancelled at {source} stage"
+                final_results['was_rejected'] = True
+                
+            # Check for successful analyst approval (final stage)
+            elif (source == "AnalystApprovalAgent" and 
+                  ("APPROVED" in content or "approved" in content.lower())):
+                should_terminate = True
+                termination_reason = "Analyst approval completed - workflow finished"
+                final_results['workflow_complete'] = True
+                
+            # If any termination condition is met, trigger external termination
+            if should_terminate:
+                agent_logger.info(f"🎯 TERMINATION: {termination_reason} - triggering external termination")
+                external_termination.set()
+                
+                # Send appropriate notification
+                if final_results.get('was_rejected'):
+                    await sender.send_workflow_rejected(
+                        rejected_stage=source.replace("ApprovalAgent", "").lower(),
+                        reason=termination_reason
+                    )
+                else:
+                    await sender.send_analysis_complete(
+                        success=True,
+                        results_summary={
+                            "termination_reason": termination_reason,
+                            "final_stage": source
+                        }
+                    )
+                
+                return  # Exit early, no need to process further
+
+        # ====================================================================
         # CHECK FOR WORKFLOW COMPLETION SIGNALS
         # ====================================================================
 
@@ -443,6 +501,7 @@ async def _process_clean_streaming_message(
         if "ANALYSIS_COMPLETE - Senior SOC investigation finished" in content:
             agent_logger.info(f"✅ STRUCTURED: Workflow completion signal detected")
             final_results['workflow_complete'] = True
+            external_termination.set()  # Also trigger external termination
             await sender.send_analysis_complete(
                 success=True,
                 results_summary={
@@ -660,31 +719,12 @@ async def _process_clean_streaming_message(
             return
 
         # ====================================================================
-        # WORKFLOW STATUS PROCESSING
-        # ====================================================================
-
-        elif (source == "MultiStageApprovalAgent" and
-              ("WORKFLOW_REJECTED" in content or
-               ("REJECTED" in content and "human operator" in content))):
-
-            final_results['was_rejected'] = True
-            agent_logger.info(f"❌ STRUCTURED: Workflow rejected")
-
-            await sender.send_workflow_rejected(
-                rejected_stage=_determine_rejection_stage(content),
-                reason="User rejected the workflow"
-            )
-
-            return
-
-        # ====================================================================
         # FUNCTION CALL DETECTION (for progress tracking) - UPDATED
         # ====================================================================
 
         if ('FunctionCall(' in content or
             'report_priority_findings' in content or
             'analyze_historical_incidents' in content):
-            # REMOVED: 'report_detailed_analysis' since analyst no longer uses function tools
 
             agent_type = _determine_agent_type_from_source(source)
             function_name = _extract_function_name(content)
@@ -701,7 +741,6 @@ async def _process_clean_streaming_message(
                     await progress_tracker.update_stage("triage_active")
                 elif agent_type == "context":
                     await progress_tracker.update_stage("context_active")
-                # REMOVED: analyst function call progress since it uses structured output
 
         # ====================================================================
         # AGENT OUTPUT STREAMING (for non-structured content)
@@ -723,7 +762,7 @@ async def _process_clean_streaming_message(
         agent_logger.error(f"❌ STRUCTURED: Critical error processing message: {e}")
         agent_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         await sender.send_error(f"Message processing error: {str(e)}")
-
+        
 # ============================================================================
 # SIMPLIFIED HELPER FUNCTIONS (NO MORE REGEX PARSING)
 # ============================================================================
@@ -873,8 +912,9 @@ def _is_system_message(content: str) -> bool:
 
 async def _create_soc_team(
     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
+    external_termination: ExternalTermination  # Add parameter
 ):
-    """Create SOC team with multiple approval agents for proper multi-stage workflow"""
+    """Create SOC team with multiple approval agents and external termination control"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
 
     # Create agents
@@ -899,7 +939,6 @@ async def _create_soc_team(
     )
 
     # FIXED: Proper agent order for multi-stage approval workflow
-    # Order: triage → triage_approval → context → context_approval → analyst → analyst_approval
     team = RoundRobinGroupChat(
         [
             triage_agent,           # 1. Analyze threats
@@ -909,7 +948,7 @@ async def _create_soc_team(
             analyst_agent,          # 5. Deep analysis
             analyst_approval_agent  # 6. Approve recommendations
         ],
-        termination_condition=_create_termination_conditions(),
+        termination_condition=_create_termination_conditions(external_termination),  # Pass external termination
         custom_message_types=[
             StructuredMessage[PriorityFindings],
             StructuredMessage[SOCAnalysisResult],
@@ -917,11 +956,11 @@ async def _create_soc_team(
         ],
     )
 
-    agent_logger.info("SOC team created with multi-stage approval workflow")
+    agent_logger.info("SOC team created with multi-stage approval workflow and external termination")
     return team, model_client
 
-def _create_termination_conditions():
-    """Create comprehensive termination conditions for multi-stage workflow - UPDATED"""
+def _create_termination_conditions(external_termination: ExternalTermination):
+    """Create comprehensive termination conditions including external control"""
     
     # Normal completion when analyst finishes with specific phrase
     normal_completion = (
@@ -937,19 +976,14 @@ def _create_termination_conditions():
         TextMentionTermination("WORKFLOW_REJECTED")
     )
 
-    # REMOVED: Function-based completion since analyst uses structured output
-    # function_completion = (
-    #     SourceMatchTermination("SeniorAnalystSpecialist") &
-    #     FunctionCallTermination("report_detailed_analysis")
-    # )
+    # Backup termination conditions
+    max_messages = MaxMessageTermination(60)
+    token_limit = TokenUsageTermination(max_total_token=90000)
+    timeout = TimeoutTermination(timeout_seconds=1200)
 
-    # Backup termination conditions - INCREASED limits for multi-stage workflow
-    max_messages = MaxMessageTermination(60)  # Increased for more agents
-    token_limit = TokenUsageTermination(max_total_token=90000)  # Increased for more conversation
-    timeout = TimeoutTermination(timeout_seconds=1200)  # 20 minutes for multi-stage
-
-    # Combined termination - REMOVED function_completion
+    # Combined termination
     termination = (
+        external_termination |
         normal_completion |
         rejection_termination |
         max_messages |
@@ -970,12 +1004,15 @@ async def run_analysis_workflow(
     message_callback: Optional[Callable] = None
 ) -> bool:
     """
-    Execute SOC analysis workflow using structured data instead of regex parsing
+    Execute SOC analysis workflow with external termination control
     """
     agent_logger.info(f"🚀 STRUCTURED: Starting SOC analysis workflow for session {session_id}")
 
     # Initialize workflow state for structured data storage
     workflow_state = WorkflowState()
+    
+    # CREATE EXTERNAL TERMINATION CONTROLLER
+    external_termination = ExternalTermination()
     
     # Initialize clean message sender with workflow state
     sender = CleanMessageSender(session_id, workflow_state, message_callback)
@@ -995,9 +1032,9 @@ async def run_analysis_workflow(
     await progress_tracker.update_stage("initializing")
     start_time = datetime.now()
 
-    # Define the user input function with clean architecture
+    # Define the user input function with external termination logic
     async def _user_input_func(prompt: str, cancellation_token: Optional[CancellationToken]) -> str:
-        """Handle user input requests with clean messaging"""
+        """Handle user input requests with clean messaging and termination control"""
         if user_input_callback:
             try:
                 user_response = await user_input_callback(prompt, session_id)
@@ -1016,7 +1053,7 @@ async def run_analysis_workflow(
                         return "APPROVED - Historical context validated as relevant. SeniorAnalystSpecialist, please perform deep analysis."
                     elif 'recommend' in prompt.lower() or 'action' in prompt.lower():
                         await progress_tracker.update_stage("finalizing")
-                        return "APPROVED - Recommended actions authorized. Please conclude with the completion phrase."
+                        return "APPROVED - Recommended actions authorized. Analysis workflow is now complete."
                     else:
                         return "APPROVED - Proceeding to next stage of analysis."
 
@@ -1032,11 +1069,11 @@ async def run_analysis_workflow(
 
             except asyncio.TimeoutError:
                 agent_logger.warning(f"User input timeout for session {session_id}")
-                sender.clear_approval_state()  # Clear state on timeout too
+                sender.clear_approval_state()
                 return "TIMEOUT - No user response received. Auto-approving to continue analysis."
             except Exception as e:
                 agent_logger.error(f"Error getting user input for session {session_id}: {e}")
-                sender.clear_approval_state()  # Clear state on error too
+                sender.clear_approval_state()
                 await sender.send_error(f"User input error: {str(e)}")
                 return "ERROR - Failed to get user input. Auto-approving to continue analysis."
         else:
@@ -1044,8 +1081,11 @@ async def run_analysis_workflow(
             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
 
     try:
-        # Create the SOC team
-        team, model_client = await _create_soc_team(user_input_func=_user_input_func)
+        # Create the SOC team with external termination
+        team, model_client = await _create_soc_team(
+            user_input_func=_user_input_func,
+            external_termination=external_termination
+        )
 
         # Create the enhanced analysis task
         task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE AND MULTI-STAGE APPROVAL
@@ -1067,13 +1107,14 @@ MULTI-STAGE WORKFLOW WITH DEDICATED APPROVAL AGENTS:
    - After recommendations: AnalystApprovalAgent handles authorization for proposed actions
    - Wait for user authorization of recommended actions
 
-4. **COMPLETION**: When complete, end with specific completion phrase
+4. **COMPLETION**: Workflow automatically terminates after analyst approval
 
 APPROVAL POINTS:
 - Each stage has dedicated approval agent
 - Provide clear, specific information for decision-making
 - Wait for explicit approval before continuing to next agent
 - Handle custom instructions and modifications
+- Workflow terminates automatically after final analyst approval
 
 TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, wait for TriageApprovalAgent to handle the approval process."""
 
@@ -1084,11 +1125,14 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
 
         # Process messages in real-time as they arrive
         async for message in stream:
-            await _process_clean_streaming_message(message, sender, progress_tracker, final_results, workflow_state)
+            await _process_clean_streaming_message(message, sender, progress_tracker, final_results, workflow_state, external_termination)
 
-            # Break early if workflow is complete
-            if final_results.get('workflow_complete'):
-                agent_logger.info(f"🎉 STRUCTURED: Workflow completed early for session {session_id}")
+            # Break early if workflow is complete OR external termination is set
+            if final_results.get('workflow_complete') or external_termination.terminated:
+                if external_termination.terminated:
+                    agent_logger.info(f"🎯 STRUCTURED: Workflow terminated externally for session {session_id}")
+                else:
+                    agent_logger.info(f"🎉 STRUCTURED: Workflow completed early for session {session_id}")
                 break
 
         await model_client.close()
@@ -1106,13 +1150,14 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                     "has_priority_findings": final_results.get('priority_findings') is not None,
                     "has_context_data": final_results.get('context_research') is not None,
                     "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
-                    "was_rejected": final_results.get('was_rejected', False)
+                    "was_rejected": final_results.get('was_rejected', False),
+                    "terminated_externally": external_termination.terminated
                 },
                 duration_seconds=duration
             )
 
         agent_logger.info(f"Structured data SOC analysis workflow completed for session {session_id}")
-        agent_logger.info(f"Final status - Duration: {duration:.1f}s")
+        agent_logger.info(f"Final status - Duration: {duration:.1f}s, External termination: {external_termination.terminated}")
 
         return not final_results.get('was_rejected', False)
 
