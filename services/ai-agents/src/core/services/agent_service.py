@@ -1,8 +1,7 @@
 # services/ai-agents/src/core/services/agent_service.py
 """
-Agent Service with Clean Message Architecture - STRUCTURED MESSAGE VERSION
-Removed regex parsing in favor of structured message data from Pydantic models
-Updated to remove analyst function tool detection since analyst now uses structured output only
+Agent Service with Clean Message Architecture - ROBUST COMPLETION DETECTION VERSION
+Enhanced with structured completion detection instead of fragile string matching
 """
 
 import json
@@ -58,6 +57,7 @@ class WorkflowState:
         self.context_research: Optional[ContextResearchResult] = None
         self.analyst_results: Optional[Dict[str, Any]] = None
         self.structured_result: Optional[SOCAnalysisResult] = None
+        self.workflow_start_time: datetime = datetime.now()
         
     def store_triage_findings(self, findings: PriorityFindings):
         """Store structured triage findings"""
@@ -73,6 +73,10 @@ class WorkflowState:
         """Store structured analyst results"""
         self.analyst_results = results
         agent_logger.info(f"✅ STRUCTURED: Stored analyst results")
+        
+    def get_workflow_duration(self) -> float:
+        """Calculate workflow duration in seconds"""
+        return (datetime.now() - self.workflow_start_time).total_seconds()
         
     def get_context_for_approval(self, stage: str) -> Dict[str, Any]:
         """Get structured context data for approval requests - NO REGEX NEEDED"""
@@ -105,6 +109,44 @@ class WorkflowState:
                 "stage_type": "security_recommendations"
             }
         return {}
+
+# ============================================================================
+# COMPLETION DETECTION AND LOGGING
+# ============================================================================
+
+def log_completion_detection(final_results, soc_result=None, method="structured", workflow_state=None):
+    """Enhanced completion detection logging with metrics"""
+    
+    completion_info = {
+        "completion_method": method,
+        "timestamp": datetime.now().isoformat(),
+        "workflow_state": {
+            "has_triage": final_results.get('priority_findings') is not None,
+            "has_context": final_results.get('context_research') is not None, 
+            "has_analysis": final_results.get('structured_result') is not None,
+        },
+        "workflow_duration_seconds": workflow_state.get_workflow_duration() if workflow_state else None
+    }
+    
+    if soc_result:
+        completion_info["structured_flags"] = {
+            "workflow_complete": soc_result.workflow_complete,
+            "analysis_status": soc_result.analysis_status,
+            "confidence_level": soc_result.confidence_level,
+            "completion_timestamp": soc_result.completion_timestamp
+        }
+    
+    agent_logger.info(f"🎉 ROBUST COMPLETION DETECTED: {json.dumps(completion_info, indent=2)}")
+    
+    # Track completion metrics for monitoring
+    completion_metrics = {
+        "method": method,
+        "confidence": soc_result.confidence_level if soc_result else "unknown",
+        "duration": completion_info["workflow_duration_seconds"],
+        "success_indicators": len([k for k, v in completion_info["workflow_state"].items() if v])
+    }
+    
+    return completion_info, completion_metrics
 
 # ============================================================================
 # CLEAN MESSAGE SENDER WITH STRUCTURED DATA
@@ -416,7 +458,7 @@ class WorkflowProgressTracker:
         )
 
 # ============================================================================
-# ENHANCED MESSAGE PROCESSOR WITH STRUCTURED DATA
+# ENHANCED MESSAGE PROCESSOR WITH ROBUST COMPLETION DETECTION
 # ============================================================================
 
 async def _process_clean_streaming_message(
@@ -425,9 +467,9 @@ async def _process_clean_streaming_message(
     progress_tracker: WorkflowProgressTracker,
     final_results: Dict[str, Any],
     workflow_state: WorkflowState,
-    external_termination: ExternalTermination  # ADD: external termination parameter
+    external_termination: ExternalTermination
 ):
-    """Process streaming messages using structured data instead of regex parsing"""
+    """Process streaming messages with ROBUST COMPLETION DETECTION using structured data"""
     try:
         if not hasattr(message, 'source') or not hasattr(message, 'content'):
             return
@@ -483,41 +525,118 @@ async def _process_clean_streaming_message(
                         reason=termination_reason
                     )
                 else:
+                    completion_info, metrics = log_completion_detection(
+                        final_results, None, "approval_completion", workflow_state
+                    )
                     await sender.send_analysis_complete(
                         success=True,
                         results_summary={
                             "termination_reason": termination_reason,
-                            "final_stage": source
+                            "final_stage": source,
+                            "completion_metadata": completion_info,
+                            "performance_metrics": metrics
                         }
                     )
                 
                 return  # Exit early, no need to process further
 
         # ====================================================================
-        # CHECK FOR WORKFLOW COMPLETION SIGNALS
+        # PRIORITY 1: ROBUST STRUCTURED COMPLETION DETECTION
         # ====================================================================
 
-        # PRIORITY 0: Check for workflow completion signals
-        if "ANALYSIS_COMPLETE - Senior SOC investigation finished" in content:
-            agent_logger.info(f"✅ STRUCTURED: Workflow completion signal detected")
+        # PRIORITY 1: Handle structured analyst results with ROBUST completion detection
+        if (source == "SeniorAnalystSpecialist" and
+              isinstance(message, StructuredMessage) and
+              isinstance(message.content, SOCAnalysisResult)):
+
+            # Check if we already processed analyst results
+            if final_results.get('structured_result') is not None:
+                agent_logger.warning(f"⚠️ STRUCTURED: Ignoring duplicate analyst results")
+                return
+
+            result = message.content.model_dump()
+            final_results['structured_result'] = result
+
+            # Store in workflow state for future approval requests
+            if 'detailed_analysis' in result:
+                workflow_state.store_analyst_results(result['detailed_analysis'])
+
+            agent_logger.info(f"✅ STRUCTURED: Structured analyst results received")
+
+            # Extract analysis data and send recommendations
+            if 'detailed_analysis' in result:
+                await sender.send_analysis_recommendations(result['detailed_analysis'])
+                
+            await sender.send_agent_status_update("analyst", "complete", "Deep analysis complete")
+            await progress_tracker.update_stage("analyst_complete")
+
+            # 🎯 NEW: ROBUST COMPLETION DETECTION using structured data
+            soc_result = message.content
+            if soc_result.workflow_complete or soc_result.analysis_status == "complete":
+                agent_logger.info(f"✅ ROBUST: Workflow completion detected via structured data")
+                final_results['workflow_complete'] = True
+                external_termination.set()
+                
+                # Enhanced logging and metrics
+                completion_info, metrics = log_completion_detection(
+                    final_results, soc_result, "structured_data", workflow_state
+                )
+                
+                await sender.send_analysis_complete(
+                    success=True,
+                    results_summary={
+                        "has_priority_findings": final_results.get('priority_findings') is not None,
+                        "has_context_data": final_results.get('context_research') is not None,
+                        "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
+                        "workflow_complete": True,
+                        "completion_method": "structured_data",
+                        "confidence_level": soc_result.confidence_level,
+                        "completion_timestamp": soc_result.completion_timestamp,
+                        "completion_metadata": completion_info,
+                        "performance_metrics": metrics
+                    }
+                )
+                return
+
+            return
+
+        # ====================================================================
+        # FALLBACK: STRING-BASED COMPLETION DETECTION (Lower Priority)
+        # ====================================================================
+
+        # FALLBACK: Check for text-based completion signals (only if structured hasn't triggered)
+        elif (isinstance(message, TextMessage) and 
+              "ANALYSIS_COMPLETE - Senior SOC investigation finished" in content and
+              not final_results.get('workflow_complete')):
+            
+            agent_logger.info(f"✅ FALLBACK: Workflow completion signal detected via text matching")
             final_results['workflow_complete'] = True
-            external_termination.set()  # Also trigger external termination
+            external_termination.set()
+            
+            # Log fallback usage for monitoring
+            completion_info, metrics = log_completion_detection(
+                final_results, None, "text_fallback", workflow_state
+            )
+            
             await sender.send_analysis_complete(
                 success=True,
                 results_summary={
                     "has_priority_findings": final_results.get('priority_findings') is not None,
                     "has_context_data": final_results.get('context_research') is not None,
                     "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
-                    "workflow_complete": True
+                    "workflow_complete": True,
+                    "completion_method": "text_fallback",
+                    "completion_metadata": completion_info,
+                    "performance_metrics": metrics
                 }
             )
             return
 
         # ====================================================================
-        # HANDLE STRUCTURED RESULTS WITH WORKFLOW STATE
+        # HANDLE OTHER STRUCTURED RESULTS WITH WORKFLOW STATE
         # ====================================================================
 
-        # PRIORITY 1: Handle structured triage findings (prevent duplicates)
+        # PRIORITY 2: Handle structured triage findings (prevent duplicates)
         if (source == "TriageSpecialist" and
             isinstance(message, StructuredMessage) and
             isinstance(message.content, PriorityFindings)):
@@ -543,7 +662,7 @@ async def _process_clean_streaming_message(
 
             return
 
-        # PRIORITY 2: Handle structured context research results
+        # PRIORITY 3: Handle structured context research results
         elif (source == "ContextAgent" and
               isinstance(message, StructuredMessage) and
               isinstance(message.content, ContextResearchResult)):
@@ -604,34 +723,6 @@ async def _process_clean_streaming_message(
                 )
                 
                 agent_logger.info(f"✅ STRUCTURED: Context approval request auto-triggered with intelligent prompt")
-
-            return
-
-        # PRIORITY 3: Handle structured analyst results
-        elif (source == "SeniorAnalystSpecialist" and
-              isinstance(message, StructuredMessage) and
-              isinstance(message.content, SOCAnalysisResult)):
-
-            # Check if we already processed analyst results
-            if final_results.get('structured_result') is not None:
-                agent_logger.warning(f"⚠️ STRUCTURED: Ignoring duplicate analyst results")
-                return
-
-            result = message.content.model_dump()
-            final_results['structured_result'] = result
-
-            # Store in workflow state for future approval requests
-            if 'detailed_analysis' in result:
-                workflow_state.store_analyst_results(result['detailed_analysis'])
-
-            agent_logger.info(f"✅ STRUCTURED: Structured analyst results received")
-
-            # Extract analysis data and send recommendations
-            if 'detailed_analysis' in result:
-                await sender.send_analysis_recommendations(result['detailed_analysis'])
-                
-            await sender.send_agent_status_update("analyst", "complete", "Deep analysis complete")
-            await progress_tracker.update_stage("analyst_complete")
 
             return
 
@@ -719,7 +810,7 @@ async def _process_clean_streaming_message(
             return
 
         # ====================================================================
-        # FUNCTION CALL DETECTION (for progress tracking) - UPDATED
+        # FUNCTION CALL DETECTION (for progress tracking)
         # ====================================================================
 
         if ('FunctionCall(' in content or
@@ -805,12 +896,11 @@ def _determine_rejection_stage(content: str) -> str:
     return 'unknown'
 
 def _extract_function_name(content: str) -> str:
-    """Extract function name from content - UPDATED"""
+    """Extract function name from content"""
     if 'report_priority_findings' in content:
         return 'report_priority_findings'
     elif 'analyze_historical_incidents' in content:
         return 'analyze_historical_incidents'
-    # REMOVED: 'report_detailed_analysis' detection
     elif 'FunctionCall(' in content:
         # Try to extract function name from FunctionCall
         try:
@@ -912,7 +1002,7 @@ def _is_system_message(content: str) -> bool:
 
 async def _create_soc_team(
     user_input_func: Callable[[str, Optional[CancellationToken]], Awaitable[str]],
-    external_termination: ExternalTermination  # Add parameter
+    external_termination: ExternalTermination
 ):
     """Create SOC team with multiple approval agents and external termination control"""
     model_client = OpenAIChatCompletionClient(model="gpt-4o")
@@ -948,7 +1038,7 @@ async def _create_soc_team(
             analyst_agent,          # 5. Deep analysis
             analyst_approval_agent  # 6. Approve recommendations
         ],
-        termination_condition=_create_termination_conditions(external_termination),  # Pass external termination
+        termination_condition=_create_termination_conditions(external_termination),
         custom_message_types=[
             StructuredMessage[PriorityFindings],
             StructuredMessage[SOCAnalysisResult],
@@ -956,13 +1046,13 @@ async def _create_soc_team(
         ],
     )
 
-    agent_logger.info("SOC team created with multi-stage approval workflow and external termination")
+    agent_logger.info("SOC team created with multi-stage approval workflow and robust completion detection")
     return team, model_client
 
 def _create_termination_conditions(external_termination: ExternalTermination):
     """Create comprehensive termination conditions including external control"""
     
-    # Normal completion when analyst finishes with specific phrase
+    # Normal completion when analyst finishes (FALLBACK - structured detection is primary)
     normal_completion = (
         SourceMatchTermination("SeniorAnalystSpecialist") &
         TextMentionTermination("ANALYSIS_COMPLETE - Senior SOC investigation finished")
@@ -981,7 +1071,7 @@ def _create_termination_conditions(external_termination: ExternalTermination):
     token_limit = TokenUsageTermination(max_total_token=90000)
     timeout = TimeoutTermination(timeout_seconds=1200)
 
-    # Combined termination
+    # Combined termination - external termination has highest priority
     termination = (
         external_termination |
         normal_completion |
@@ -994,7 +1084,7 @@ def _create_termination_conditions(external_termination: ExternalTermination):
     return termination
 
 # ============================================================================
-# MAIN WORKFLOW FUNCTION WITH STRUCTURED DATA
+# MAIN WORKFLOW FUNCTION WITH ROBUST COMPLETION DETECTION
 # ============================================================================
 
 async def run_analysis_workflow(
@@ -1004,9 +1094,9 @@ async def run_analysis_workflow(
     message_callback: Optional[Callable] = None
 ) -> bool:
     """
-    Execute SOC analysis workflow with external termination control
+    Execute SOC analysis workflow with ROBUST COMPLETION DETECTION
     """
-    agent_logger.info(f"🚀 STRUCTURED: Starting SOC analysis workflow for session {session_id}")
+    agent_logger.info(f"🚀 ROBUST: Starting SOC analysis workflow with structured completion detection for session {session_id}")
 
     # Initialize workflow state for structured data storage
     workflow_state = WorkflowState()
@@ -1081,14 +1171,14 @@ async def run_analysis_workflow(
             return "AUTO-APPROVED - No user input mechanism available, automatically continuing with analysis."
 
     try:
-        # Create the SOC team with external termination
+        # Create the SOC team with external termination and robust completion detection
         team, model_client = await _create_soc_team(
             user_input_func=_user_input_func,
             external_termination=external_termination
         )
 
-        # Create the enhanced analysis task
-        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH CLEAN ARCHITECTURE AND MULTI-STAGE APPROVAL
+        # Create the enhanced analysis task with completion instructions
+        task = f"""ENHANCED SECURITY LOG ANALYSIS WITH ROBUST COMPLETION DETECTION AND MULTI-STAGE APPROVAL
 
 Please analyze these OCSF security log events for threats requiring immediate attention:
 
@@ -1107,32 +1197,38 @@ MULTI-STAGE WORKFLOW WITH DEDICATED APPROVAL AGENTS:
    - After recommendations: AnalystApprovalAgent handles authorization for proposed actions
    - Wait for user authorization of recommended actions
 
-4. **COMPLETION**: Workflow automatically terminates after analyst approval
+4. **COMPLETION**: Workflow uses STRUCTURED COMPLETION FLAGS for robust termination
+
+⚠️ CRITICAL COMPLETION REQUIREMENTS:
+- SeniorAnalystSpecialist MUST set workflow_complete=True in SOCAnalysisResult when done
+- SeniorAnalystSpecialist MUST set analysis_status="complete" for robust detection
+- SeniorAnalystSpecialist MUST set completion_timestamp when finishing
+- Structured completion flags take PRIORITY over text-based detection
 
 APPROVAL POINTS:
 - Each stage has dedicated approval agent
 - Provide clear, specific information for decision-making
 - Wait for explicit approval before continuing to next agent
 - Handle custom instructions and modifications
-- Workflow terminates automatically after final analyst approval
+- Workflow terminates automatically after final analyst approval OR structured completion flags
 
 TriageSpecialist: Begin initial triage analysis. After completing your analysis and providing structured findings, wait for TriageApprovalAgent to handle the approval process."""
 
-        agent_logger.info(f"Starting multi-stage approval team execution for session {session_id}")
+        agent_logger.info(f"Starting robust multi-stage approval team execution for session {session_id}")
 
         # Use run_stream for real-time message processing
         stream = team.run_stream(task=task, cancellation_token=CancellationToken())
 
-        # Process messages in real-time as they arrive
+        # Process messages in real-time as they arrive with robust completion detection
         async for message in stream:
             await _process_clean_streaming_message(message, sender, progress_tracker, final_results, workflow_state, external_termination)
 
             # Break early if workflow is complete OR external termination is set
             if final_results.get('workflow_complete') or external_termination.terminated:
                 if external_termination.terminated:
-                    agent_logger.info(f"🎯 STRUCTURED: Workflow terminated externally for session {session_id}")
+                    agent_logger.info(f"🎯 ROBUST: Workflow terminated externally for session {session_id}")
                 else:
-                    agent_logger.info(f"🎉 STRUCTURED: Workflow completed early for session {session_id}")
+                    agent_logger.info(f"🎉 ROBUST: Workflow completed via structured completion for session {session_id}")
                 break
 
         await model_client.close()
@@ -1143,6 +1239,10 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
         # Send final completion update if not already sent
         if not final_results.get('workflow_complete'):
             success = not final_results.get('was_rejected', False)
+            
+            completion_info, metrics = log_completion_detection(
+                final_results, None, "workflow_timeout", workflow_state
+            )
 
             await sender.send_analysis_complete(
                 success=success,
@@ -1151,18 +1251,20 @@ TriageSpecialist: Begin initial triage analysis. After completing your analysis 
                     "has_context_data": final_results.get('context_research') is not None,
                     "has_detailed_analysis": final_results.get('detailed_analysis') is not None,
                     "was_rejected": final_results.get('was_rejected', False),
-                    "terminated_externally": external_termination.terminated
+                    "terminated_externally": external_termination.terminated,
+                    "completion_metadata": completion_info,
+                    "performance_metrics": metrics
                 },
                 duration_seconds=duration
             )
 
-        agent_logger.info(f"Structured data SOC analysis workflow completed for session {session_id}")
-        agent_logger.info(f"Final status - Duration: {duration:.1f}s, External termination: {external_termination.terminated}")
+        agent_logger.info(f"Robust completion detection SOC analysis workflow completed for session {session_id}")
+        agent_logger.info(f"Final status - Duration: {duration:.1f}s, External termination: {external_termination.terminated}, Structured completion: {final_results.get('workflow_complete', False)}")
 
         return not final_results.get('was_rejected', False)
 
     except Exception as e:
-        agent_logger.error(f"Structured data SOC analysis workflow error for session {session_id}: {e}")
+        agent_logger.error(f"Robust completion SOC analysis workflow error for session {session_id}: {e}")
         agent_logger.error(f"Full traceback: {traceback.format_exc()}")
 
         # Send error via clean messaging

@@ -67,3 +67,19 @@ class SOCAnalysisResult(BaseModel):
     historical_context: str = Field(description="Historical context from similar incidents")
     confidence_level: Literal["high", "medium", "low"] = Field(description="Overall confidence in analysis")
     analyst_notes: str = Field(description="Additional analyst notes and observations")
+    
+    # NEW: Explicit workflow completion flags for robust detection
+    workflow_complete: bool = Field(
+        default=False, 
+        description="True when the entire SOC analysis workflow is complete and ready for final review"
+    )
+    
+    completion_timestamp: Optional[str] = Field(
+        None, 
+        description="ISO timestamp when analysis was completed"
+    )
+    
+    analysis_status: Literal["in_progress", "awaiting_approval", "complete", "requires_review"] = Field(
+        default="in_progress",
+        description="Current status of the analysis workflow"
+    )

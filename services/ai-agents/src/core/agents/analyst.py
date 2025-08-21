@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/agents/analyst.py - SIMPLIFIED VERSION
+# services/ai-agents/src/core/agents/analyst.py - ROBUST COMPLETION VERSION
 from core.agents.base import BaseAgent
 from core.models.analysis import SOCAnalysisResult
 from typing import List, Dict, Any, Literal
@@ -49,6 +49,22 @@ class AnalystAgent(BaseAgent):
    - historical_context: Summary of how historical incidents inform this case
    - confidence_level: "high", "medium", or "low"
    - analyst_notes: Your professional assessment and recommendations
+   
+   ⚠️ **CRITICAL - ROBUST WORKFLOW COMPLETION FLAGS**:
+   🎯 **workflow_complete**: Set to TRUE when your analysis is final and complete
+   🎯 **analysis_status**: Set to "complete" when workflow should terminate  
+   🎯 **completion_timestamp**: Set to current ISO timestamp when complete
+   
+   EXAMPLE COMPLETION:
+   ```
+   SOCAnalysisResult(
+       executive_summary="Critical threat detected and analyzed...",
+       # ... all other fields ...
+       workflow_complete=True,           # 🎯 REQUIRED FOR ROBUST COMPLETION
+       analysis_status="complete",       # 🎯 REQUIRED FOR ROBUST COMPLETION  
+       completion_timestamp="2024-01-15T10:45:00Z"  # 🎯 REQUIRED FOR ROBUST COMPLETION
+   )
+   ```
 
 6. **PRESENT RECOMMENDATIONS CLEARLY**: After providing structured results, present your findings in this format:
 
@@ -78,17 +94,37 @@ LONG-TERM (within 1 week):
 
 MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {number} security actions. Do you authorize these recommendations? Any modifications needed?"
 
-7. **WAIT FOR AUTHORIZATION**: Stop and wait for authorization before concluding
+7. **WAIT FOR AUTHORIZATION**: Stop and wait for authorization before any further action
 
-8. **CONCLUDE**: After receiving authorization, end with "ANALYSIS_COMPLETE - Senior SOC investigation finished"
+8. **CONCLUDE**: After receiving authorization, the workflow will automatically complete based on the structured data completion flags you set (workflow_complete=True, analysis_status="complete")
 
-⚠️ CRITICAL REQUIREMENTS:
+⚠️ CRITICAL REQUIREMENTS FOR ROBUST COMPLETION:
 - DO NOT start until you see approved context research
 - Return complete structured data using the SOCAnalysisResult format
+- 🎯 **ALWAYS SET workflow_complete=TRUE when your analysis is done**
+- 🎯 **ALWAYS SET analysis_status="complete" when ready to finish**
+- 🎯 **ALWAYS SET completion_timestamp to current ISO timestamp**
 - PRESENT findings in the exact format shown above
 - ALWAYS end your presentation with the MultiStageApprovalAgent question
 - Look for messages indicating context validation before beginning
-- Both structured output AND presentation must happen in your response"""
+- Both structured output AND presentation must happen in your response
+- The system will detect completion via your structured flags, NOT text parsing
+
+🔧 ROBUST COMPLETION SYSTEM:
+The workflow now uses your structured completion flags for robust termination detection instead of fragile text matching. This means:
+- Your workflow_complete=True flag is the PRIMARY completion signal
+- Your analysis_status="complete" provides additional confirmation
+- Your completion_timestamp helps with debugging and metrics
+- Text-based completion detection is only a fallback
+- This approach is much more reliable and won't break if text format changes
+
+EXAMPLE OF SETTING COMPLETION FLAGS:
+When you finish your analysis, ensure your SOCAnalysisResult includes:
+- workflow_complete=True (tells system you're completely done)
+- analysis_status="complete" (confirms completion status)
+- completion_timestamp="[current ISO timestamp]" (tracks when completed)
+
+These flags will trigger robust completion detection automatically."""
 
         super().__init__(
             name="SeniorAnalystSpecialist",
@@ -98,5 +134,5 @@ MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {n
             output_content_type=SOCAnalysisResult
         )
         
-        print(f"🔧 Simplified Analyst agent initialized with structured output only")
-        agent_logger.info(f"Simplified Analyst agent created with structured output: {SOCAnalysisResult.__name__}")
+        print(f"🔧 Robust Completion Analyst agent initialized with structured completion flags")
+        agent_logger.info(f"Robust Completion Analyst agent created with enhanced completion detection: {SOCAnalysisResult.__name__}")
