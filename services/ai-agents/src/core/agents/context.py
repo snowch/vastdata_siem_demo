@@ -1,6 +1,6 @@
 # services/ai-agents/src/core/agents/context.py - COMPLETE UPDATED VERSION
 from core.agents.base import BaseAgent
-from core.models.analysis import ContextResearchResult
+from core.models.analysis import ContextResearchResult, DocumentMetadata
 from autogen_core.tools import FunctionTool
 from infrastructure.vectordb_utils import search_chroma
 import logging
@@ -40,6 +40,7 @@ def analyze_historical_incidents(
         
         all_documents = []
         all_distances = []
+        all_metadata = []
         search_results_summary = []
         
         # Execute searches and collect results
@@ -50,10 +51,29 @@ def analyze_historical_incidents(
                 
                 documents = results.get('documents', [[]])[0]  # ChromaDB returns nested lists
                 distances = results.get('distances', [[]])[0]
+                metadatas = results.get('metadatas', [[]])[0] if 'metadatas' in results else []
                 
                 if documents:
                     all_documents.extend(documents)
                     all_distances.extend(distances)
+                    
+                    # Handle metadata - convert to structured format
+                    if metadatas:
+                        if isinstance(metadatas, list):
+                            for i, metadata in enumerate(metadatas):
+                                doc_metadata = _convert_to_document_metadata(metadata, i, query)
+                                all_metadata.append(doc_metadata)
+                        else:
+                            # If metadatas is not a list, create empty metadata
+                            for i in range(len(documents)):
+                                doc_metadata = _convert_to_document_metadata({}, i, query)
+                                all_metadata.append(doc_metadata)
+                    else:
+                        # No metadata available, create empty metadata objects
+                        for i in range(len(documents)):
+                            doc_metadata = _convert_to_document_metadata({}, i, query)
+                            all_metadata.append(doc_metadata)
+                    
                     search_results_summary.append({
                         "query": query,
                         "results_count": len(documents),
@@ -81,8 +101,13 @@ def analyze_historical_incidents(
             "recommended_actions": analysis_result["recommendations"],
             "confidence_assessment": analysis_result["confidence"],
             "historical_timeline": analysis_result["timeline_insights"],
-            "related_incidents": all_documents[:5],  # Include top 5 most relevant
-            "analysis_timestamp": datetime.now().isoformat()
+            "related_incidents": all_documents[:5],  # Include top 5 most relevant for summary
+            "analysis_timestamp": datetime.now().isoformat(),
+            
+            # NEW: Include ALL documents and distances with structured metadata
+            "all_documents": all_documents,
+            "all_distances": all_distances,
+            "all_document_metadata": all_metadata
         }
         
         agent_logger.info(f"✅ Historical analysis complete: {len(all_documents)} documents analyzed")
@@ -94,6 +119,29 @@ def analyze_historical_incidents(
         agent_logger.error(f"Historical incident analysis error: {e}")
         print(f"❌ CONTEXT ANALYSIS ERROR: {e}")
         return {"status": "analysis_failed", "error": str(e)}
+
+def _convert_to_document_metadata(raw_metadata: Any, index: int, query: str) -> Dict[str, Any]:
+    """Convert raw metadata to structured DocumentMetadata format"""
+    if not raw_metadata or not isinstance(raw_metadata, dict):
+        # Create default metadata if none provided
+        return {
+            "document_id": f"doc_{index}",
+            "source": "vector_database",
+            "timestamp": datetime.now().isoformat(),
+            "category": "security_incident",
+            "tags": [query.replace(" ", "_")],
+            "additional_info": "No additional metadata available"
+        }
+    
+    # Extract common metadata fields with defaults
+    return {
+        "document_id": str(raw_metadata.get("id", f"doc_{index}")),
+        "source": str(raw_metadata.get("source", "vector_database")),
+        "timestamp": str(raw_metadata.get("timestamp", datetime.now().isoformat())),
+        "category": str(raw_metadata.get("category", "security_incident")),
+        "tags": raw_metadata.get("tags", [query.replace(" ", "_")]) if isinstance(raw_metadata.get("tags"), list) else [query.replace(" ", "_")],
+        "additional_info": str(raw_metadata.get("additional_info", f"Retrieved via query: {query}"))
+    }
 
 def _analyze_security_patterns(documents: List[str], distances: List[float], threat_type: str) -> Dict[str, Any]:
     """
@@ -229,6 +277,7 @@ class ContextAgent(BaseAgent):
    - Attack progression insights from historical data
    - Actionable recommendations based on past incidents
    - Confidence assessment of the analysis
+   - ALL HISTORICAL DOCUMENTS and their relevance scores for detailed review
 
 6. **MANDATORY APPROVAL REQUEST**: After completing analysis, you MUST present findings AND request validation:
    - First, summarize your findings professionally

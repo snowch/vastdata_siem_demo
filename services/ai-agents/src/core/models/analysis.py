@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Any
 from pydantic import BaseModel, Field
 
 class Timeline(BaseModel):
@@ -34,6 +34,15 @@ class SearchEffectiveness(BaseModel):
     results_count: int = Field(description="Number of results returned")
     avg_relevance: float = Field(description="Average relevance score")
 
+class DocumentMetadata(BaseModel):
+    """Metadata for a historical document"""
+    document_id: str = Field(description="Document identifier", default="")
+    source: str = Field(description="Source of the document", default="")
+    timestamp: str = Field(description="Document timestamp", default="")
+    category: str = Field(description="Document category", default="")
+    tags: List[str] = Field(description="Document tags", default_factory=list)
+    additional_info: str = Field(description="Additional metadata as string", default="")
+
 class ContextResearchResult(BaseModel):
     """Structured domain result for historical security context analysis"""
     total_documents_found: int = Field(description="Total number of historical documents analyzed")
@@ -47,6 +56,11 @@ class ContextResearchResult(BaseModel):
     historical_timeline: str = Field(description="Timeline insights from historical incidents")
     related_incidents: List[str] = Field(description="Most relevant historical incident summaries")
     analysis_timestamp: str = Field(description="When this analysis was performed")
+    
+    # NEW: Include all documents and their distances/relevance scores
+    all_documents: List[str] = Field(description="All historical documents found during search", default_factory=list)
+    all_distances: List[float] = Field(description="Relevance/distance scores for all documents (lower = more relevant)", default_factory=list)
+    all_document_metadata: List[DocumentMetadata] = Field(description="Structured metadata for all documents", default_factory=list)
 
 class DetailedAnalysis(BaseModel):
     threat_assessment: ThreatAssessment = Field(description="Detailed threat assessment")

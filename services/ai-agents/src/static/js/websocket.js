@@ -499,8 +499,66 @@ function updateContextDisplay(contextData) {
         '📝 Search Scope: ' + (contextData.search_queries.length > 0 ? contextData.search_queries.join(', ') : 'General threat patterns') + '\n\n' +
         '📋 Analysis: ' + contextData.pattern_analysis;
     
+    // NEW: Add detailed document and distance information if available
+    if (contextData.all_documents && contextData.all_distances) {
+        contextSummary += '\n\n' + '=' * 50 + '\n';
+        contextSummary += '📄 DETAILED HISTORICAL DOCUMENTS & RELEVANCE SCORES\n';
+        contextSummary += '=' * 50 + '\n\n';
+        
+        var documentCount = Math.min(contextData.all_documents.length, contextData.all_distances.length);
+        
+        if (documentCount > 0) {
+            contextSummary += 'Found ' + documentCount + ' historical documents (lower score = more relevant):\n\n';
+            
+            // Create pairs of documents and distances, sort by relevance (lowest distance first)
+            var documentPairs = [];
+            for (var i = 0; i < documentCount; i++) {
+                documentPairs.push({
+                    document: contextData.all_documents[i],
+                    distance: contextData.all_distances[i],
+                    index: i + 1
+                });
+            }
+            
+            // Sort by distance (most relevant first)
+            documentPairs.sort(function(a, b) {
+                return a.distance - b.distance;
+            });
+            
+            // Display documents with their relevance scores
+            for (var i = 0; i < documentPairs.length; i++) {
+                var pair = documentPairs[i];
+                var relevancePercent = ((1 - pair.distance) * 100).toFixed(1);
+                
+                contextSummary += 'Document #' + pair.index + ' (Relevance: ' + relevancePercent + '%):\n';
+                contextSummary += 'Distance Score: ' + pair.distance.toFixed(4) + '\n';
+                
+                // Truncate long documents for display
+                var docText = pair.document;
+                if (docText.length > 200) {
+                    docText = docText.substring(0, 200) + '... [truncated]';
+                }
+                contextSummary += 'Content: ' + docText + '\n';
+                contextSummary += '-' * 80 + '\n';
+            }
+            
+            // Add summary statistics
+            var avgDistance = contextData.all_distances.reduce(function(sum, dist) { return sum + dist; }, 0) / contextData.all_distances.length;
+            var minDistance = Math.min.apply(Math, contextData.all_distances);
+            var maxDistance = Math.max.apply(Math, contextData.all_distances);
+            
+            contextSummary += '\n📊 RELEVANCE STATISTICS:\n';
+            contextSummary += 'Average Distance: ' + avgDistance.toFixed(4) + '\n';
+            contextSummary += 'Best Match (Min Distance): ' + minDistance.toFixed(4) + '\n';
+            contextSummary += 'Worst Match (Max Distance): ' + maxDistance.toFixed(4) + '\n';
+            contextSummary += 'Total Documents Analyzed: ' + documentCount + '\n';
+        } else {
+            contextSummary += 'No historical documents found with distance scores.\n';
+        }
+    }
+    
     contextOutput.textContent = contextSummary;
-    debugLogger.debugLog('✅ UI: CONTEXT content updated successfully');
+    debugLogger.debugLog('✅ UI: CONTEXT content updated successfully with all documents and distances');
     
     // Add visual context indicator
     var contextCard = document.getElementById('contextCard');
