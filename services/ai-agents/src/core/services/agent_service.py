@@ -712,17 +712,21 @@ async def _process_clean_streaming_message(
                 agent_logger.info(f"🔄 STRUCTURED: Auto-triggering context approval with structured data")
                 sender._awaiting_approval = True
 
+                # Include detailed research data for user review
+                context_with_research = {
+                    "source": source, 
+                    "timestamp": datetime.now().isoformat(),
+                    "auto_triggered": True,
+                    "research_data": context_dict  # Include full research data for detailed view
+                }
+
                 await sender.send_structured_approval_request(
                     stage="context",
                     base_prompt="Are these historical insights relevant for the current threat analysis?",
-                    context={
-                        "source": source, 
-                        "timestamp": datetime.now().isoformat(),
-                        "auto_triggered": True
-                    }
+                    context=context_with_research
                 )
                 
-                agent_logger.info(f"✅ STRUCTURED: Context approval request auto-triggered with intelligent prompt")
+                agent_logger.info(f"✅ STRUCTURED: Context approval request auto-triggered with detailed research data")
 
             return
 

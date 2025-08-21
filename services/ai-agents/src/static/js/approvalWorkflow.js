@@ -11,6 +11,9 @@ var awaitingApproval = false;
 var lastApprovalTimestamp = null;
 var processedApprovalIds = new Set(); // Track processed approval requests
 
+// Store detailed context data for user review
+var contextResearchData = null;
+
 // Define approval stages and their configurations
 const APPROVAL_STAGES = {
     'triage': {
@@ -27,9 +30,11 @@ const APPROVAL_STAGES = {
         buttons: [
             { text: '✅ Relevant context, proceed to analysis', value: 'approve', class: 'btn-approve' },
             { text: '❌ Not relevant, skip context', value: 'reject', class: 'btn-reject' },
+            { text: '📋 Show Details', value: 'show-details', class: 'btn btn-secondary' },
             { text: '✏️ Provide different context', value: 'custom', class: 'btn-custom' }
         ],
-        allowCustomInput: true
+        allowCustomInput: true,
+        hasDetailedView: true
     },
     'analyst': {
         title: 'Action Authorization',
@@ -46,6 +51,12 @@ const APPROVAL_STAGES = {
 function handleApprovalRequest(data) {
     debugLogger.debugLog('🔍 APPROVAL: Processing approval request - Type: ' + data.type + ', Stage: ' + (data.stage || 'undefined'));
     console.log('Full approval request data:', data);
+    
+    // Store context research data for detailed view
+    if (data.stage === 'context' && data.context && data.context.research_data) {
+        contextResearchData = data.context.research_data;
+        debugLogger.debugLog('📋 APPROVAL: Stored context research data for detailed view');
+    }
     
     // ENHANCED: Filter out invalid or problematic approval requests
     if (!isValidApprovalRequest(data)) {
@@ -389,6 +400,8 @@ function attachApprovalEventListeners(agentType, container, stageConfig) {
                 hideCustomInput(agentType);
             } else if (value === 'custom') {
                 showCustomInput(agentType);
+            } else if (value === 'show-details' && agentType === 'context') {
+                showContextDetails();
             } else {
                 handleStandardApproval(agentType, value);
             }
@@ -614,7 +627,344 @@ function clearApprovalHistory() {
     awaitingApproval = false;
     currentApprovalStage = null;
     lastApprovalTimestamp = null;
+    contextResearchData = null;
     hideAllApprovalButtons();
+}
+
+// ============================================================================
+// CONTEXT DETAILS MODAL FUNCTIONALITY
+// ============================================================================
+
+function showContextDetails() {
+    debugLogger.debugLog('📋 APPROVAL: Showing context research details');
+    
+    if (!contextResearchData) {
+        ui.showStatus('No detailed context data available', 'warning');
+        return;
+    }
+    
+    // Create modal overlay
+    var modal = document.createElement('div');
+    modal.id = 'contextDetailsModal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        overflow-y: auto;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
+    
+    // Create modal content
+    var modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        max-width: 90%;
+        width: 800px;
+        max-height: 90%;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        color: #2c3e50;
+    `;
+    
+    // Build detailed content
+    var detailsHTML = buildContextDetailsHTML(contextResearchData);
+    modalContent.innerHTML = detailsHTML;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Close modal handlers
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+    
+    // Close button handler
+    var closeBtn = modalContent.querySelector('#closeContextDetails');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            document.body.removeChild(modal);
+        });
+    }
+    
+    // Escape key handler
+    var closeOnEscape = function(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', closeOnEscape);
+        }
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    
+    debugLogger.debugLog('✅ APPROVAL: Context details modal displayed');
+}
+
+function buildContextDetailsHTML(data) {
+    var html = `
+        <div style="padding: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 1.5em;">
+                    📋 Historical Context Research Details
+                </h3>
+                <button id="closeContextDetails" style="
+                    background: #e74c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">✕ Close</button>
+            </div>
+    `;
+    
+    // Summary Section
+    html += `
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+            <h4 style="color: #2c3e50; margin-bottom: 15px;">📊 Research Summary</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                    <div style="font-size: 1.8em; font-weight: bold; color: #3498db;">${data.total_documents_found || 0}</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;">Documents Found</div>
+                </div>
+                <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                    <div style="font-size: 1.8em; font-weight: bold; color: #27ae60;">${(data.search_queries_executed || []).length}</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;">Search Queries</div>
+                </div>
+                <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                    <div style="font-size: 1.2em; font-weight: bold; color: #e67e22;">${data.confidence_assessment || 'Unknown'}</div>
+                    <div style="font-size: 0.9em; color: #7f8c8d;">Confidence Level</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Search Queries
+    if (data.search_queries_executed && data.search_queries_executed.length > 0) {
+        html += `
+            <div style="margin-bottom: 25px;">
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">🔍 Search Queries Executed</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+        `;
+        
+        data.search_queries_executed.forEach(function(query, index) {
+            html += `<div style="padding: 8px; margin: 5px 0; background: white; border-radius: 4px; font-family: monospace; font-size: 0.9em;">${index + 1}. ${query}</div>`;
+        });
+        
+        html += `</div></div>`;
+    }
+    
+    // Pattern Analysis
+    if (data.pattern_analysis) {
+        html += `
+            <div style="margin-bottom: 25px;">
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">🔍 Pattern Analysis</h4>
+                <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #27ae60;">
+                    <p style="margin: 0; line-height: 1.6;">${data.pattern_analysis}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Detailed Documents Section
+    if (data.all_documents && data.all_documents.length > 0) {
+        html += `
+            <div style="margin-bottom: 25px;">
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">📄 Historical Documents (${data.all_documents.length} found)</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto;">
+        `;
+        
+        // Create document pairs with relevance scores
+        var documentPairs = [];
+        for (var i = 0; i < data.all_documents.length; i++) {
+            var distance = data.all_distances && data.all_distances[i] !== undefined ? data.all_distances[i] : 1.0;
+            var metadata = data.all_document_metadata && data.all_document_metadata[i] ? data.all_document_metadata[i] : {};
+            
+            documentPairs.push({
+                document: data.all_documents[i],
+                distance: distance,
+                metadata: metadata,
+                index: i + 1
+            });
+        }
+        
+        // Sort by relevance (lower distance = more relevant)
+        documentPairs.sort(function(a, b) {
+            return a.distance - b.distance;
+        });
+        
+        // Display each document
+        documentPairs.forEach(function(pair, index) {
+            var relevancePercent = ((1 - pair.distance) * 100).toFixed(1);
+            var relevanceColor = pair.distance < 0.3 ? '#27ae60' : pair.distance < 0.7 ? '#f39c12' : '#e74c3c';
+            
+            html += `
+                <div style="background: white; margin: 10px 0; padding: 15px; border-radius: 6px; border-left: 4px solid ${relevanceColor};">
+                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-weight: bold; color: #2c3e50;">Document #${pair.index}</span>
+                        <span style="background: ${relevanceColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">
+                            ${relevancePercent}% Relevant
+                        </span>
+                    </div>
+            `;
+            
+            // Document metadata
+            if (pair.metadata && Object.keys(pair.metadata).length > 0) {
+                html += `<div style="font-size: 0.85em; color: #7f8c8d; margin-bottom: 8px;">`;
+                if (pair.metadata.timestamp) {
+                    html += `📅 ${pair.metadata.timestamp} `;
+                }
+                if (pair.metadata.source) {
+                    html += `📁 ${pair.metadata.source} `;
+                }
+                if (pair.metadata.category) {
+                    html += `🏷️ ${pair.metadata.category}`;
+                }
+                html += `</div>`;
+            }
+            
+            // Distance score
+            html += `<div style="font-size: 0.8em; color: #95a5a6; margin-bottom: 8px;">Distance Score: ${pair.distance.toFixed(4)}</div>`;
+            
+            // Document content (truncated)
+            var docContent = pair.document;
+            if (docContent.length > 300) {
+                docContent = docContent.substring(0, 300) + '...';
+            }
+            
+            html += `
+                    <div style="background: #f1f2f6; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.85em; line-height: 1.4; white-space: pre-wrap;">
+                        ${escapeHtml(docContent)}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div></div>`;
+        
+        // Statistics
+        if (data.all_distances && data.all_distances.length > 0) {
+            var avgDistance = data.all_distances.reduce(function(sum, dist) { return sum + dist; }, 0) / data.all_distances.length;
+            var minDistance = Math.min.apply(Math, data.all_distances);
+            var maxDistance = Math.max.apply(Math, data.all_distances);
+            
+            html += `
+                <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                    <h5 style="color: #2c3e50; margin-bottom: 10px;">📊 Relevance Statistics</h5>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9em;">
+                        <div><strong>Average Distance:</strong> ${avgDistance.toFixed(4)}</div>
+                        <div><strong>Best Match:</strong> ${minDistance.toFixed(4)}</div>
+                        <div><strong>Worst Match:</strong> ${maxDistance.toFixed(4)}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // Recommendations
+    if (data.recommended_actions && data.recommended_actions.length > 0) {
+        html += `
+            <div style="margin-bottom: 25px;">
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">💡 Recommendations Based on Historical Data</h4>
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+        `;
+        
+        data.recommended_actions.forEach(function(action, index) {
+            html += `<div style="margin: 8px 0; padding: 8px; background: white; border-radius: 4px;"><strong>${index + 1}.</strong> ${action}</div>`;
+        });
+        
+        html += `</div></div>`;
+    }
+    
+    // Action buttons
+    html += `
+            <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ecf0f1;">
+                <p style="color: #7f8c8d; margin-bottom: 15px; font-style: italic;">
+                    Based on this historical context analysis, do you believe these findings are relevant for the current threat investigation?
+                </p>
+                <button id="closeContextDetails" style="
+                    background: linear-gradient(45deg, #3498db, #2980b9);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 12px 24px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 1em;
+                ">Close and Make Decision</button>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Add CSS for context details modal
+function addContextDetailsCSS() {
+    if (document.getElementById('contextDetailsCSS')) return;
+    
+    var style = document.createElement('style');
+    style.id = 'contextDetailsCSS';
+    style.textContent = `
+        #contextDetailsModal {
+            animation: fadeIn 0.3s ease;
+        }
+        
+        #contextDetailsModal > div {
+            animation: slideInFromBottom 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideInFromBottom {
+            from { 
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(45deg, #6c757d, #5a6268) !important;
+            color: white !important;
+        }
+        
+        .btn-secondary:hover {
+            background: linear-gradient(45deg, #5a6268, #495057) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Initialize CSS when module loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addContextDetailsCSS);
+} else {
+    addContextDetailsCSS();
 }
 
 export { 
