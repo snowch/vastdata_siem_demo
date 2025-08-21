@@ -2,6 +2,7 @@
 """
 Agent Service with Clean Message Architecture - STRUCTURED MESSAGE VERSION
 Removed regex parsing in favor of structured message data from Pydantic models
+Updated to remove analyst function tool detection since analyst now uses structured output only
 """
 
 import json
@@ -22,8 +23,7 @@ from autogen_agentchat.conditions import (
     MaxMessageTermination,
     TokenUsageTermination,
     TimeoutTermination,
-    SourceMatchTermination,
-    FunctionCallTermination
+    SourceMatchTermination
 )
 from autogen_core import CancellationToken
 from core.models.analysis import SOCAnalysisResult, PriorityFindings, ContextResearchResult
@@ -364,7 +364,7 @@ class CleanMessageSender:
             return False
 
 # ============================================================================
-# WORKFLOW PROGRESS TRACKER (unchanged)
+# WORKFLOW PROGRESS TRACKER
 # ============================================================================
 
 class WorkflowProgressTracker:
@@ -678,13 +678,13 @@ async def _process_clean_streaming_message(
             return
 
         # ====================================================================
-        # FUNCTION CALL DETECTION (for progress tracking)
+        # FUNCTION CALL DETECTION (for progress tracking) - UPDATED
         # ====================================================================
 
         if ('FunctionCall(' in content or
             'report_priority_findings' in content or
-            'report_detailed_analysis' in content or
             'analyze_historical_incidents' in content):
+            # REMOVED: 'report_detailed_analysis' since analyst no longer uses function tools
 
             agent_type = _determine_agent_type_from_source(source)
             function_name = _extract_function_name(content)
@@ -701,8 +701,7 @@ async def _process_clean_streaming_message(
                     await progress_tracker.update_stage("triage_active")
                 elif agent_type == "context":
                     await progress_tracker.update_stage("context_active")
-                elif agent_type == "analyst":
-                    await progress_tracker.update_stage("analyst_active")
+                # REMOVED: analyst function call progress since it uses structured output
 
         # ====================================================================
         # AGENT OUTPUT STREAMING (for non-structured content)
@@ -767,13 +766,12 @@ def _determine_rejection_stage(content: str) -> str:
     return 'unknown'
 
 def _extract_function_name(content: str) -> str:
-    """Extract function name from content"""
+    """Extract function name from content - UPDATED"""
     if 'report_priority_findings' in content:
         return 'report_priority_findings'
-    elif 'report_detailed_analysis' in content:
-        return 'report_detailed_analysis'
     elif 'analyze_historical_incidents' in content:
         return 'analyze_historical_incidents'
+    # REMOVED: 'report_detailed_analysis' detection
     elif 'FunctionCall(' in content:
         # Try to extract function name from FunctionCall
         try:
@@ -870,7 +868,7 @@ def _is_system_message(content: str) -> bool:
     return any(indicator in content for indicator in system_indicators)
 
 # ============================================================================
-# TEAM CREATION AND WORKFLOW FUNCTIONS (unchanged)
+# TEAM CREATION AND WORKFLOW FUNCTIONS
 # ============================================================================
 
 async def _create_soc_team(
@@ -923,7 +921,7 @@ async def _create_soc_team(
     return team, model_client
 
 def _create_termination_conditions():
-    """Create comprehensive termination conditions for multi-stage workflow"""
+    """Create comprehensive termination conditions for multi-stage workflow - UPDATED"""
     
     # Normal completion when analyst finishes with specific phrase
     normal_completion = (
@@ -939,20 +937,19 @@ def _create_termination_conditions():
         TextMentionTermination("WORKFLOW_REJECTED")
     )
 
-    # Function-based completion - when analyst calls report_detailed_analysis
-    function_completion = (
-        SourceMatchTermination("SeniorAnalystSpecialist") &
-        FunctionCallTermination("report_detailed_analysis")
-    )
+    # REMOVED: Function-based completion since analyst uses structured output
+    # function_completion = (
+    #     SourceMatchTermination("SeniorAnalystSpecialist") &
+    #     FunctionCallTermination("report_detailed_analysis")
+    # )
 
     # Backup termination conditions - INCREASED limits for multi-stage workflow
     max_messages = MaxMessageTermination(60)  # Increased for more agents
     token_limit = TokenUsageTermination(max_total_token=90000)  # Increased for more conversation
     timeout = TimeoutTermination(timeout_seconds=1200)  # 20 minutes for multi-stage
 
-    # Combined termination
+    # Combined termination - REMOVED function_completion
     termination = (
-        function_completion |
         normal_completion |
         rejection_termination |
         max_messages |

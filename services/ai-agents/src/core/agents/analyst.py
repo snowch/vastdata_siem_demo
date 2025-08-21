@@ -1,94 +1,16 @@
-# services/ai-agents/src/core/agents/analyst.py - ENHANCED APPROVAL TRIGGERING VERSION
+# services/ai-agents/src/core/agents/analyst.py - SIMPLIFIED VERSION
 from core.agents.base import BaseAgent
 from core.models.analysis import SOCAnalysisResult
-from autogen_core.tools import FunctionTool
-from core.models.analysis import Timeline, DetailedAnalysis, AttackEvent, ThreatAssessment
 from typing import List, Dict, Any, Literal
 import logging
 from datetime import datetime
 
 agent_logger = logging.getLogger("agent_diagnostics")
 
-def report_detailed_analysis(
-    threat_severity: Literal["critical", "high", "medium", "low"],
-    threat_confidence: float,
-    threat_type_detailed: str,
-    attribution_indicators: List[str],
-    lateral_movement_evidence: List[str],
-    data_at_risk: List[str],
-    business_impact: str,
-    recommended_actions: List[str],
-    investigation_notes: str
-) -> Dict[str, Any]:
-    """Report detailed analysis results - ENHANCED with better output"""
-    try:
-        # Create timeline events from the analysis
-        current_time = datetime.now().isoformat()
-        timeline_events = [
-            AttackEvent(
-                timestamp=current_time,
-                event_type="analysis_initiated",
-                description="Deep security analysis initiated",
-                severity=threat_severity
-            ),
-            AttackEvent(
-                timestamp=current_time,
-                event_type="threat_assessment_complete",
-                description=f"Threat assessment completed: {threat_type_detailed}",
-                severity=threat_severity
-            ),
-            AttackEvent(
-                timestamp=current_time,
-                event_type="recommendations_generated",
-                description=f"Generated {len(recommended_actions)} actionable recommendations",
-                severity="medium"
-            )
-        ]
-        
-        threat_assessment = ThreatAssessment(
-            severity=threat_severity,
-            confidence=float(threat_confidence),
-            threat_type=threat_type_detailed
-        )
-        
-        validated_analysis = DetailedAnalysis(
-            threat_assessment=threat_assessment,
-            attack_timeline=timeline_events,
-            attribution_indicators=attribution_indicators,
-            lateral_movement_evidence=lateral_movement_evidence,
-            data_at_risk=data_at_risk,
-            business_impact=business_impact,
-            recommended_actions=recommended_actions,
-            investigation_notes=investigation_notes
-        )
-        
-        agent_logger.info(f"✅ ANALYST FUNCTION CALLED - Detailed analysis validated: {len(recommended_actions)} recommendations generated")
-        print(f"🔧 ANALYST FUNCTION EXECUTED: {threat_type_detailed} - Severity: {threat_severity} - Actions: {len(recommended_actions)}")
-        
-        # Return the validated analysis in the expected format
-        function_result = {"status": "analysis_complete", "data": validated_analysis.model_dump()}
-        
-        # Also print it clearly for parsing
-        print(f"FUNCTION_RESULT: {function_result}")
-        
-        return function_result
-        
-    except Exception as e:
-        agent_logger.error(f"Detailed analysis validation error: {e}")
-        print(f"❌ ANALYST FUNCTION ERROR: {e}")
-        return {"status": "validation_error", "error": str(e)}
-
-
 class AnalystAgent(BaseAgent):
     def __init__(self, model_client):
         
-         analysis_tool = FunctionTool(
-            report_detailed_analysis,
-            description="Report detailed analysis results",
-            strict=True
-         )
-
-         system_message = """You are a Senior SOC Analyst. Your role is to:
+        system_message = """You are a Senior SOC Analyst. Your role is to:
 
 1. **WAIT FOR CONTEXT**: Only begin when you receive approved context from ContextAgent
 2. **DEEP ANALYSIS**: Perform comprehensive investigation:
@@ -110,31 +32,35 @@ class AnalystAgent(BaseAgent):
    - Business operations impact and downtime risk
    - Compliance implications and reporting requirements
 
-5. **CALL FUNCTION IMMEDIATELY**: When analysis is complete, you MUST actually invoke report_detailed_analysis():
+5. **RETURN STRUCTURED RESULTS**: When analysis is complete, return a complete SOCAnalysisResult with:
 
-report_detailed_analysis(
-    threat_severity="critical/high/medium/low",
-    threat_confidence=0.95,  # float between 0.0-1.0
-    threat_type_detailed="detailed_threat_description",
-    attribution_indicators=["indicator1", "indicator2", "indicator3"],
-    lateral_movement_evidence=["evidence1", "evidence2"],
-    data_at_risk=["sensitive_data1", "system2", "database3"],
-    business_impact="clear_business_impact_description",
-    recommended_actions=["immediate_action1", "short_term_action2", "long_term_action3"],
-    investigation_notes="additional_analysis_notes_and_observations"
-)
+   - executive_summary: Clear summary for executives
+   - priority_findings: The original triage findings (copy from earlier stage)
+   - context_research: The historical context research (copy from earlier stage)  
+   - detailed_analysis: Your complete analysis including:
+     * threat_assessment: severity, confidence, threat_type
+     * attack_timeline: chronological events with timestamps
+     * attribution_indicators: list of attribution clues
+     * lateral_movement_evidence: evidence of lateral movement
+     * data_at_risk: systems/data potentially compromised
+     * business_impact: clear business impact description
+     * recommended_actions: specific actionable recommendations
+     * investigation_notes: additional notes and observations
+   - historical_context: Summary of how historical incidents inform this case
+   - confidence_level: "high", "medium", or "low"
+   - analyst_notes: Your professional assessment and recommendations
 
-6. **PRESENT RECOMMENDATIONS CLEARLY**: After calling the function, present your findings in this EXACT format:
+6. **PRESENT RECOMMENDATIONS CLEARLY**: After providing structured results, present your findings in this format:
 
 "Based on my comprehensive security analysis, I have completed the investigation with the following key findings:
 
 🎯 THREAT ASSESSMENT:
-- Severity: [threat_severity]
-- Confidence: [threat_confidence]%
-- Threat Type: [threat_type_detailed]
+- Severity: [severity level]
+- Confidence: [confidence level]
+- Threat Type: [detailed threat description]
 
 💼 BUSINESS IMPACT:
-[business_impact]
+[clear business impact description]
 
 📋 RECOMMENDED ACTIONS:
 
@@ -148,7 +74,7 @@ LONG-TERM (within 1 week):
 - [list long-term actions]
 
 🔍 INVESTIGATION NOTES:
-[investigation_notes]
+[additional insights and observations]
 
 MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {number} security actions. Do you authorize these recommendations? Any modifications needed?"
 
@@ -158,20 +84,19 @@ MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {n
 
 ⚠️ CRITICAL REQUIREMENTS:
 - DO NOT start until you see approved context research
-- You MUST CALL report_detailed_analysis() function first - do not just describe it
+- Return complete structured data using the SOCAnalysisResult format
 - PRESENT findings in the exact format shown above
 - ALWAYS end your presentation with the MultiStageApprovalAgent question
-- CALL the function FIRST, then present findings, then request authorization
 - Look for messages indicating context validation before beginning
-- The function call and presentation must both happen in your response"""
+- Both structured output AND presentation must happen in your response"""
 
-         super().__init__(
+        super().__init__(
             name="SeniorAnalystSpecialist",
             model_client=model_client,
             system_message=system_message,
-            tools=[analysis_tool],
+            tools=None,  # No tools needed with structured output
             output_content_type=SOCAnalysisResult
-         )
-         
-         print(f"🔧 Enhanced Analyst agent initialized with {len([analysis_tool])} tools")
-         agent_logger.info(f"Enhanced Analyst agent created with tools: {[analysis_tool.name]}")
+        )
+        
+        print(f"🔧 Simplified Analyst agent initialized with structured output only")
+        agent_logger.info(f"Simplified Analyst agent created with structured output: {SOCAnalysisResult.__name__}")
