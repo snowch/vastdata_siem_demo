@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/event-manager.js - COMPLETE FIXED FILE
-// Handles DOM events and user interactions
+// services/ai-agents/src/static/js/modules/event-manager.js - CLEAN FLOW IMPLEMENTATION
+// Handles DOM events and user interactions for the clean flow
 
 export class EventManager {
     constructor() {
@@ -65,7 +65,7 @@ export class EventManager {
 
     setupKeyboardShortcuts() {
         this.addListener(document, 'keydown', (e) => {
-            // Global shortcuts
+            // Global shortcuts (Ctrl+Shift combinations)
             if (e.ctrlKey && e.shiftKey) {
                 switch (e.key) {
                     case 'D':
@@ -82,10 +82,14 @@ export class EventManager {
                         e.preventDefault();
                         this.dashboard.clearResults();
                         break;
+                    case 'R':
+                        e.preventDefault();
+                        this.dashboard.retrieveLogs();
+                        break;
                 }
             }
 
-            // Approval shortcuts (when approval is active)
+            // Approval shortcuts (when approval UI is visible)
             if (this.dashboard.uiManager.currentApproval) {
                 switch (e.key) {
                     case '1':
@@ -144,9 +148,11 @@ export class EventManager {
 Connected: ${stats.connected}
 Messages Sent: ${stats.messagesSent}
 Messages Received: ${stats.messagesReceived}
-Ready State: ${stats.readyState}`;
+Ready State: ${stats.readyState}
+Reconnect Attempts: ${stats.reconnectAttempts}`;
         
         console.log(message);
+        this.dashboard.debugManager.info('WebSocket stats displayed in console');
         this.dashboard.uiManager.showStatus('Stats logged to console', 'info');
     }
 

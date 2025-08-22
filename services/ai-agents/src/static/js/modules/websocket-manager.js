@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/websocket-manager.js - COMPLETE FIXED FILE
-// Handles WebSocket communication with proper approval status updates
+// services/ai-agents/src/static/js/modules/websocket-manager.js - CLEAN FLOW IMPLEMENTATION
+// Handles WebSocket communication with simplified agent status flow
 
 export class WebSocketManager {
     constructor() {
@@ -99,7 +99,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // MESSAGE ROUTING - HANDLES CORRECT AGENT STATUS FLOW
+    // MESSAGE ROUTING - CLEAN FLOW IMPLEMENTATION
     // ============================================================================
 
     routeMessage(data) {
@@ -123,26 +123,23 @@ export class WebSocketManager {
                 break;
                 
             case 'triage_findings':
+                // CLEAN FLOW: Triage completed its processing, show results and request approval
                 this.dashboard.onTriageComplete(data);
                 break;
                 
             case 'context_research':
+                // CLEAN FLOW: Context completed its processing, show results and request approval
                 this.dashboard.onContextComplete(data);
                 break;
                 
             case 'analysis_recommendations':
+                // CLEAN FLOW: Analyst completed its processing, show results and request approval
                 this.dashboard.onAnalysisComplete(data);
                 break;
                 
             case 'approval_request':
-                this.dashboard.onApprovalRequest(data);
-                break;
-
-            // ============================================================================
-            // CRITICAL: Agent Status Update Handling - Follows the Pattern
-            // ============================================================================
-            case 'agent_status_update':
-                this.handleAgentStatusUpdate(data);
+                // CLEAN FLOW: Backend is requesting approval for a stage
+                this.handleApprovalRequest(data);
                 break;
                 
             case 'workflow_progress':
@@ -155,7 +152,7 @@ export class WebSocketManager {
                 break;
                 
             case 'analysis_complete':
-                this.dashboard.onAnalysisComplete(data);
+                this.dashboard.onWorkflowComplete(data);
                 break;
                 
             case 'error':
@@ -173,56 +170,62 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // AGENT STATUS UPDATE HANDLER - IMPLEMENTS THE CORRECT PATTERN
+    // APPROVAL REQUEST HANDLING - SIMPLIFIED
     // ============================================================================
-    handleAgentStatusUpdate(data) {
-        const agent = data.agent;
-        const status = data.status;
-        const message = data.message;
+    
+    handleApprovalRequest(data) {
+        console.log('🔔 Approval request received:', data);
         
-        console.log(`🔄 Agent status update: ${agent} -> ${status}`);
+        const stage = this.determineStage(data);
+        const prompt = data.prompt || data.content || 'Approval required';
         
-        if (!agent || !status) {
-            console.warn('Invalid agent status update:', data);
-            return;
-        }
+        // Show approval UI for this stage
+        this.dashboard.uiManager.showApprovalForAgent(stage, prompt, (response) => {
+            console.log(`📤 Sending approval response for ${stage}: ${response}`);
+            
+            const success = this.send({
+                type: 'TextMessage',
+                content: response,
+                source: 'user'
+            });
+            
+            if (success) {
+                console.log('✅ Approval response sent successfully');
+                // Hide approval UI since response was sent
+                this.dashboard.uiManager.hideApprovalForAgent(stage);
+                // Set agent to complete status
+                this.dashboard.uiManager.updateAgent(stage, 'complete');
+                // Activate next agent if applicable
+                this.activateNextAgent(stage);
+            } else {
+                console.error('❌ Failed to send approval response');
+                this.dashboard.uiManager.showStatus('Failed to send response', 'error');
+            }
+        });
+    }
 
-        // PATTERN IMPLEMENTATION:
-        // - When agent becomes "active": show spinner
-        // - When agent becomes "complete": hide spinner, show results
-        // - When agent becomes "awaiting-approval": show approval box (but status stays "complete")
-        // - When approval given: hide approval box, next agent becomes "active"
+    determineStage(data) {
+        // Simple stage detection
+        if (data.stage) return data.stage;
+        
+        const content = (data.content || data.prompt || '').toLowerCase();
+        if (content.includes('threat') || content.includes('investigate')) return 'triage';
+        if (content.includes('context') || content.includes('historical')) return 'context';
+        if (content.includes('recommend') || content.includes('action')) return 'analyst';
+        
+        return 'triage'; // Default
+    }
 
-        // Update the agent status in UI (this handles spinner show/hide automatically)
-        this.dashboard.uiManager.updateAgent(agent, status);
+    activateNextAgent(currentStage) {
+        // Activate the next agent in sequence
+        const sequence = { 'triage': 'context', 'context': 'analyst', 'analyst': null };
+        const nextStage = sequence[currentStage];
         
-        // CRITICAL: Hide approval UI when agent status changes from awaiting-approval
-        // This happens when user clicks approve and backend activates next stage
-        if (status !== 'awaiting-approval') {
-            console.log(`🗑️ Clearing approval for ${agent} (status: ${status})`);
-            this.dashboard.uiManager.hideApprovalForAgent(agent);
-        }
-        
-        // Show status message if provided
-        if (message) {
-            this.dashboard.uiManager.showStatus(message, 'info');
-        }
-        
-        // Handle specific status transitions with proper logging
-        switch (status) {
-            case 'active':
-                console.log(`🔄 ${agent} agent is now processing (spinner should be visible)`);
-                break;
-            case 'complete':
-                console.log(`✅ ${agent} agent completed (spinner should be hidden, results visible)`);
-                break;
-            case 'awaiting-approval':
-                console.log(`⏳ ${agent} agent awaiting approval (approval box should be visible)`);
-                break;
-            case 'error':
-                console.log(`❌ ${agent} agent error`);
-                this.dashboard.uiManager.showStatus(`${agent} agent error`, 'error');
-                break;
+        if (nextStage) {
+            console.log(`🔄 Activating next agent: ${nextStage}`);
+            this.dashboard.uiManager.updateAgent(nextStage, 'active');
+        } else {
+            console.log('✅ No more agents to activate - workflow ending');
         }
     }
 

@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/main.js - COMPLETE FIXED FILE
-// Simple, clean entry point following the correct agent status pattern
+// services/ai-agents/src/static/js/main.js - CLEAN FLOW IMPLEMENTATION
+// Simple, clean dashboard following the correct agent status pattern
 
 import { WebSocketManager } from './modules/websocket-manager.js';
 import { UIManager } from './modules/ui-manager.js';
@@ -18,7 +18,7 @@ class SOCDashboard {
     }
 
     async initialize() {
-        console.log('🚀 Initializing SOC Dashboard - Clean Architecture');
+        console.log('🚀 Initializing SOC Dashboard - Clean Flow');
         
         try {
             // Initialize managers in order
@@ -68,11 +68,13 @@ class SOCDashboard {
             return;
         }
 
+        console.log('🚀 Starting analysis - CLEAN FLOW');
+        
         this.analysisInProgress = true;
         this.uiManager.setAnalysisMode(true);
         this.uiManager.updateProgress(5, 'Starting analysis...');
 
-        // PATTERN: Start analysis → triage becomes "active" with spinner
+        // CLEAN FLOW: Start with triage active (shows spinner)
         this.uiManager.updateAgent('triage', 'active');
 
         this.websocketManager.send({
@@ -88,7 +90,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // WEBSOCKET EVENT HANDLERS - Called by WebSocketManager
+    // WEBSOCKET EVENT HANDLERS - CLEAN FLOW IMPLEMENTATION
     // ============================================================================
 
     onConnectionEstablished(data) {
@@ -112,48 +114,43 @@ class SOCDashboard {
         this.uiManager.updateProgress(0, 'Ready');
     }
 
+    // CLEAN FLOW: When backend completes triage processing
     onTriageComplete(data) {
-        // PATTERN: Triage completes → status "complete", spinner disappears, show findings
-        // The approval request will be handled separately
-        this.uiManager.updateAgent('triage', 'complete', this.formatTriageOutput(data));
-        this.uiManager.updateProgress(30, 'Triage complete');
+        console.log('✅ Triage processing complete - showing results and requesting approval');
+        
+        // Stop triage spinner, show results, transition to awaiting-approval
+        // The approval request will be handled separately by websocket manager
+        const output = this.formatTriageOutput(data);
+        this.uiManager.updateAgent('triage', 'awaiting-approval', output);
+        this.uiManager.updateProgress(30, 'Triage complete - awaiting approval');
     }
 
+    // CLEAN FLOW: When backend completes context processing  
     onContextComplete(data) {
-        // PATTERN: Context completes → status "complete", spinner disappears, show findings
-        this.uiManager.updateAgent('context', 'complete', this.formatContextOutput(data));
-        this.uiManager.updateProgress(60, 'Context analysis complete');
+        console.log('✅ Context processing complete - showing results and requesting approval');
+        
+        const output = this.formatContextOutput(data);
+        this.uiManager.updateAgent('context', 'awaiting-approval', output);
+        this.uiManager.updateProgress(60, 'Context complete - awaiting approval');
     }
 
+    // CLEAN FLOW: When backend completes analyst processing
     onAnalysisComplete(data) {
-        // PATTERN: Analyst completes → status "complete", spinner disappears, show findings
-        this.uiManager.updateAgent('analyst', 'complete', this.formatAnalysisOutput(data));
-        this.uiManager.updateProgress(100, 'Analysis complete');
+        console.log('✅ Analysis processing complete - showing results and requesting approval');
+        
+        const output = this.formatAnalysisOutput(data);
+        this.uiManager.updateAgent('analyst', 'awaiting-approval', output);
+        this.uiManager.updateProgress(90, 'Analysis complete - awaiting approval');
+    }
+
+    // CLEAN FLOW: When entire workflow is complete
+    onWorkflowComplete(data) {
+        console.log('✅ Entire workflow complete');
+        
         this.analysisInProgress = false;
         this.uiManager.setAnalysisMode(false);
-        this.uiManager.showStatus('Security analysis complete', 'success');
-    }
-
-    onApprovalRequest(data) {
-        console.log('🔔 Approval request received:', data);
-        
-        this.uiManager.showApprovalRequest(data, (response) => {
-            console.log('📤 Sending approval response:', response);
-            
-            const success = this.websocketManager.send({
-                type: 'TextMessage',
-                content: response,
-                source: 'user'
-            });
-            
-            if (success) {
-                console.log('✅ Approval response sent successfully');
-                // PATTERN: After approval, wait for agent_status_update to activate next agent
-            } else {
-                console.error('❌ Failed to send approval response');
-                this.uiManager.showStatus('Failed to send response', 'error');
-            }
-        });
+        this.uiManager.updateProgress(100, 'Workflow complete');
+        this.uiManager.showStatus('Security analysis workflow complete', 'success');
     }
 
     onError(data) {
@@ -163,7 +160,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // FORMATTERS
+    // OUTPUT FORMATTERS
     // ============================================================================
 
     formatTriageOutput(data) {
@@ -175,7 +172,9 @@ class SOCDashboard {
 📍 Source: ${d.source_ip || 'Unknown'}
 📊 Confidence: ${(d.confidence_score * 100 || 0).toFixed(1)}%
 
-${d.brief_summary || 'Threat identified'}`;
+${d.brief_summary || 'Threat identified'}
+
+✅ Triage analysis complete. Ready for approval.`;
     }
 
     formatContextOutput(data) {
@@ -186,7 +185,7 @@ ${d.brief_summary || 'Threat identified'}`;
 🔍 Pattern Analysis: ${d.pattern_analysis || 'Analyzing...'}
 📝 Confidence: ${d.confidence_assessment || 'Medium'}
 
-Context analysis complete`;
+✅ Context research complete. Ready for validation.`;
     }
 
     formatAnalysisOutput(data) {
@@ -198,7 +197,9 @@ Context analysis complete`;
 💼 Business Impact: ${d.business_impact || 'Assessing...'}
 
 Actions:
-${actions.map((action, i) => `${i+1}. ${action}`).join('\n') || 'No actions identified'}`;
+${actions.map((action, i) => `${i+1}. ${action}`).join('\n') || 'No actions identified'}
+
+✅ Analysis complete. Ready for authorization.`;
     }
 }
 

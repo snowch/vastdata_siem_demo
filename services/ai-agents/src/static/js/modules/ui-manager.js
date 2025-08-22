@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/ui-manager.js - COMPLETE FIXED FILE
-// Handles all UI operations without dependencies
+// services/ai-agents/src/static/js/modules/ui-manager.js - CLEAN FLOW IMPLEMENTATION
+// Handles all UI operations with proper status flow
 
 export class UIManager {
     constructor() {
@@ -78,11 +78,11 @@ export class UIManager {
     }
 
     // ============================================================================
-    // AGENT MANAGEMENT - FIXED FOR CORRECT SPINNER PATTERN
+    // AGENT MANAGEMENT - CLEAN FLOW IMPLEMENTATION
     // ============================================================================
 
     updateAgent(agentType, status, outputText = null) {
-        console.log(`🔄 Updating agent ${agentType} to status ${status}`);
+        console.log(`🔄 Agent ${agentType} → ${status}`);
         
         // Update status badge
         const statusElement = document.getElementById(`${agentType}Status`);
@@ -103,19 +103,23 @@ export class UIManager {
         const card = document.getElementById(`${agentType}Card`);
         if (card) {
             card.classList.remove('active', 'approval-active');
-            if (status === 'complete') {
+            
+            if (status === 'awaiting-approval') {
+                card.classList.add('approval-active');
+            } else if (status === 'complete') {
                 card.classList.add('active');
             }
         }
 
-        // FIXED: Spinner logic follows the pattern:
-        // - Show spinner when status="active" 
-        // - Hide spinner when status="complete" or any other status
+        // CLEAN SPINNER LOGIC:
+        // active = show spinner
+        // awaiting-approval = hide spinner  
+        // complete = hide spinner
+        // pending = hide spinner
         if (status === 'active') {
-            console.log(`🔄 Showing spinner for ${agentType} (status: active)`);
             this.showSpinner(agentType);
+            this.hideApprovalForAgent(agentType); // Clear any existing approval
         } else {
-            console.log(`⏹️ Hiding spinner for ${agentType} (status: ${status})`);
             this.hideSpinner(agentType);
         }
     }
@@ -123,9 +127,9 @@ export class UIManager {
     formatStatusText(status) {
         const statusMap = {
             'pending': 'Pending',
-            'active': 'Active',
+            'active': 'Processing...',
+            'awaiting-approval': 'Awaiting Decision',
             'complete': 'Complete',
-            'awaiting-approval': 'Awaiting Approval',
             'error': 'Error'
         };
         return statusMap[status] || status;
@@ -135,9 +139,6 @@ export class UIManager {
         const spinner = document.getElementById(`${agentType}Spinner`);
         if (spinner) {
             spinner.style.display = 'flex';
-            console.log(`✅ Spinner shown for ${agentType}`);
-        } else {
-            console.warn(`⚠️ Spinner element not found: ${agentType}Spinner`);
         }
     }
 
@@ -145,48 +146,32 @@ export class UIManager {
         const spinner = document.getElementById(`${agentType}Spinner`);
         if (spinner) {
             spinner.style.display = 'none';
-            console.log(`✅ Spinner hidden for ${agentType}`);
         }
     }
 
     // ============================================================================
-    // APPROVAL WORKFLOW
+    // APPROVAL WORKFLOW - SIMPLIFIED
     // ============================================================================
 
-    showApprovalRequest(data, responseCallback) {
+    showApprovalForAgent(agentType, prompt, responseCallback) {
+        // Hide any existing approval
         this.hideCurrentApproval();
         
-        const stage = this.determineStage(data);
-        if (!stage) return;
-
-        const approvalSection = this.createApprovalSection(stage, data, responseCallback);
-        this.attachApprovalToAgent(stage, approvalSection);
+        // Create approval section
+        const approvalSection = this.createApprovalSection(agentType, prompt, responseCallback);
+        this.attachApprovalToAgent(agentType, approvalSection);
         
-        this.currentApproval = { stage, element: approvalSection };
+        // Set agent status to awaiting-approval (this will hide spinner automatically)
+        this.updateAgent(agentType, 'awaiting-approval');
         
-        // IMPORTANT: Don't change agent status here - it should stay "complete"
-        // Just show the approval UI
-        this.showStatus(`${stage} approval required`, 'warning');
+        this.currentApproval = { stage: agentType, element: approvalSection };
+        this.showStatus(`${agentType} decision required`, 'warning');
     }
 
-    determineStage(data) {
-        // Simple stage detection
-        if (data.stage) return data.stage;
-        
-        const content = (data.content || data.prompt || '').toLowerCase();
-        if (content.includes('threat') || content.includes('investigate')) return 'triage';
-        if (content.includes('context') || content.includes('historical')) return 'context';
-        if (content.includes('recommend') || content.includes('action')) return 'analyst';
-        
-        return 'triage'; // Default
-    }
-
-    createApprovalSection(stage, data, responseCallback) {
+    createApprovalSection(stage, prompt, responseCallback) {
         const section = document.createElement('div');
         section.className = 'approval-section';
         section.id = `${stage}ApprovalSection`;
-        
-        const prompt = data.prompt || data.content || 'Approval required';
         
         section.innerHTML = `
             <div class="approval-prompt">
@@ -223,18 +208,14 @@ export class UIManager {
             const action = e.target.getAttribute('data-action');
             if (!action) return;
 
-            console.log(`🎯 Approval action: ${action}`);
-
             switch (action) {
                 case 'approve':
-                    console.log('👍 User approved - sending approval response');
                     responseCallback('approve');
-                    this.showStatus('Approval sent...', 'info');
+                    this.showStatus('Approved - proceeding...', 'success');
                     break;
                 case 'reject':
-                    console.log('👎 User rejected - sending rejection response');
                     responseCallback('reject');
-                    this.showStatus('Rejection sent...', 'info');
+                    this.showStatus('Rejected - stopping workflow', 'error');
                     break;
                 case 'custom':
                     section.querySelector('.custom-input-section').style.display = 'block';
@@ -242,9 +223,8 @@ export class UIManager {
                 case 'submit-custom':
                     const customText = section.querySelector('textarea').value.trim();
                     if (customText) {
-                        console.log('✏️ User provided custom response:', customText);
                         responseCallback(`custom: ${customText}`);
-                        this.showStatus('Custom response sent...', 'info');
+                        this.showStatus('Custom response sent', 'info');
                     } else {
                         this.showStatus('Please enter custom instructions', 'warning');
                     }
@@ -252,26 +232,6 @@ export class UIManager {
                 case 'cancel-custom':
                     section.querySelector('.custom-input-section').style.display = 'none';
                     break;
-            }
-        });
-
-        // Keyboard shortcuts
-        section.addEventListener('keydown', (e) => {
-            if (e.key === '1') {
-                console.log('⌨️ Keyboard approve (1)');
-                responseCallback('approve');
-            }
-            if (e.key === '2') {
-                console.log('⌨️ Keyboard reject (2)');
-                responseCallback('reject');
-            }
-            if (e.key === 'Enter' && !e.target.matches('textarea')) {
-                console.log('⌨️ Keyboard approve (Enter)');
-                responseCallback('approve');
-            }
-            if (e.key === 'Escape') {
-                console.log('⌨️ Keyboard reject (Escape)');
-                responseCallback('reject');
             }
         });
     }
@@ -283,14 +243,11 @@ export class UIManager {
         const agentContent = agentCard.querySelector('.agent-content');
         if (agentContent) {
             agentContent.parentNode.insertBefore(section, agentContent.nextSibling);
-            agentCard.classList.add('approval-active');
         }
     }
 
     hideCurrentApproval() {
         if (this.currentApproval) {
-            console.log(`🗑️ Hiding approval for ${this.currentApproval.stage}`);
-            
             this.currentApproval.element.remove();
             
             const agentCard = document.getElementById(`${this.currentApproval.stage}Card`);
@@ -299,11 +256,9 @@ export class UIManager {
             }
             
             this.currentApproval = null;
-            console.log('✅ Approval UI cleared');
         }
     }
 
-    // Public method to hide approval for specific agent (called by websocket manager)
     hideApprovalForAgent(agentType) {
         if (this.currentApproval && this.currentApproval.stage === agentType) {
             this.hideCurrentApproval();
@@ -335,11 +290,6 @@ export class UIManager {
 
         agents.forEach(agent => {
             this.updateAgent(agent, 'pending', defaultTexts[agent]);
-            
-            const card = document.getElementById(`${agent}Card`);
-            if (card) {
-                card.classList.remove('active', 'approval-active');
-            }
         });
     }
 
@@ -348,7 +298,6 @@ export class UIManager {
     // ============================================================================
 
     clearAll() {
-        // Clear inputs
         const logInput = document.getElementById('logInput');
         if (logInput) logInput.value = '';
 
@@ -356,10 +305,6 @@ export class UIManager {
         this.resetAgentStates();
         this.hideCurrentApproval();
         this.updateProgress(0, 'Ready');
-
-        // Hide findings panel
-        const findingsPanel = document.getElementById('findingsPanel');
-        if (findingsPanel) findingsPanel.style.display = 'none';
     }
 
     resetAllStates() {
@@ -381,7 +326,6 @@ export class UIManager {
         toast.className = `toast ${type}`;
         toast.textContent = message;
         
-        // Auto-remove on click
         toast.addEventListener('click', () => toast.remove());
         
         return toast;

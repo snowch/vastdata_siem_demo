@@ -1,5 +1,5 @@
-/* services/ai-agents/src/static/css/main.css - CLEAN REFACTORED */
-/* Simplified, focused CSS for the refactored dashboard */
+/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING */
+/* Optimized CSS for the clean agent status flow */
 
 /* ============================================================================
    CSS VARIABLES
@@ -286,7 +286,7 @@ textarea:focus {
 }
 
 /* ============================================================================
-   AGENT CARDS
+   AGENT CARDS - CLEAN FLOW STYLING
    ============================================================================ */
 .workflow-container {
     display: grid;
@@ -342,6 +342,9 @@ textarea:focus {
     font-size: 0.95em;
 }
 
+/* ============================================================================
+   STATUS BADGES - CLEAN FLOW STATES
+   ============================================================================ */
 .status-badge {
     padding: 6px var(--spacing-lg);
     border-radius: 20px;
@@ -349,8 +352,9 @@ textarea:focus {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    min-width: 80px;
+    min-width: 120px;
     text-align: center;
+    transition: var(--transition);
 }
 
 .status-pending {
@@ -363,17 +367,20 @@ textarea:focus {
     background: linear-gradient(45deg, var(--primary), #764ba2);
     color: white;
     animation: pulse 2s infinite;
-}
-
-.status-complete {
-    background: linear-gradient(45deg, var(--success), #56ab2f);
-    color: white;
+    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
 }
 
 .status-awaiting-approval {
     background: linear-gradient(45deg, var(--warning), #e67e22);
     color: white;
     animation: pulse 1.5s infinite;
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.5);
+}
+
+.status-complete {
+    background: linear-gradient(45deg, var(--success), #56ab2f);
+    color: white;
+    box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
 }
 
 .status-error {
@@ -400,6 +407,9 @@ textarea:focus {
     color: var(--text-primary);
 }
 
+/* ============================================================================
+   LOADING SPINNER - CLEAN FLOW
+   ============================================================================ */
 .loading-spinner {
     display: none;
     justify-content: center;
@@ -409,6 +419,7 @@ textarea:focus {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    z-index: 10;
 }
 
 .spinner {
@@ -421,15 +432,16 @@ textarea:focus {
 }
 
 /* ============================================================================
-   APPROVAL WORKFLOW
+   APPROVAL WORKFLOW - CLEAN FLOW
    ============================================================================ */
 .approval-section {
     padding: var(--spacing-xl) var(--spacing-2xl);
     background: rgba(255, 255, 255, 0.98);
-    border-top: 2px solid var(--primary);
+    border-top: 2px solid var(--warning);
     margin-top: var(--spacing-lg);
     border-radius: 0 0 var(--radius-xl) var(--radius-xl);
     animation: slideInFromBottom 0.3s ease;
+    box-shadow: 0 -2px 10px rgba(243, 156, 18, 0.2);
 }
 
 .approval-prompt {
@@ -669,6 +681,11 @@ textarea:focus {
         left: var(--spacing-lg);
         right: var(--spacing-lg);
         max-width: none;
+    }
+    
+    .status-badge {
+        min-width: 100px;
+        font-size: 0.8em;
     }
 }
 
