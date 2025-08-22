@@ -5,7 +5,7 @@ WebSocket message factory - centralized message creation
 
 from datetime import datetime
 from typing import Dict, Any, List
-from core.messaging.registry import MessageRegistry, ControlMessageType
+from core.messaging.simple_registry import MessageRegistry, ControlMessageType
 
 class MessageFactory:
     """Factory for creating WebSocket messages"""

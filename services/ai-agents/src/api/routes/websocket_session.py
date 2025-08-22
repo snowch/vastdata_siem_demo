@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Optional
 from fastapi import WebSocket, WebSocketDisconnect
-from core.messaging.registry import MessageRegistry, ControlMessageType
+from core.messaging.simple_registry import MessageRegistry, ControlMessageType
 import logging
 
 ws_logger = logging.getLogger("websocket_server")

@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 from core.services.agent_service import run_analysis_workflow
 from infrastructure.trino_db_reader import get_logs
-from core.messaging.registry import MessageRegistry, ControlMessageType
+from core.messaging.simple_registry import MessageRegistry, ControlMessageType
 from .websocket_session import SessionManager
 from .websocket_messages import MessageFactory
 import logging
