@@ -46,7 +46,8 @@
 /* Approval Button Styling */
 .approval-section .btn-approve, 
 .approval-section .btn-reject, 
-.approval-section .btn-custom {
+.approval-section .btn-custom,
+.approval-section .btn[data-value="show-details"] {
     padding: 10px var(--spacing-xl);
     border: none;
     border-radius: var(--radius-md);
@@ -60,6 +61,10 @@
     white-space: nowrap;
     min-width: 140px;
     justify-content: center;
+}
+
+.approval-section .btn[data-value="show-details"] {
+    order: -1;
 }
 
 .approval-section .btn-approve {

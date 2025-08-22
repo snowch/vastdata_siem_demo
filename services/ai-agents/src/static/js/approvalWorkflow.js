@@ -21,7 +21,8 @@ const APPROVAL_STAGES = {
         prompt: 'Do you want to proceed with investigating this threat?',
         buttons: [
             { text: '✅ Yes, investigate this threat', value: 'approve', class: 'btn-approve' },
-            { text: '❌ No, skip this threat', value: 'reject', class: 'btn-reject' }
+            { text: '❌ No, skip this threat', value: 'reject', class: 'btn-reject' },
+            { text: '📋 Show Details', value: 'show-details', class: 'btn btn-secondary' }
         ]
     },
     'context': {
@@ -42,6 +43,7 @@ const APPROVAL_STAGES = {
         buttons: [
             { text: '✅ Approve all recommendations', value: 'approve', class: 'btn-approve' },
             { text: '❌ Reject recommendations', value: 'reject', class: 'btn-reject' },
+            { text: '📋 Show Details', value: 'show-details', class: 'btn btn-secondary' },
             { text: '✏️ Modify recommendations', value: 'custom', class: 'btn-custom' }
         ],
         allowCustomInput: true
