@@ -1,4 +1,4 @@
-// services/ai-agents/src/static/js/modules/event-manager.js - CLEAN REFACTORED
+// services/ai-agents/src/static/js/modules/event-manager.js - COMPLETE FIXED FILE
 // Handles DOM events and user interactions
 
 export class EventManager {

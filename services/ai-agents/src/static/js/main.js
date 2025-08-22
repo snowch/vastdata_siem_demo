@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/main.js - CLEAN REFACTORED
-// Simple, clean entry point with no backward compatibility
+// services/ai-agents/src/static/js/main.js - COMPLETE FIXED FILE
+// Simple, clean entry point following the correct agent status pattern
 
 import { WebSocketManager } from './modules/websocket-manager.js';
 import { UIManager } from './modules/ui-manager.js';
@@ -72,6 +72,9 @@ class SOCDashboard {
         this.uiManager.setAnalysisMode(true);
         this.uiManager.updateProgress(5, 'Starting analysis...');
 
+        // PATTERN: Start analysis → triage becomes "active" with spinner
+        this.uiManager.updateAgent('triage', 'active');
+
         this.websocketManager.send({
             type: 'start_analysis',
             logs: logInput
@@ -110,16 +113,20 @@ class SOCDashboard {
     }
 
     onTriageComplete(data) {
+        // PATTERN: Triage completes → status "complete", spinner disappears, show findings
+        // The approval request will be handled separately
         this.uiManager.updateAgent('triage', 'complete', this.formatTriageOutput(data));
         this.uiManager.updateProgress(30, 'Triage complete');
     }
 
     onContextComplete(data) {
+        // PATTERN: Context completes → status "complete", spinner disappears, show findings
         this.uiManager.updateAgent('context', 'complete', this.formatContextOutput(data));
         this.uiManager.updateProgress(60, 'Context analysis complete');
     }
 
     onAnalysisComplete(data) {
+        // PATTERN: Analyst completes → status "complete", spinner disappears, show findings
         this.uiManager.updateAgent('analyst', 'complete', this.formatAnalysisOutput(data));
         this.uiManager.updateProgress(100, 'Analysis complete');
         this.analysisInProgress = false;
@@ -141,7 +148,7 @@ class SOCDashboard {
             
             if (success) {
                 console.log('✅ Approval response sent successfully');
-                // Don't hide approval here - wait for agent_status_update from backend
+                // PATTERN: After approval, wait for agent_status_update to activate next agent
             } else {
                 console.error('❌ Failed to send approval response');
                 this.uiManager.showStatus('Failed to send response', 'error');

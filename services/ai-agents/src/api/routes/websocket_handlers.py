@@ -1,4 +1,4 @@
-# services/ai-agents/src/api/routes/websocket_handlers.py
+# services/ai-agents/src/api/routes/websocket_handlers.py - COMPLETE FIXED FILE
 """
 WebSocket message handlers - clean separation of concerns
 """
@@ -70,7 +70,7 @@ class MessageHandlers:
         asyncio.create_task(self._run_analysis(log_batch, session_id))
     
     async def handle_user_input(self, data: Dict[str, Any], session_id: str):
-        """Handle user input response"""
+        """Handle user input response - FIXED TO ACTIVATE NEXT STAGE"""
         content = data.get("content", "")
         
         session = self.session_manager.get_session(session_id)
@@ -78,10 +78,22 @@ class MessageHandlers:
             ws_logger.error(f"Session not found: {session_id}")
             return
         
-        processed_response = self._process_user_response(content, session.current_approval_stage)
+        # Use the session's current approval stage
+        stage = session.current_approval_stage or "unknown"
+        ws_logger.info(f"📥 Processing user response for {stage} stage: {content}")
+        
+        processed_response = self._process_user_response(content, stage)
         
         if session.set_user_response(processed_response):
-            ws_logger.info(f"👤 User input processed for {session_id}")
+            ws_logger.info(f"👤 User input processed for {session_id} ({stage})")
+            
+            # CRITICAL FIX: After approval, activate the NEXT stage
+            if content.lower().strip() in ['approve', 'approved', 'yes', 'continue']:
+                next_stage = self._get_next_stage(stage)
+                if next_stage:
+                    await self._send_agent_status_update(session_id, next_stage, "active")
+                    ws_logger.info(f"✅ Activated next stage: {next_stage}")
+            
         else:
             ws_logger.warning(f"⚠️ No pending user input for {session_id}")
     
@@ -196,6 +208,31 @@ class MessageHandlers:
             return f"CUSTOM - User provided instructions: {custom_instructions}"
         else:
             return f"CUSTOM - User response: {content}"
+    
+    def _get_next_stage(self, current_stage: str) -> str:
+        """Get the next stage after approval"""
+        stage_flow = {
+            'triage': 'context',
+            'context': 'analyst',
+            'analyst': None  # No next stage after analyst
+        }
+        return stage_flow.get(current_stage)
+    
+    async def _send_agent_status_update(self, session_id: str, agent: str, status: str):
+        """Send agent status update message"""
+        status_msg = {
+            "type": "agent_status_update",
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat(),
+            "agent": agent,
+            "status": status,
+            "message": f"{agent} agent status updated to {status}"
+        }
+        
+        session = self.session_manager.get_session(session_id)
+        if session:
+            await session.send_message(status_msg)
+            ws_logger.info(f"📤 Sent agent status update: {agent} -> {status}")
     
     async def _send_error(self, session_id: str, message: str, error_code: str = "GENERAL_ERROR"):
         """Send error message to session"""

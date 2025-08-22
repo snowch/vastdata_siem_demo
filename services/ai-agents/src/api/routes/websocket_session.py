@@ -1,4 +1,4 @@
-# services/ai-agents/src/api/routes/websocket_session.py
+# services/ai-agents/src/api/routes/websocket_session.py - COMPLETE FIXED FILE
 """
 WebSocket session management - clean separation of concerns
 """
@@ -57,19 +57,24 @@ class Session:
         await self.send_message(error_msg)
     
     async def request_user_input(self, prompt: str, stage: str, timeout: int = 300):
-        """Request user input with timeout"""
+        """Request user input with timeout - FIXED STAGE MAPPING"""
         if self.user_input_future and not self.user_input_future.done():
             ws_logger.warning(f"Previous input request still pending for {self.session_id}")
             return "timeout"
         
         self.user_input_future = asyncio.Future()
-        self.current_approval_stage = stage
+        
+        # FIXED: Map stage names to match UI expectations
+        ui_stage = self._map_stage_to_ui(stage, prompt)
+        self.current_approval_stage = ui_stage
+        
+        ws_logger.info(f"🔔 Requesting user input for {ui_stage} stage (original: {stage})")
         
         # Send approval request
         approval_msg = MessageRegistry.create_message(
             "approval_request",  # Using string to avoid circular import
             session_id=self.session_id,
-            stage=stage,
+            stage=ui_stage,
             prompt=prompt,
             timeout_seconds=timeout
         )
@@ -81,17 +86,55 @@ class Session:
             
             # Record in history
             self.approval_history.append({
-                "stage": stage,
+                "stage": ui_stage,
                 "prompt": prompt,
                 "response": response,
                 "timestamp": datetime.now().isoformat()
             })
             
+            ws_logger.info(f"✅ User response received for {ui_stage}: {response[:50]}...")
             return response
             
         except asyncio.TimeoutError:
             ws_logger.warning(f"User input timeout for {self.session_id}")
             return "auto_approve"
+    
+    def _map_stage_to_ui(self, stage: str, prompt: str) -> str:
+        """Map internal stage names to UI-expected agent names"""
+        
+        # First, check if stage is already a UI agent name
+        if stage in ['triage', 'context', 'analyst']:
+            return stage
+        
+        # Map based on prompt content analysis
+        prompt_lower = prompt.lower()
+        
+        # Triage stage indicators
+        if any(keyword in prompt_lower for keyword in [
+            'priority', 'threat', 'investigate', 'brute force', 'attack', 
+            'sql injection', 'incident', 'malicious'
+        ]):
+            return 'triage'
+        
+        # Context stage indicators  
+        elif any(keyword in prompt_lower for keyword in [
+            'historical', 'context', 'incidents', 'pattern', 'similar',
+            'documents', 'research', 'analysis'
+        ]):
+            return 'context'
+        
+        # Analyst stage indicators
+        elif any(keyword in prompt_lower for keyword in [
+            'recommend', 'action', 'authorize', 'implement', 'security',
+            'business impact', 'final', 'complete'
+        ]):
+            return 'analyst'
+        
+        # Default mapping based on common patterns
+        else:
+            ws_logger.warning(f"Could not determine stage from prompt: {prompt[:100]}...")
+            # Default to triage if we can't determine
+            return 'triage'
     
     def set_user_response(self, response: str):
         """Set user response for pending input request"""

@@ -1,4 +1,4 @@
-// services/ai-agents/src/static/js/modules/debug-manager.js - CLEAN REFACTORED
+// services/ai-agents/src/static/js/modules/debug-manager.js - COMPLETE FIXED FILE
 // Handles debug logging and debug mode
 
 export class DebugManager {

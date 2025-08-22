@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/services/message_processor.py
+# services/ai-agents/src/core/services/message_processor.py - COMPLETE FIXED FILE
 """
 Message Processor - Handles streaming messages from agents
 """
@@ -55,7 +55,7 @@ class MessageProcessor:
             await self.send_error(f"Message processing error: {str(e)}")
     
     async def _handle_structured_message(self, message, source: str, external_termination: ExternalTermination):
-        """Handle structured messages from agents"""
+        """Handle structured messages from agents - IMPLEMENTS CORRECT PATTERN"""
         content = message.content
         
         # Triage findings
@@ -74,10 +74,10 @@ class MessageProcessor:
                 await self._process_analyst_results(content, external_termination)
     
     async def _process_triage_findings(self, findings: PriorityFindings):
-        """Process triage findings"""
+        """Process triage findings - PATTERN: complete → show findings → approval request"""
         self.state_manager.store_triage_findings(findings)
         
-        # Send to UI
+        # Send findings to UI
         await self._send_message({
             "type": "triage_findings",
             "session_id": self.session_id,
@@ -85,17 +85,20 @@ class MessageProcessor:
             "data": findings.model_dump()
         })
         
+        # PATTERN: Set triage to "complete" (spinner disappears, findings show)
         await self._send_agent_status_update("triage", "complete")
+        
+        # Update progress
         await self.send_progress_update(
             self.state_manager.get_progress_percentage(),
             "Triage Complete"
         )
     
     async def _process_context_research(self, research: ContextResearchResult):
-        """Process context research"""
+        """Process context research - PATTERN: complete → show findings → approval request"""
         self.state_manager.store_context_research(research)
         
-        # Send to UI
+        # Send research to UI
         await self._send_message({
             "type": "context_research",
             "session_id": self.session_id,
@@ -109,21 +112,24 @@ class MessageProcessor:
             }
         })
         
+        # PATTERN: Set context to "complete" (spinner disappears, findings show)
         await self._send_agent_status_update("context", "complete")
+        
+        # Update progress
         await self.send_progress_update(
             self.state_manager.get_progress_percentage(),
             "Context Research Complete"
         )
     
     async def _process_analyst_results(self, result: SOCAnalysisResult, external_termination: ExternalTermination):
-        """Process final analyst results"""
+        """Process final analyst results - PATTERN: complete → show findings"""
         self.state_manager.store_structured_result(result)
         
         # Extract analysis data
         analysis_data = result.detailed_analysis.model_dump()
         self.state_manager.store_analyst_results(analysis_data)
         
-        # Send to UI
+        # Send analysis to UI
         await self._send_message({
             "type": "analysis_recommendations",
             "session_id": self.session_id,
@@ -131,6 +137,7 @@ class MessageProcessor:
             "data": analysis_data
         })
         
+        # PATTERN: Set analyst to "complete" (spinner disappears, final results show)
         await self._send_agent_status_update("analyst", "complete")
         
         # Check for completion
@@ -139,10 +146,12 @@ class MessageProcessor:
             agent_logger.info("✅ Workflow completion detected via structured flags")
     
     async def _handle_approval_request(self, message, source: str):
-        """Handle approval requests"""
-        stage = self._determine_stage_from_source(source)
+        """Handle approval requests - IMPORTANT: Don't change status, just show approval UI"""
+        # Map agent source to stage name
+        stage = self._map_source_to_stage(source)
         context = self.state_manager.get_context_for_approval(stage)
         
+        # Send approval request to UI (this will show the approval box)
         await self._send_message({
             "type": "approval_request",
             "session_id": self.session_id,
@@ -152,7 +161,37 @@ class MessageProcessor:
             "timeout_seconds": 300
         })
         
-        await self._send_agent_status_update(stage, "awaiting-approval")
+        # IMPORTANT: Don't send agent status update here!
+        # The agent should stay "complete" while approval box is showing
+        agent_logger.info(f"📝 Approval request sent for {stage} (agent stays 'complete')")
+    
+    def _map_source_to_stage(self, source: str) -> str:
+        """Map agent source names to UI stage names"""
+        # Direct mapping for approval agents
+        if "TriageApproval" in source:
+            return "triage"
+        elif "ContextApproval" in source:
+            return "context" 
+        elif "AnalystApproval" in source:
+            return "analyst"
+        
+        # Fallback mapping for agent names
+        source_lower = source.lower()
+        if 'triage' in source_lower:
+            return 'triage'
+        elif 'context' in source_lower:
+            return 'context'
+        elif 'analyst' in source_lower:
+            return 'analyst'
+        
+        # Default to workflow state
+        completed_stages = self.state_manager.completed_stages
+        if 'triage' not in completed_stages:
+            return 'triage'
+        elif 'context' not in completed_stages:
+            return 'context'
+        else:
+            return 'analyst'
     
     async def _handle_text_message(self, message, source: str, external_termination: ExternalTermination):
         """Handle text messages for completion detection"""
@@ -197,14 +236,18 @@ class MessageProcessor:
         })
     
     async def _send_agent_status_update(self, agent: str, status: str):
-        """Send agent status update"""
-        await self._send_message({
+        """Send agent status update - CRITICAL FOR PATTERN"""
+        status_msg = {
             "type": "agent_status_update",
             "session_id": self.session_id,
             "agent": agent,
             "status": status,
-            "timestamp": datetime.now().isoformat()
-        })
+            "timestamp": datetime.now().isoformat(),
+            "message": f"{agent} agent status: {status}"
+        }
+        
+        await self._send_message(status_msg)
+        agent_logger.info(f"📤 Agent status update sent: {agent} -> {status}")
     
     async def _send_message(self, message_data):
         """Send message via callback"""
@@ -213,13 +256,3 @@ class MessageProcessor:
                 await self.message_callback(message_data)
             except Exception as e:
                 agent_logger.error(f"❌ Error sending message: {e}")
-    
-    def _determine_stage_from_source(self, source: str) -> str:
-        """Determine stage from message source"""
-        if 'triage' in source.lower():
-            return 'triage'
-        elif 'context' in source.lower():
-            return 'context'
-        elif 'analyst' in source.lower():
-            return 'analyst'
-        return 'unknown'

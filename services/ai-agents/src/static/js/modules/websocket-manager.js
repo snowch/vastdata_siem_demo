@@ -1,4 +1,4 @@
-// services/ai-agents/src/static/js/modules/websocket-manager.js - FIXED APPROVAL HANDLING
+// services/ai-agents/src/static/js/modules/websocket-manager.js - COMPLETE FIXED FILE
 // Handles WebSocket communication with proper approval status updates
 
 export class WebSocketManager {
@@ -99,7 +99,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // MESSAGE ROUTING - FIXED TO HANDLE AGENT STATUS UPDATES
+    // MESSAGE ROUTING - HANDLES CORRECT AGENT STATUS FLOW
     // ============================================================================
 
     routeMessage(data) {
@@ -139,7 +139,7 @@ export class WebSocketManager {
                 break;
 
             // ============================================================================
-            // FIX: Handle agent status updates to clear approval UI
+            // CRITICAL: Agent Status Update Handling - Follows the Pattern
             // ============================================================================
             case 'agent_status_update':
                 this.handleAgentStatusUpdate(data);
@@ -173,7 +173,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // FIX: Agent Status Update Handler
+    // AGENT STATUS UPDATE HANDLER - IMPLEMENTS THE CORRECT PATTERN
     // ============================================================================
     handleAgentStatusUpdate(data) {
         const agent = data.agent;
@@ -187,10 +187,17 @@ export class WebSocketManager {
             return;
         }
 
-        // Update the agent status in UI
+        // PATTERN IMPLEMENTATION:
+        // - When agent becomes "active": show spinner
+        // - When agent becomes "complete": hide spinner, show results
+        // - When agent becomes "awaiting-approval": show approval box (but status stays "complete")
+        // - When approval given: hide approval box, next agent becomes "active"
+
+        // Update the agent status in UI (this handles spinner show/hide automatically)
         this.dashboard.uiManager.updateAgent(agent, status);
         
-        // CRITICAL FIX: Hide approval UI when agent moves from awaiting-approval
+        // CRITICAL: Hide approval UI when agent status changes from awaiting-approval
+        // This happens when user clicks approve and backend activates next stage
         if (status !== 'awaiting-approval') {
             console.log(`🗑️ Clearing approval for ${agent} (status: ${status})`);
             this.dashboard.uiManager.hideApprovalForAgent(agent);
@@ -201,18 +208,19 @@ export class WebSocketManager {
             this.dashboard.uiManager.showStatus(message, 'info');
         }
         
-        // Handle specific status transitions
+        // Handle specific status transitions with proper logging
         switch (status) {
             case 'active':
-                this.dashboard.uiManager.showSpinner(agent);
-                this.dashboard.uiManager.showStatus(`${agent} agent processing...`, 'info');
+                console.log(`🔄 ${agent} agent is now processing (spinner should be visible)`);
                 break;
             case 'complete':
-                this.dashboard.uiManager.hideSpinner(agent);
-                this.dashboard.uiManager.showStatus(`${agent} agent completed`, 'success');
+                console.log(`✅ ${agent} agent completed (spinner should be hidden, results visible)`);
+                break;
+            case 'awaiting-approval':
+                console.log(`⏳ ${agent} agent awaiting approval (approval box should be visible)`);
                 break;
             case 'error':
-                this.dashboard.uiManager.hideSpinner(agent);
+                console.log(`❌ ${agent} agent error`);
                 this.dashboard.uiManager.showStatus(`${agent} agent error`, 'error');
                 break;
         }

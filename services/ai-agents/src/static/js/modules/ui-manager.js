@@ -1,4 +1,4 @@
-// services/ai-agents/src/static/js/modules/ui-manager.js - CLEAN REFACTORED
+// services/ai-agents/src/static/js/modules/ui-manager.js - COMPLETE FIXED FILE
 // Handles all UI operations without dependencies
 
 export class UIManager {
@@ -78,10 +78,12 @@ export class UIManager {
     }
 
     // ============================================================================
-    // AGENT MANAGEMENT
+    // AGENT MANAGEMENT - FIXED FOR CORRECT SPINNER PATTERN
     // ============================================================================
 
     updateAgent(agentType, status, outputText = null) {
+        console.log(`🔄 Updating agent ${agentType} to status ${status}`);
+        
         // Update status badge
         const statusElement = document.getElementById(`${agentType}Status`);
         if (statusElement) {
@@ -106,8 +108,16 @@ export class UIManager {
             }
         }
 
-        // Hide spinner
-        this.hideSpinner(agentType);
+        // FIXED: Spinner logic follows the pattern:
+        // - Show spinner when status="active" 
+        // - Hide spinner when status="complete" or any other status
+        if (status === 'active') {
+            console.log(`🔄 Showing spinner for ${agentType} (status: active)`);
+            this.showSpinner(agentType);
+        } else {
+            console.log(`⏹️ Hiding spinner for ${agentType} (status: ${status})`);
+            this.hideSpinner(agentType);
+        }
     }
 
     formatStatusText(status) {
@@ -123,12 +133,20 @@ export class UIManager {
 
     showSpinner(agentType) {
         const spinner = document.getElementById(`${agentType}Spinner`);
-        if (spinner) spinner.style.display = 'flex';
+        if (spinner) {
+            spinner.style.display = 'flex';
+            console.log(`✅ Spinner shown for ${agentType}`);
+        } else {
+            console.warn(`⚠️ Spinner element not found: ${agentType}Spinner`);
+        }
     }
 
     hideSpinner(agentType) {
         const spinner = document.getElementById(`${agentType}Spinner`);
-        if (spinner) spinner.style.display = 'none';
+        if (spinner) {
+            spinner.style.display = 'none';
+            console.log(`✅ Spinner hidden for ${agentType}`);
+        }
     }
 
     // ============================================================================
@@ -145,7 +163,9 @@ export class UIManager {
         this.attachApprovalToAgent(stage, approvalSection);
         
         this.currentApproval = { stage, element: approvalSection };
-        this.updateAgent(stage, 'awaiting-approval');
+        
+        // IMPORTANT: Don't change agent status here - it should stay "complete"
+        // Just show the approval UI
         this.showStatus(`${stage} approval required`, 'warning');
     }
 
