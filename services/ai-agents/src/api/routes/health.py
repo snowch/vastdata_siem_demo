@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from datetime import datetime
-from fastapi import WebSocket
 
 router = APIRouter()
 

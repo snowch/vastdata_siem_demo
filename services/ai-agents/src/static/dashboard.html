@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOC Agent Analysis Dashboard - Refactored</title>
+    <title>SOC Agent Analysis Dashboard</title>
     
-    <!-- Simplified CSS loading - single main file -->
+    <!-- Clean CSS - single file -->
     <link rel="stylesheet" href="css/main.css">
     
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     
-    <!-- Preload critical JavaScript modules -->
+    <!-- Preload main JavaScript module -->
     <link rel="modulepreload" href="js/main.js">
-    <link rel="modulepreload" href="js/modules/event-manager.js">
-    <link rel="modulepreload" href="js/modules/keyboard-manager.js">
-    <link rel="modulepreload" href="js/modules/ui-helper.js">
 </head>
 <body>
     <div class="dashboard">
         <!-- Header with connection status and controls -->
-        <header class="header module-component">
+        <header class="header">
             <div class="connection-status">
                 <span class="status-indicator" id="connectionIndicator"></span>
                 <span id="connectionStatus">Connecting...</span>
@@ -29,7 +26,7 @@
             </button>
             
             <h1>🛡️ SOC Agent Analysis Dashboard</h1>
-            <p>Refactored multi-agent security log analysis with modular architecture</p>
+            <p>Multi-agent security log analysis with clean architecture</p>
             
             <div class="controls">
                 <button class="btn btn-secondary" id="retrieveBtn" title="Retrieve security logs">
@@ -39,7 +36,7 @@
                     🚀 Start Analysis
                 </button>
                 <button class="btn" id="clearBtn" 
-                        style="background: var(--neutral-gradient); color: white;"
+                        style="background: linear-gradient(45deg, #95a5a6, #7f8c8d); color: white;"
                         title="Clear all results">
                     🧹 Clear Results
                 </button>
@@ -47,7 +44,7 @@
         </header>
 
         <!-- Input section -->
-        <section class="input-section module-component">
+        <section class="input-section">
             <h3>
                 Security Logs Input
                 <span class="log-counter" id="logCounter">0 events</span>
@@ -66,11 +63,11 @@
         <!-- Agent workflow section -->
         <main class="workflow-container">
             <!-- Triage Agent -->
-            <article class="agent-card module-component" id="triageCard">
+            <article class="agent-card" id="triageCard">
                 <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
-                            <h3>Triage Specialist</h3>
+                            <h3>🚨 Triage Specialist</h3>
                             <p>Initial threat identification and prioritization</p>
                         </div>
                     </div>
@@ -87,11 +84,11 @@
             </article>
 
             <!-- Context Agent -->
-            <article class="agent-card module-component" id="contextCard">
+            <article class="agent-card" id="contextCard">
                 <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
-                            <h3>Context Research Agent</h3>
+                            <h3>📚 Context Research Agent</h3>
                             <p>Historical incident correlation and pattern matching</p>
                         </div>
                     </div>
@@ -108,11 +105,11 @@
             </article>
 
             <!-- Senior Analyst -->
-            <article class="agent-card module-component" id="analystCard">
+            <article class="agent-card" id="analystCard">
                 <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
-                            <h3>Senior Analyst</h3>
+                            <h3>🎯 Senior Analyst</h3>
                             <p>Deep analysis and actionable recommendations</p>
                         </div>
                     </div>
@@ -130,7 +127,7 @@
         </main>
 
         <!-- Debug Panel -->
-        <aside class="debug-panel module-component" id="debugPanel" style="display: none;" aria-hidden="true">
+        <aside class="debug-panel" id="debugPanel" aria-hidden="true">
             <h3>🔧 Debug Console</h3>
             <div class="debug-controls">
                 <button class="debug-btn" data-action="clearDebugLog">Clear Log</button>
@@ -139,16 +136,13 @@
                 <button class="debug-btn" data-action="testConnection">Test Connection</button>
             </div>
             <div class="debug-log" id="debugLog" aria-live="polite">
-                Debug mode enabled. WebSocket logs will appear here...
+                Debug mode disabled. Click "Debug Mode" to enable logging.
             </div>
         </aside>
 
-        <!-- Results Panel -->
-        <section class="findings-panel module-component" id="findingsPanel" style="display: none;">
-            <h3>
-                🎯 Analysis Results
-                <span class="priority-indicator" id="priorityIndicator">Unknown</span>
-            </h3>
+        <!-- Results Panel (hidden by default) -->
+        <section class="findings-panel" id="findingsPanel" style="display: none;">
+            <h3>🎯 Analysis Results</h3>
             <div class="findings-grid" id="findingsContent">
                 <!-- Results will be populated here -->
             </div>
@@ -159,29 +153,15 @@
     <div id="toast-container" aria-live="polite"></div>
 
     <!-- Screen reader announcements -->
-    <div id="sr-announcements" aria-live="assertive" class="visually-hidden"></div>
+    <div id="sr-announcements" aria-live="assertive" style="position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;"></div>
 
-    <!-- Modular JavaScript - ES6 modules -->
-    <script type="module">
-        // Import and initialize the main dashboard
-        import('./js/main.js').catch(error => {
-            console.error('Failed to load dashboard modules:', error);
-            document.body.innerHTML = `
-                <div style="padding: 2rem; text-align: center; color: #e74c3c;">
-                    <h2>⚠️ Dashboard Load Error</h2>
-                    <p>Failed to load the dashboard modules. Please refresh the page.</p>
-                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        🔄 Refresh Page
-                    </button>
-                </div>
-            `;
-        });
-    </script>
+    <!-- Clean JavaScript - single entry point -->
+    <script type="module" src="js/main.js"></script>
 
     <!-- Fallback for browsers without module support -->
     <script nomodule>
         document.body.innerHTML = `
-            <div style="padding: 2rem; text-align: center; color: #e74c3c;">
+            <div style="padding: 2rem; text-align: center; color: #e74c3c; background: white;">
                 <h2>⚠️ Browser Not Supported</h2>
                 <p>This dashboard requires a modern browser with ES6 module support.</p>
                 <p>Please update your browser or use Chrome, Firefox, Safari, or Edge.</p>
