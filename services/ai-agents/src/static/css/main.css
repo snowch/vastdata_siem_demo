@@ -1,0 +1,137 @@
+/* services/ai-agents/src/static/css/main.css */
+/* Main CSS file - imports all others in the correct order */
+
+/* 1. Foundation - Base styles and variables */
+@import url('./base.css');
+
+/* 2. Layout - Structure and positioning */
+@import url('./layout.css');
+
+/* 3. Components - Reusable UI components */
+@import url('./components.css');
+
+/* 4. Features - Specific feature styling */
+@import url('./agents.css');
+@import url('./approval.css');
+@import url('./findings.css');
+@import url('./notifications.css');
+@import url('./debug.css');
+
+/* 5. Effects and responsive - Load last */
+@import url('./animations.css');
+@import url('./responsive.css');
+
+/* 6. Refactored additions for modular architecture */
+:root {
+    /* Additional variables for refactored components */
+    --module-spacing: 1rem;
+    --module-border-radius: 8px;
+    --module-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    
+    /* Component states */
+    --component-active: #667eea;
+    --component-success: #27ae60;
+    --component-warning: #f39c12;
+    --component-error: #e74c3c;
+}
+
+/* Modular component base styles */
+.module-component {
+    padding: var(--module-spacing);
+    border-radius: var(--module-border-radius);
+    box-shadow: var(--module-shadow);
+    margin-bottom: var(--module-spacing);
+    background: var(--bg-primary);
+    transition: var(--transition-fast);
+}
+
+.module-component.active {
+    border-left: 4px solid var(--component-active);
+    transform: translateY(-2px);
+}
+
+.module-component.success {
+    border-left: 4px solid var(--component-success);
+}
+
+.module-component.warning {
+    border-left: 4px solid var(--component-warning);
+}
+
+.module-component.error {
+    border-left: 4px solid var(--component-error);
+}
+
+/* Enhanced focus styles for accessibility */
+.module-component:focus-within {
+    outline: 2px solid var(--component-active);
+    outline-offset: 2px;
+}
+
+/* Loading states for modular components */
+.module-component.loading {
+    opacity: 0.7;
+    pointer-events: none;
+    position: relative;
+}
+
+.module-component.loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--component-active);
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Utility classes for modular architecture */
+.module-grid {
+    display: grid;
+    gap: var(--module-spacing);
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.module-flex {
+    display: flex;
+    gap: var(--module-spacing);
+    align-items: center;
+}
+
+.module-flex.column {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.module-text-center {
+    text-align: center;
+}
+
+.module-text-muted {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.module-divider {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: var(--module-spacing) 0;
+}
+
+/* Print-friendly styles for modular components */
+@media print {
+    .module-component {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+    
+    .module-component.loading::after {
+        display: none;
+    }
+}

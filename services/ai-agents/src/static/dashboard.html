@@ -3,71 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOC Agent Analysis Dashboard - WebSocket</title>
+    <title>SOC Agent Analysis Dashboard - Refactored</title>
     
-    <!-- Refactored CSS Files - Load in Order -->
-    <!-- Base styles first -->
-    <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/layout.css">
-    
-    <!-- Core components -->
-    <link rel="stylesheet" href="css/components.css">
-    <link rel="stylesheet" href="css/agents.css">
-    
-    <!-- Feature-specific styles -->
-    <link rel="stylesheet" href="css/approval.css">
-    <link rel="stylesheet" href="css/findings.css">
-    <link rel="stylesheet" href="css/debug.css">
-    <link rel="stylesheet" href="css/notifications.css">
-    
-    <!-- Effects and responsive - load last -->
-    <link rel="stylesheet" href="css/animations.css">
-    <link rel="stylesheet" href="css/responsive.css">
+    <!-- Simplified CSS loading - single main file -->
+    <link rel="stylesheet" href="css/main.css">
     
     <link rel="icon" type="image/x-icon" href="favicon.ico">
+    
+    <!-- Preload critical JavaScript modules -->
+    <link rel="modulepreload" href="js/main.js">
+    <link rel="modulepreload" href="js/modules/event-manager.js">
+    <link rel="modulepreload" href="js/modules/keyboard-manager.js">
+    <link rel="modulepreload" href="js/modules/ui-helper.js">
 </head>
 <body>
     <div class="dashboard">
-        <div class="header">
+        <!-- Header with connection status and controls -->
+        <header class="header module-component">
             <div class="connection-status">
                 <span class="status-indicator" id="connectionIndicator"></span>
                 <span id="connectionStatus">Connecting...</span>
             </div>
-            <button class="debug-toggle" id="debugToggle">
+            <button class="debug-toggle" id="debugToggle" title="Toggle debug mode">
                 🔧 Debug Mode
             </button>
+            
             <h1>🛡️ SOC Agent Analysis Dashboard</h1>
-            <p>Real-time multi-agent security log analysis</p>
+            <p>Refactored multi-agent security log analysis with modular architecture</p>
+            
             <div class="controls">
-                <button class="btn btn-secondary" id="retrieveBtn">
+                <button class="btn btn-secondary" id="retrieveBtn" title="Retrieve security logs">
                     📥 Retrieve Logs
                 </button>
-                <button class="btn btn-primary" id="analyzeBtn">
+                <button class="btn btn-primary" id="analyzeBtn" title="Start security analysis">
                     🚀 Start Analysis
                 </button>
-                <button class="btn" id="clearBtn" style="background: var(--neutral-gradient); color: white;">
+                <button class="btn" id="clearBtn" 
+                        style="background: var(--neutral-gradient); color: white;"
+                        title="Clear all results">
                     🧹 Clear Results
                 </button>
             </div>
-        </div>
+        </header>
 
-        <div class="input-section">
+        <!-- Input section -->
+        <section class="input-section module-component">
             <h3>
                 Security Logs Input
                 <span class="log-counter" id="logCounter">0 events</span>
             </h3>
-            <textarea id="logInput" placeholder="Retrieved security logs will appear here, or paste your own OCSF logs..."></textarea>
-        </div>
+            <textarea id="logInput" 
+                      placeholder="Retrieved security logs will appear here, or paste your own OCSF logs..."
+                      aria-label="Security logs input"></textarea>
+        </section>
 
-        <div class="progress-bar">
+        <!-- Progress tracking -->
+        <div class="progress-bar" role="progressbar" aria-live="polite">
             <div class="progress-fill" id="progressBar"></div>
             <div class="progress-text" id="progressText">Ready</div>
         </div>
 
-        <div class="workflow-container">
-            <!-- Triage Agent Card -->
-            <div class="agent-card" id="triageCard">
-                <div class="agent-header">
+        <!-- Agent workflow section -->
+        <main class="workflow-container">
+            <!-- Triage Agent -->
+            <article class="agent-card module-component" id="triageCard">
+                <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
                             <h3>Triage Specialist</h3>
@@ -75,37 +75,41 @@
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="triageStatus">Pending</div>
-                </div>
+                </header>
                 <div class="agent-content">
-                    <div class="loading-spinner" id="triageSpinner">
+                    <div class="loading-spinner" id="triageSpinner" aria-hidden="true">
                         <div class="spinner"></div>
                     </div>
-                    <div class="agent-output" id="triageOutput">Waiting for analysis to begin...</div>
+                    <div class="agent-output" id="triageOutput" aria-live="polite">
+                        Waiting for analysis to begin...
+                    </div>
                 </div>
-            </div>
+            </article>
 
-            <!-- Context Agent Card -->
-            <div class="agent-card" id="contextCard">
-                <div class="agent-header">
+            <!-- Context Agent -->
+            <article class="agent-card module-component" id="contextCard">
+                <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
-                            <h3>Context Research Agent (Vector DB)</h3>
+                            <h3>Context Research Agent</h3>
                             <p>Historical incident correlation and pattern matching</p>
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="contextStatus">Pending</div>
-                </div>
+                </header>
                 <div class="agent-content">
-                    <div class="loading-spinner" id="contextSpinner">
+                    <div class="loading-spinner" id="contextSpinner" aria-hidden="true">
                         <div class="spinner"></div>
                     </div>
-                    <div class="agent-output" id="contextOutput">Waiting for triage completion...</div>
+                    <div class="agent-output" id="contextOutput" aria-live="polite">
+                        Waiting for triage completion...
+                    </div>
                 </div>
-            </div>
+            </article>
 
-            <!-- Senior Analyst Card -->
-            <div class="agent-card" id="analystCard">
-                <div class="agent-header">
+            <!-- Senior Analyst -->
+            <article class="agent-card module-component" id="analystCard">
+                <header class="agent-header">
                     <div class="agent-info">
                         <div class="agent-details">
                             <h3>Senior Analyst</h3>
@@ -113,18 +117,20 @@
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="analystStatus">Pending</div>
-                </div>
+                </header>
                 <div class="agent-content">
-                    <div class="loading-spinner" id="analystSpinner">
+                    <div class="loading-spinner" id="analystSpinner" aria-hidden="true">
                         <div class="spinner"></div>
                     </div>
-                    <div class="agent-output" id="analystOutput">Waiting for context research...</div>
+                    <div class="agent-output" id="analystOutput" aria-live="polite">
+                        Waiting for context research...
+                    </div>
                 </div>
-            </div>
-        </div>
+            </article>
+        </main>
 
         <!-- Debug Panel -->
-        <div class="debug-panel" id="debugPanel" style="display: none;">
+        <aside class="debug-panel module-component" id="debugPanel" style="display: none;" aria-hidden="true">
             <h3>🔧 Debug Console</h3>
             <div class="debug-controls">
                 <button class="debug-btn" data-action="clearDebugLog">Clear Log</button>
@@ -132,32 +138,55 @@
                 <button class="debug-btn" data-action="showWebSocketStats">WebSocket Stats</button>
                 <button class="debug-btn" data-action="testConnection">Test Connection</button>
             </div>
-            <div class="debug-log" id="debugLog">Debug mode enabled. WebSocket logs will appear here...</div>
-        </div>
+            <div class="debug-log" id="debugLog" aria-live="polite">
+                Debug mode enabled. WebSocket logs will appear here...
+            </div>
+        </aside>
 
-        <!-- Findings Panel -->
-        <div class="findings-panel" id="findingsPanel" style="display: none;">
+        <!-- Results Panel -->
+        <section class="findings-panel module-component" id="findingsPanel" style="display: none;">
             <h3>
                 🎯 Analysis Results
                 <span class="priority-indicator" id="priorityIndicator">Unknown</span>
             </h3>
             <div class="findings-grid" id="findingsContent">
-                <!-- Findings will be populated here -->
+                <!-- Results will be populated here -->
             </div>
-        </div>
+        </section>
     </div>
 
-    <div id="toast-container"></div>
+    <!-- Toast notifications container -->
+    <div id="toast-container" aria-live="polite"></div>
 
-    <!-- Load all modules first -->
-    <script src="js/debugLogger.js" type="module"></script>
-    <script src="js/progressManager.js" type="module"></script>
-    <script src="js/eventHandlers.js" type="module"></script>
-    <script src="js/websocket.js" type="module"></script>
-    <script src="js/approvalWorkflow.js" type="module"></script>
-    <script src="js/ui.js" type="module"></script>
-    
-    <!-- Main script that sets up event listeners - load last -->
-    <script src="js/main.js" type="module"></script>
+    <!-- Screen reader announcements -->
+    <div id="sr-announcements" aria-live="assertive" class="visually-hidden"></div>
+
+    <!-- Modular JavaScript - ES6 modules -->
+    <script type="module">
+        // Import and initialize the main dashboard
+        import('./js/main.js').catch(error => {
+            console.error('Failed to load dashboard modules:', error);
+            document.body.innerHTML = `
+                <div style="padding: 2rem; text-align: center; color: #e74c3c;">
+                    <h2>⚠️ Dashboard Load Error</h2>
+                    <p>Failed to load the dashboard modules. Please refresh the page.</p>
+                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        🔄 Refresh Page
+                    </button>
+                </div>
+            `;
+        });
+    </script>
+
+    <!-- Fallback for browsers without module support -->
+    <script nomodule>
+        document.body.innerHTML = `
+            <div style="padding: 2rem; text-align: center; color: #e74c3c;">
+                <h2>⚠️ Browser Not Supported</h2>
+                <p>This dashboard requires a modern browser with ES6 module support.</p>
+                <p>Please update your browser or use Chrome, Firefox, Safari, or Edge.</p>
+            </div>
+        `;
+    </script>
 </body>
 </html>
