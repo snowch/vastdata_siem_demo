@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/agents/context.py - COMPLETE UPDATED VERSION
+# services/ai-agents/src/core/agents/context.py - PERFORMANCE OPTIMIZED VERSION
 from core.agents.base import BaseAgent
 from core.models.analysis import ContextResearchResult, DocumentMetadata
 from autogen_core.tools import FunctionTool
@@ -17,37 +17,30 @@ def analyze_historical_incidents(
 ) -> Dict[str, Any]:
     """
     Analyze historical security incidents and return structured domain results.
-    This function handles the ChromaDB search internally and processes results.
+    PERFORMANCE OPTIMIZED: Reduced search scope and document processing.
     """
     try:
-        agent_logger.info(f"Starting historical incident analysis for: {primary_search_query}")
+        agent_logger.info(f"Starting OPTIMIZED historical incident analysis for: {primary_search_query}")
         
-        # Perform multiple targeted searches for comprehensive analysis
+        # OPTIMIZATION 1: Reduce search queries from 3 to 1 primary search
+        # Only use the main search query, skip additional context searches
         search_queries = [primary_search_query]
         
-        # Add specific searches based on threat context (checks for non-empty strings)
-        if threat_type and threat_type.strip():
-            search_queries.append(f"threat type {threat_type}")
-        if source_ip and source_ip.strip():
-            search_queries.append(f"source ip {source_ip}")
+        # OPTIMIZATION 1: Reduce results per search from 10 to 5
+        optimized_results_per_search = min(max_results_per_search, 5)
         
-        # Additional common security search patterns
-        search_queries.extend([
-            "brute force attack patterns",
-            "lateral movement indicators", 
-            "privilege escalation"
-        ])
+        agent_logger.info(f"🔧 PERFORMANCE MODE: Using {len(search_queries)} search(es) with max {optimized_results_per_search} results each")
         
         all_documents = []
         all_distances = []
         all_metadata = []
         search_results_summary = []
         
-        # Execute searches and collect results
-        for query in search_queries[:3]:  # Limit to 3 searches to avoid overload
+        # Execute reduced searches
+        for query in search_queries:
             try:
-                agent_logger.info(f"Executing search: {query}")
-                results = search_chroma(query, n_results=max_results_per_search)
+                agent_logger.info(f"Executing optimized search: {query}")
+                results = search_chroma(query, n_results=optimized_results_per_search)
                 
                 documents = results.get('documents', [[]])[0]  # ChromaDB returns nested lists
                 distances = results.get('distances', [[]])[0]
@@ -87,12 +80,24 @@ def analyze_historical_incidents(
                 agent_logger.error(f"Search failed for query '{query}': {search_error}")
                 continue
         
+        # OPTIMIZATION 2: Limit total documents processed to maximum 10
+        original_count = len(all_documents)
+        MAX_DOCUMENTS = 10
+        
+        if len(all_documents) > MAX_DOCUMENTS:
+            agent_logger.info(f"🔧 PERFORMANCE LIMIT: Reducing from {original_count} to {MAX_DOCUMENTS} documents")
+            all_documents = all_documents[:MAX_DOCUMENTS]
+            all_distances = all_distances[:MAX_DOCUMENTS]
+            all_metadata = all_metadata[:MAX_DOCUMENTS]
+        
         # Analyze the collected documents for security patterns
         analysis_result = _analyze_security_patterns(all_documents, all_distances, threat_type)
         
         # Build structured domain result
         domain_result = {
             "total_documents_found": len(all_documents),
+            "original_document_count": original_count,  # Track how many we originally found
+            "performance_limited": original_count > MAX_DOCUMENTS,
             "search_queries_executed": [summary["query"] for summary in search_results_summary],
             "search_effectiveness": search_results_summary,
             "pattern_analysis": analysis_result["pattern_summary"],
@@ -104,14 +109,14 @@ def analyze_historical_incidents(
             "related_incidents": all_documents[:5],  # Include top 5 most relevant for summary
             "analysis_timestamp": datetime.now().isoformat(),
             
-            # NEW: Include ALL documents and distances with structured metadata
+            # Include ALL processed documents and distances with structured metadata
             "all_documents": all_documents,
             "all_distances": all_distances,
             "all_document_metadata": all_metadata
         }
         
-        agent_logger.info(f"✅ Historical analysis complete: {len(all_documents)} documents analyzed")
-        print(f"🔍 CONTEXT ANALYSIS: Found {len(all_documents)} related incidents")
+        agent_logger.info(f"✅ OPTIMIZED Historical analysis complete: {len(all_documents)} documents analyzed (limited from {original_count})")
+        print(f"🔍 OPTIMIZED CONTEXT ANALYSIS: Processed {len(all_documents)}/{original_count} incidents")
         
         return {"status": "analysis_complete", "data": domain_result}
         
@@ -146,7 +151,7 @@ def _convert_to_document_metadata(raw_metadata: Any, index: int, query: str) -> 
 def _analyze_security_patterns(documents: List[str], distances: List[float], threat_type: str) -> Dict[str, Any]:
     """
     Analyze historical documents for security patterns and insights.
-    This is where the domain expertise lives.
+    OPTIMIZED: Works efficiently with reduced document set.
     """
     if not documents:
         return {
@@ -158,7 +163,7 @@ def _analyze_security_patterns(documents: List[str], distances: List[float], thr
             "timeline_insights": "No historical timeline available"
         }
     
-    # Analyze document content for security patterns
+    # Analyze document content for security patterns (now processing fewer documents)
     common_indicators = []
     attack_techniques = []
     affected_systems = []
@@ -243,10 +248,10 @@ def _analyze_security_patterns(documents: List[str], distances: List[float], thr
 class ContextAgent(BaseAgent):
     def __init__(self, model_client):
         
-        # Use the domain-focused analysis function
+        # Use the optimized analysis function
         context_tool = FunctionTool(
             analyze_historical_incidents,
-            description="Analyze historical security incidents and return structured domain insights",
+            description="Analyze historical security incidents with PERFORMANCE OPTIMIZATIONS for faster processing",
             strict=True  # Strict mode is required for auto-parsing
         )
 
@@ -254,50 +259,58 @@ class ContextAgent(BaseAgent):
 
 1. **WAIT FOR HANDOFF**: Only begin when you receive approval from TriageSpecialist findings.
 
-2. **ANALYZE HISTORICAL INCIDENTS**: Use analyze_historical_incidents() to perform comprehensive security context analysis:
+2. **ANALYZE HISTORICAL INCIDENTS**: Use analyze_historical_incidents() to perform OPTIMIZED security context analysis:
    - primary_search_query: Main search term based on the threat (REQUIRED)
-   - max_results_per_search: Number of results per search (recommend 5-10) (REQUIRED)
+   - max_results_per_search: Number of results per search (system will optimize this automatically) (REQUIRED)
    - threat_type: Specific threat type. Pass an empty string "" if not identified. (REQUIRED)
    - source_ip: Source IP. Pass an empty string "" if not available. (REQUIRED)
 
-3. **COMPREHENSIVE ANALYSIS**: The function performs multiple searches and analyzes results for:
-   - Security pattern identification
+3. **PERFORMANCE OPTIMIZED ANALYSIS**: The function now uses optimizations for faster processing:
+   - Reduced search scope for faster results
+   - Limited document processing to prevent slowdowns
+   - Focused pattern analysis for efficiency
+   - Maintains quality while improving speed
+
+4. **COMPREHENSIVE ANALYSIS**: Despite optimizations, still provides:
+   - Security pattern identification from top relevant incidents
    - Threat correlations and attack progressions
    - Historical attack outcomes and lessons learned
-   - Cross-incident analysis and trend identification
+   - Cross-incident analysis focused on most relevant cases
 
-4. **DOMAIN EXPERTISE**: Focus on security-relevant insights:
+5. **DOMAIN EXPERTISE**: Focus on security-relevant insights from the most pertinent incidents:
    - How similar attacks typically progress
    - What defensive measures were effective/ineffective
    - Common attack vectors and techniques used
    - Business impact patterns from historical incidents
 
-5. **STRUCTURED OUTPUT**: The function returns a complete ContextResearchResult with:
-   - Pattern analysis and threat correlations
+6. **STRUCTURED OUTPUT**: The function returns a complete ContextResearchResult with:
+   - Pattern analysis and threat correlations from relevant incidents
    - Attack progression insights from historical data
    - Actionable recommendations based on past incidents
    - Confidence assessment of the analysis
-   - ALL HISTORICAL DOCUMENTS and their relevance scores for detailed review
+   - Performance metrics showing optimization results
 
-6. **MANDATORY APPROVAL REQUEST**: After completing analysis, you MUST present findings AND request validation:
+7. **MANDATORY APPROVAL REQUEST**: After completing analysis, you MUST present findings AND request validation:
    - First, summarize your findings professionally
+   - Mention the performance optimizations if the analysis was limited
    - Then, you MUST end with this EXACT phrase: "MultiStageApprovalAgent: Based on my analysis of {X} historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
-   - Replace {X} with the actual number of incidents found
+   - Replace {X} with the actual number of incidents analyzed
    - This is MANDATORY - the workflow depends on this exact request format
 
-7. **WAIT FOR RESPONSE**: Stop and wait for validation before any further action.
+8. **WAIT FOR RESPONSE**: Stop and wait for validation before any further action.
 
 CRITICAL REQUIREMENTS:
 - Call analyze_historical_incidents() ONCE with comprehensive parameters
-- Focus on SECURITY DOMAIN insights, not technical ChromaDB details
-- Provide clear, actionable intelligence based on historical incident patterns
+- Focus on SECURITY DOMAIN insights from the most relevant incidents
+- Provide clear, actionable intelligence based on optimized historical incident patterns
 - ALWAYS request approval with the exact phrase format shown above
 - Wait for explicit approval before concluding
+- Note any performance optimizations in your summary if document count was limited
 
 Example completion format:
-"I analyzed 24 historical security incidents and found patterns of credential attacks with lateral movement. Key findings include multiple attack vectors and cross-platform targeting. Based on similar incidents, I recommend implementing multi-factor authentication and network segmentation.
+"I analyzed 8 historical security incidents (optimized from 15 found for performance) and identified patterns of credential attacks with lateral movement. Key findings include multiple attack vectors and cross-platform targeting. Based on similar incidents, I recommend implementing multi-factor authentication and network segmentation.
 
-MultiStageApprovalAgent: Based on my analysis of 24 historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
+MultiStageApprovalAgent: Based on my analysis of 8 historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
 """
 
         super().__init__(
@@ -308,4 +321,4 @@ MultiStageApprovalAgent: Based on my analysis of 24 historical incidents, are th
             output_content_type=ContextResearchResult
         )
         
-        agent_logger.info("ContextAgent initialized with mandatory approval request")
+        agent_logger.info("ContextAgent initialized with PERFORMANCE OPTIMIZATIONS - faster context research")
