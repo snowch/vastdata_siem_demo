@@ -1,9 +1,10 @@
-/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING WITH ENHANCED ANALYST DETAILS */
+/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING WITH REDUCED VERTICAL SPACING */
 /* Clear visual states for agent flow: pending → active → awaiting-decision → complete */
 /* Plus comprehensive findings panel styling and enhanced technical displays */
+/* UPDATED: Reduced vertical spacing throughout for more compact layout */
 
 /* ============================================================================
-   CSS VARIABLES
+   CSS VARIABLES - REDUCED SPACING VALUES
    ============================================================================ */
 :root {
     /* Colors */
@@ -23,13 +24,13 @@
     --text-secondary: #a2aeb4;
     --text-muted: #7f8c8d;
     
-    /* Spacing */
+    /* REDUCED spacing values */
     --spacing-xs: 4px;
-    --spacing-sm: 8px;
-    --spacing-md: 12px;
-    --spacing-lg: 16px;
-    --spacing-xl: 20px;
-    --spacing-2xl: 24px;
+    --spacing-sm: 6px;    /* Reduced from 8px */
+    --spacing-md: 10px;   /* Reduced from 12px */
+    --spacing-lg: 12px;   /* Reduced from 16px */
+    --spacing-xl: 16px;   /* Reduced from 20px */
+    --spacing-2xl: 18px;  /* Reduced from 24px */
     
     /* Borders */
     --radius-sm: 4px;
@@ -59,24 +60,24 @@ body {
     background: #164253;
     color: var(--text-primary);
     line-height: 1.6;
-    padding-top: 20px;
+    padding-top: 16px; /* Reduced from 20px */
 }
 
 /* ============================================================================
-   LAYOUT
+   LAYOUT - REDUCED SPACING
    ============================================================================ */
 .dashboard {
     max-width: 1400px;
     margin: 0 auto;
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg); /* Reduced from --spacing-xl */
 }
 
 .header {
     background: var(--bg-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
-    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-xl); /* Reduced from --spacing-2xl */
+    margin-bottom: var(--spacing-lg); /* Reduced from --spacing-xl */
     box-shadow: var(--shadow);
     border: 1px solid rgba(255, 255, 255, 0.18);
     position: relative;
@@ -91,7 +92,7 @@ body {
 .header p {
     color: var(--text-secondary);
     font-size: 1.1em;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg); /* Reduced from --spacing-xl */
 }
 
 .controls {
@@ -229,21 +230,21 @@ body {
 }
 
 /* ============================================================================
-   INPUT SECTION
+   INPUT SECTION - REDUCED SPACING
    ============================================================================ */
 .input-section {
     background: var(--bg-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
-    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-xl); /* Reduced from --spacing-2xl */
+    margin-bottom: var(--spacing-lg); /* Reduced from --spacing-xl */
     box-shadow: var(--shadow);
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .input-section h3 {
     color: var(--text-primary);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -278,7 +279,7 @@ textarea:focus {
 }
 
 /* ============================================================================
-   PROGRESS BAR
+   PROGRESS BAR - REDUCED SPACING
    ============================================================================ */
 .progress-bar {
     width: 100%;
@@ -286,7 +287,7 @@ textarea:focus {
     background: #e1e8ed;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    margin: var(--spacing-xl) 0;
+    margin: var(--spacing-lg) 0; /* Reduced from --spacing-xl */
     position: relative;
 }
 
@@ -311,19 +312,19 @@ textarea:focus {
 }
 
 /* ============================================================================
-   AGENT CARDS - CLEAN FLOW STATES
+   AGENT CARDS - CLEAN FLOW STATES WITH REDUCED SPACING
    ============================================================================ */
 .workflow-container {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--spacing-xl);
+    gap: var(--spacing-lg); /* Reduced from --spacing-xl */
 }
 
 .agent-card {
     background: var(--bg-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
+    padding: var(--spacing-xl); /* Reduced from --spacing-2xl */
     box-shadow: var(--shadow);
     border: 1px solid rgba(255, 255, 255, 0.18);
     transition: var(--transition);
@@ -347,9 +348,9 @@ textarea:focus {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg); /* Reduced from --spacing-xl */
     flex-wrap: wrap;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-md); /* Reduced from --spacing-lg */
 }
 
 .agent-info {
@@ -419,24 +420,24 @@ textarea:focus {
 .agent-content {
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg); /* Reduced from --spacing-xl */
     min-height: 150px;
     position: relative;
 }
 
 /* ============================================================================
-   ENHANCED AGENT OUTPUT - FOR ANALYST DETAILS
+   ENHANCED AGENT OUTPUT - FOR ANALYST DETAILS WITH REDUCED SPACING
    ============================================================================ */
 .agent-output {
     font-family: 'Courier New', monospace;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.4; /* Reduced from 1.5 */
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 500px; /* Increased height for analyst details */
     overflow-y: auto;
     color: var(--text-primary);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md); /* Reduced from --spacing-lg */
     background: var(--bg-secondary);
     border-radius: var(--radius-md);
     border-left: 3px solid var(--primary);
@@ -496,17 +497,17 @@ textarea:focus {
 }
 
 /* ============================================================================
-   APPROVAL WORKFLOW - ENHANCED FOR TECHNICAL CONTENT
+   APPROVAL WORKFLOW - ENHANCED FOR TECHNICAL CONTENT WITH REDUCED SPACING
    ============================================================================ */
 .approval-section {
-    padding: var(--spacing-xl) var(--spacing-2xl);
+    padding: var(--spacing-lg) var(--spacing-xl); /* Reduced vertical padding */
     background: rgba(255, 255, 255, 0.98);
     border-top: 2px solid var(--warning);
-    margin-top: var(--spacing-lg);
+    margin-top: var(--spacing-md); /* Reduced from --spacing-lg */
     border-radius: 0 0 var(--radius-xl) var(--radius-xl);
     animation: slideInFromBottom 0.3s ease;
     box-shadow: 0 -2px 10px rgba(243, 156, 18, 0.2);
-    max-height: 200px; /* Prevent approval from being too tall */
+    max-height: 180px; /* Reduced from 200px */
     overflow-y: auto;
 }
 
@@ -525,7 +526,7 @@ textarea:focus {
 }
 
 .approval-prompt {
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
     text-align: center;
 }
 
@@ -546,11 +547,11 @@ textarea:focus {
     gap: var(--spacing-md);
     justify-content: center;
     flex-wrap: wrap;
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
 }
 
 .custom-input-section {
-    margin-top: var(--spacing-lg);
+    margin-top: var(--spacing-md); /* Reduced from --spacing-lg */
     padding: var(--spacing-lg);
     background: rgba(255, 255, 255, 0.8);
     border-radius: var(--radius-md);
@@ -563,14 +564,14 @@ textarea:focus {
 }
 
 /* ============================================================================
-   FINDINGS PANEL - COMPREHENSIVE RESULTS DISPLAY
+   FINDINGS PANEL - COMPREHENSIVE RESULTS DISPLAY WITH REDUCED SPACING
    ============================================================================ */
 .findings-panel {
     background: var(--bg-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
-    margin-top: var(--spacing-xl);
+    padding: var(--spacing-xl); /* Reduced from --spacing-2xl */
+    margin-top: var(--spacing-lg); /* Reduced from --spacing-xl */
     box-shadow: var(--shadow);
     border: 1px solid rgba(255, 255, 255, 0.18);
     animation: slideInFromBottom 0.5s ease;
@@ -578,7 +579,7 @@ textarea:focus {
 
 .findings-panel h3 {
     color: var(--text-primary);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg); /* Reduced from --spacing-xl */
     text-align: center;
     font-size: 1.5em;
     display: flex;
@@ -590,13 +591,13 @@ textarea:focus {
 .findings-summary {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--spacing-xl);
+    gap: var(--spacing-lg); /* Reduced from --spacing-xl */
 }
 
 .finding-section {
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg); /* Reduced from --spacing-xl */
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: var(--transition);
 }
@@ -608,7 +609,7 @@ textarea:focus {
 
 .finding-section h4 {
     color: var(--primary);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -620,8 +621,8 @@ textarea:focus {
 .finding-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    gap: var(--spacing-sm); /* Reduced from --spacing-md */
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
 }
 
 .finding-item {
@@ -701,25 +702,25 @@ textarea:focus {
 .business-impact {
     background: rgba(243, 156, 18, 0.1);
     border-left-color: var(--warning);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
 }
 
 .recommendations-container {
-    margin-top: var(--spacing-md);
+    margin-top: var(--spacing-sm); /* Reduced from --spacing-md */
 }
 
 .recommendations-list {
-    margin-top: var(--spacing-md);
+    margin-top: var(--spacing-sm); /* Reduced from --spacing-md */
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs); /* Reduced from --spacing-sm */
 }
 
 .recommendation-item {
     display: flex;
-    gap: var(--spacing-md);
+    gap: var(--spacing-sm); /* Reduced from --spacing-md */
     background: rgba(102, 126, 234, 0.08);
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm); /* Reduced from --spacing-md */
     border-radius: var(--radius-md);
     border-left: 3px solid var(--primary);
     transition: var(--transition);
@@ -864,14 +865,14 @@ textarea:focus {
 }
 
 /* ============================================================================
-   DEBUG PANEL
+   DEBUG PANEL - REDUCED SPACING
    ============================================================================ */
 .debug-panel {
     background: var(--bg-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
-    margin-top: var(--spacing-xl);
+    padding: var(--spacing-xl); /* Reduced from --spacing-2xl */
+    margin-top: var(--spacing-lg); /* Reduced from --spacing-xl */
     box-shadow: var(--shadow);
     border: 1px solid rgba(255, 255, 255, 0.18);
     display: none;
@@ -883,7 +884,7 @@ textarea:focus {
 
 .debug-panel h3 {
     color: var(--error);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -892,7 +893,7 @@ textarea:focus {
 .debug-controls {
     display: flex;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
     flex-wrap: wrap;
 }
 
@@ -960,15 +961,15 @@ textarea:focus {
 }
 
 /* ============================================================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN - REDUCED SPACING
    ============================================================================ */
 @media (max-width: 768px) {
     .dashboard {
-        padding: var(--spacing-md);
+        padding: var(--spacing-sm); /* Reduced from --spacing-md */
     }
     
     .header {
-        padding: var(--spacing-lg);
+        padding: var(--spacing-md); /* Reduced from --spacing-lg */
         text-align: center;
     }
     
@@ -981,7 +982,7 @@ textarea:focus {
         top: 0;
         right: 0;
         justify-content: center;
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm); /* Reduced from --spacing-md */
     }
     
     .debug-toggle {
@@ -995,7 +996,7 @@ textarea:focus {
         position: relative;
         top: 0;
         right: 0;
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
         width: 100%;
     }
     
@@ -1021,8 +1022,8 @@ textarea:focus {
     }
     
     #toast-container {
-        left: var(--spacing-lg);
-        right: var(--spacing-lg);
+        left: var(--spacing-md); /* Reduced from --spacing-lg */
+        right: var(--spacing-md); /* Reduced from --spacing-lg */
         max-width: none;
     }
     
@@ -1051,7 +1052,7 @@ textarea:focus {
     .agent-output {
         font-size: 12px;
         max-height: 300px;
-        padding: var(--spacing-md);
+        padding: var(--spacing-sm); /* Reduced from --spacing-md */
     }
 }
 

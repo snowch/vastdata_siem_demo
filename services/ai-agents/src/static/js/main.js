@@ -276,11 +276,11 @@ class SOCDashboard {
     // OUTPUT FORMATTERS - ENHANCED WITH COMPLETE ANALYST DETAILS
     // ============================================================================
 
-    formatTriageOutput(data) {
-        const d = data.data;
-        
-        if (this.viewMode === 'executive') {
-            return `🚨 THREAT ASSESSMENT
+formatTriageOutput(data) {
+    const d = data.data;
+    
+    if (this.viewMode === 'executive') {
+        return `🚨 THREAT ASSESSMENT
 
 ⚠️  Priority: ${d.priority?.toUpperCase() || 'UNKNOWN'}
 🎯 Threat: ${d.threat_type || 'Unknown'}
@@ -290,28 +290,28 @@ class SOCDashboard {
 ${d.brief_summary || 'Threat identified'}
 
 ✅ Triage analysis complete. Ready for approval.`;
-        }
-        
-        // ANALYST VIEW - Full technical details
-        const timeline = d.timeline ? `
+    }
+    
+    // ANALYST VIEW - Full technical details with CONSISTENT single newlines
+    const timeline = d.timeline ? `
 ⏰ ATTACK TIMELINE:
    Started: ${new Date(d.timeline.start).toLocaleString()}
    Ended: ${new Date(d.timeline.end).toLocaleString()}
    Duration: ${this.calculateDuration(d.timeline.start, d.timeline.end)}` : '';
 
-        const targets = d.target_hosts && d.target_hosts.length > 0 ? `
+    const targets = d.target_hosts && d.target_hosts.length > 0 ? `
 🎯 TARGET HOSTS (${d.target_hosts.length}):
    ${d.target_hosts.map(host => `• ${host}`).join('\n   ')}` : '';
 
-        const indicators = d.indicators && d.indicators.length > 0 ? `
+    const indicators = d.indicators && d.indicators.length > 0 ? `
 🔍 SECURITY INDICATORS (${d.indicators.length}):
    ${d.indicators.map(indicator => `• ${indicator}`).join('\n   ')}` : '';
 
-        const services = d.affected_services && d.affected_services.length > 0 ? `
+    const services = d.affected_services && d.affected_services.length > 0 ? `
 🛠️ AFFECTED SERVICES:
    ${d.affected_services.join(', ')}` : '';
 
-        return `🚨 THREAT ASSESSMENT - ANALYST VIEW
+    return `🚨 THREAT ASSESSMENT - ANALYST VIEW
 
 ⚠️  Priority: ${d.priority?.toUpperCase() || 'UNKNOWN'}
 🎯 Threat Type: ${d.threat_type || 'Unknown'}
@@ -320,152 +320,145 @@ ${d.brief_summary || 'Threat identified'}
 📈 Event Count: ${d.event_count || 0} events
 
 🔍 ATTACK PATTERN:
-${d.attack_pattern || 'Not specified'}
-
-${timeline}
-
-${targets}
-
-${indicators}
-
-${services}
+${d.attack_pattern || 'Not specified'}${timeline}${targets}${indicators}${services}
 
 📋 SUMMARY:
 ${d.brief_summary || 'Threat identified and analyzed'}
 
 ✅ Triage analysis complete with full technical details.
 🚨 DECISION REQUIRED: Proceed with investigation?`;
-    }
+}
 
-    formatContextOutput(data) {
-        const d = data.data;
-        console.log('🔍 Context data structure for formatting:', d); // Debug log
-        
-        if (this.viewMode === 'executive') {
-            return `📚 HISTORICAL CONTEXT
+formatContextOutput(data) {
+    const d = data.data;
+    console.log('🔍 Context data structure for formatting:', d);
+    
+    if (this.viewMode === 'executive') {
+        return `📚 HISTORICAL CONTEXT
 
 📊 Incidents Found: ${d.total_documents_found || 0}
 🔍 Pattern Analysis: ${d.pattern_analysis || 'Analyzing...'}
 📝 Confidence: ${d.confidence_assessment || 'Medium'}
 
 ✅ Context research complete. Ready for validation.`;
-        }
+    }
 
-        // ANALYST VIEW - Build comprehensive output step by step
-        let sections = [];
-        
-        // Header with basic summary
-        sections.push(`📚 HISTORICAL CONTEXT - ANALYST VIEW
+    // ANALYST VIEW - Build comprehensive output with CONSISTENT single newlines
+    let sections = [];
+    
+    // Header with basic summary
+    sections.push(`📚 HISTORICAL CONTEXT - ANALYST VIEW
 
 📊 RESEARCH SUMMARY:
    Documents Analyzed: ${d.total_documents_found || 0}
    Confidence Level: ${d.confidence_assessment || 'Medium'}
    Pattern Analysis: ${d.pattern_analysis || 'Mixed patterns identified in historical incidents'}`);
 
-        // Performance metrics (if available)
-        if (d.original_document_count && d.performance_limited) {
-            sections.push(`⚡ PERFORMANCE OPTIMIZATION:
+    // Performance metrics (if available)
+    if (d.original_document_count && d.performance_limited) {
+        sections.push(`⚡ PERFORMANCE OPTIMIZATION:
    Original Documents Found: ${d.original_document_count}
    Processed for Analysis: ${d.total_documents_found}
    Ultra-fast Mode: ${d.performance_limited ? 'Enabled' : 'Disabled'}`);
-        }
+    }
 
-        // Search Strategy
-        const queries = d.search_queries_executed || [];
-        if (queries.length > 0) {
-            sections.push(`🔍 SEARCH STRATEGY (${queries.length} queries executed):
+    // Search Strategy
+    const queries = d.search_queries_executed || [];
+    if (queries.length > 0) {
+        sections.push(`🔍 SEARCH STRATEGY (${queries.length} queries executed):
    ${queries.map(query => `• "${query}"`).join('\n   ')}`);
-        } else {
-            sections.push(`🔍 SEARCH STRATEGY:
+    } else {
+        sections.push(`🔍 SEARCH STRATEGY:
    • Primary search query executed
    • Historical incident correlation performed`);
-        }
+    }
 
-        // Search Effectiveness 
-        const effectiveness = d.search_effectiveness || [];
-        if (effectiveness.length > 0) {
-            sections.push(`📊 SEARCH EFFECTIVENESS:
+    // Search Effectiveness 
+    const effectiveness = d.search_effectiveness || [];
+    if (effectiveness.length > 0) {
+        sections.push(`📊 SEARCH EFFECTIVENESS:
    ${effectiveness.map(search => 
       `• ${search.query}: ${search.results_count} results (${(search.avg_relevance * 100).toFixed(1)}% avg relevance)`
    ).join('\n   ')}`);
-        } else {
-            sections.push(`📊 SEARCH EFFECTIVENESS:
+    } else {
+        sections.push(`📊 SEARCH EFFECTIVENESS:
    • Search completed with ${d.total_documents_found} relevant documents
    • Relevance scoring applied to prioritize most similar incidents`);
-        }
+    }
 
-        // Threat Correlations
-        const correlations = d.threat_correlations || [];
-        if (correlations.length > 0) {
-            sections.push(`🔗 THREAT CORRELATIONS (${correlations.length} identified):
+    // Threat Correlations
+    const correlations = d.threat_correlations || [];
+    if (correlations.length > 0) {
+        sections.push(`🔗 THREAT CORRELATIONS (${correlations.length} identified):
    ${correlations.map(corr => `• ${corr}`).join('\n   ')}`);
-        } else {
-            sections.push(`🔗 THREAT CORRELATIONS:
+    } else {
+        sections.push(`🔗 THREAT CORRELATIONS:
    • Cross-incident analysis performed
    • Pattern matching completed across historical dataset
    • No specific correlations above confidence threshold`);
-        }
+    }
 
-        // Attack Progression Insights
-        const insights = d.attack_progression_insights || [];
-        if (insights.length > 0) {
-            sections.push(`📈 ATTACK PROGRESSION INSIGHTS (${insights.length} patterns):
+    // Attack Progression Insights
+    const insights = d.attack_progression_insights || [];
+    if (insights.length > 0) {
+        sections.push(`📈 ATTACK PROGRESSION INSIGHTS (${insights.length} patterns):
    ${insights.map(insight => `• ${insight}`).join('\n   ')}`);
-        } else {
-            sections.push(`📈 ATTACK PROGRESSION INSIGHTS:
+    } else {
+        sections.push(`📈 ATTACK PROGRESSION INSIGHTS:
    • Historical attack progression patterns analyzed
    • Typical escalation pathways evaluated
    • Defensive response effectiveness assessed`);
-        }
+    }
 
-        // Historical Recommendations
-        const recommendations = d.recommended_actions || [];
-        if (recommendations.length > 0) {
-            sections.push(`💡 HISTORICAL RECOMMENDATIONS (${recommendations.length} actions):
+    // Historical Recommendations
+    const recommendations = d.recommended_actions || [];
+    if (recommendations.length > 0) {
+        sections.push(`💡 HISTORICAL RECOMMENDATIONS (${recommendations.length} actions):
    ${recommendations.map((action, i) => `${i+1}. ${action}`).join('\n   ')}`);
-        } else {
-            sections.push(`💡 HISTORICAL RECOMMENDATIONS:
+    } else {
+        sections.push(`💡 HISTORICAL RECOMMENDATIONS:
    • Based on similar incident outcomes
    • Defensive measures that proved effective
    • Lessons learned from past responses`);
-        }
+    }
 
-        // Related Incidents Summary
-        if (d.related_incidents && d.related_incidents.length > 0) {
-            const limitedIncidents = d.related_incidents.slice(0, 3); // Show top 3
-            sections.push(`🔗 RELATED INCIDENTS (showing top ${limitedIncidents.length} of ${d.related_incidents.length}):
+    // Related Incidents Summary
+    if (d.related_incidents && d.related_incidents.length > 0) {
+        const limitedIncidents = d.related_incidents.slice(0, 3);
+        sections.push(`🔗 RELATED INCIDENTS (showing top ${limitedIncidents.length} of ${d.related_incidents.length}):
    ${limitedIncidents.map((incident, i) => 
       `${i+1}. ${incident.substring(0, 100)}${incident.length > 100 ? '...' : ''}`
    ).join('\n   ')}`);
-        }
+    }
 
-        // Timeline Insights
-        const timelineText = d.historical_timeline || 'Historical patterns from multiple timeframes analyzed';
-        sections.push(`🕒 TIMELINE INSIGHTS:
+    // Timeline Insights
+    const timelineText = d.historical_timeline || 'Historical patterns from multiple timeframes analyzed';
+    sections.push(`🕒 TIMELINE INSIGHTS:
 ${timelineText}`);
 
-        // Analysis metadata
-        if (d.analysis_timestamp) {
-            sections.push(`📅 ANALYSIS METADATA:
+    // Analysis metadata
+    if (d.analysis_timestamp) {
+        sections.push(`📅 ANALYSIS METADATA:
    Timestamp: ${new Date(d.analysis_timestamp).toLocaleString()}
    Total Search Queries: ${queries.length || 1}
    Documents Processed: ${d.total_documents_found || 0}
    Confidence Assessment: ${d.confidence_assessment || 'Medium'}`);
-        }
-
-        // Completion message
-        sections.push(`✅ Context research complete with comprehensive historical analysis.
-🚨 DECISION REQUIRED: Are these insights relevant for current threat analysis?`);
-
-        return sections.join('\n\n');
     }
 
-    formatAnalysisOutput(data) {
-        const d = data.data;
-        const actions = d.recommended_actions || [];
-        
-        if (this.viewMode === 'executive') {
-            return `🎯 SECURITY ANALYSIS
+    // Completion message
+    sections.push(`✅ Context research complete with comprehensive historical analysis.
+🚨 DECISION REQUIRED: Are these insights relevant for current threat analysis?`);
+
+    // FIXED: Use single newline separator instead of double newlines
+    return sections.join('\n');
+}
+
+formatAnalysisOutput(data) {
+    const d = data.data;
+    const actions = d.recommended_actions || [];
+    
+    if (this.viewMode === 'executive') {
+        return `🎯 SECURITY ANALYSIS
 
 📋 Recommendations: ${actions.length} actions
 💼 Business Impact: ${d.business_impact || 'Assessing...'}
@@ -474,64 +467,49 @@ Actions:
 ${actions.map((action, i) => `${i+1}. ${action}`).join('\n') || 'No actions identified'}
 
 ✅ Analysis complete. Ready for FINAL authorization.`;
-        }
+    }
 
-        // ANALYST VIEW - Full analysis details
-        const threat = d.threat_assessment ? `
+    // ANALYST VIEW - Full analysis details with CONSISTENT single newlines
+    const threat = d.threat_assessment ? `
 🎯 THREAT ASSESSMENT:
    Severity: ${d.threat_assessment.severity?.toUpperCase() || 'Unknown'}
    Confidence: ${((d.threat_assessment.confidence || 0) * 100).toFixed(1)}%
    Type: ${d.threat_assessment.threat_type || 'Unknown'}` : '';
 
-        const timeline = d.attack_timeline && d.attack_timeline.length > 0 ? `
+    const timeline = d.attack_timeline && d.attack_timeline.length > 0 ? `
 ⏰ ATTACK TIMELINE (${d.attack_timeline.length} events):
    ${d.attack_timeline.map(event => 
       `• ${new Date(event.timestamp).toLocaleTimeString()} - ${event.event_type}: ${event.description} [${event.severity.toUpperCase()}]`
    ).join('\n   ')}` : '';
 
-        const attribution = d.attribution_indicators && d.attribution_indicators.length > 0 ? `
+    const attribution = d.attribution_indicators && d.attribution_indicators.length > 0 ? `
 🔍 ATTRIBUTION INDICATORS:
    ${d.attribution_indicators.map(indicator => `• ${indicator}`).join('\n   ')}` : '';
 
-        const dataAtRisk = d.data_at_risk && d.data_at_risk.length > 0 ? `
+    const dataAtRisk = d.data_at_risk && d.data_at_risk.length > 0 ? `
 💾 DATA AT RISK:
    ${d.data_at_risk.map(item => `• ${item}`).join('\n   ')}` : '';
 
-        const lateralMovement = d.lateral_movement_evidence && d.lateral_movement_evidence.length > 0 ? `
+    const lateralMovement = d.lateral_movement_evidence && d.lateral_movement_evidence.length > 0 ? `
 🔄 LATERAL MOVEMENT EVIDENCE:
    ${d.lateral_movement_evidence.map(evidence => `• ${evidence}`).join('\n   ')}` : '';
 
-        const businessImpact = d.business_impact ? `
+    const businessImpact = d.business_impact ? `
 💼 BUSINESS IMPACT:
 ${d.business_impact}` : '';
 
-        const investigationNotes = d.investigation_notes ? `
+    const investigationNotes = d.investigation_notes ? `
 📝 INVESTIGATION NOTES:
 ${d.investigation_notes}` : '';
 
-        return `🎯 SECURITY ANALYSIS - ANALYST VIEW
-
-${threat}
-
-${timeline}
-
-${attribution}
-
-${dataAtRisk}
-
-${lateralMovement}
-
-${businessImpact}
+    return `🎯 SECURITY ANALYSIS - ANALYST VIEW${threat}${timeline}${attribution}${dataAtRisk}${lateralMovement}${businessImpact}
 
 📋 RECOMMENDED ACTIONS (${actions.length}):
-${actions.map((action, i) => `   ${i+1}. ${action}`).join('\n') || '   No specific actions identified'}
-
-${investigationNotes}
+${actions.map((action, i) => `   ${i+1}. ${action}`).join('\n') || '   No specific actions identified'}${investigationNotes}
 
 ✅ Complete security analysis with full technical details.
 🚨 FINAL DECISION REQUIRED: Authorize these ${actions.length} security actions?`;
-    }
-
+}
     // ============================================================================
     // UTILITIES
     // ============================================================================
