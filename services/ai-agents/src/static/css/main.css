@@ -1,5 +1,5 @@
 /* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING */
-/* Optimized CSS for the clean agent status flow */
+/* Clear visual states for agent flow: pending → active → awaiting-decision → complete */
 
 /* ============================================================================
    CSS VARIABLES
@@ -286,7 +286,7 @@ textarea:focus {
 }
 
 /* ============================================================================
-   AGENT CARDS - CLEAN FLOW STYLING
+   AGENT CARDS - CLEAN FLOW STATES
    ============================================================================ */
 .workflow-container {
     display: grid;
@@ -306,9 +306,11 @@ textarea:focus {
     overflow: hidden;
 }
 
+/* CLEAN FLOW: Card states */
 .agent-card.active {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
+    border-color: var(--primary);
 }
 
 .agent-card.approval-active {
@@ -357,6 +359,7 @@ textarea:focus {
     transition: var(--transition);
 }
 
+/* CLEAN FLOW: Clear status progression */
 .status-pending {
     background: #f8f9fa;
     color: #6c757d;
@@ -370,7 +373,7 @@ textarea:focus {
     box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
 }
 
-.status-awaiting-approval {
+.status-awaiting-decision {
     background: linear-gradient(45deg, var(--warning), #e67e22);
     color: white;
     animation: pulse 1.5s infinite;
@@ -408,10 +411,10 @@ textarea:focus {
 }
 
 /* ============================================================================
-   LOADING SPINNER - CLEAN FLOW
+   LOADING SPINNER - CLEAN FLOW VISIBILITY
    ============================================================================ */
 .loading-spinner {
-    display: none;
+    display: none; /* Hidden by default */
     justify-content: center;
     align-items: center;
     height: 100px;
@@ -420,6 +423,14 @@ textarea:focus {
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 10;
+    background: rgba(1, 35, 48, 0.9);
+    border-radius: var(--radius-lg);
+    width: 120px;
+}
+
+/* Show spinner only when explicitly displayed */
+.loading-spinner[style*="flex"] {
+    display: flex !important;
 }
 
 .spinner {

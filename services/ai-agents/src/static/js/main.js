@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/main.js - CLEAN FLOW IMPLEMENTATION
-// Simple, clean dashboard following the correct agent status pattern
+// services/ai-agents/src/static/js/main.js - CLEAN SIMPLIFIED FLOW
+// Simple dashboard with predictable agent flow: active → awaiting-decision → complete
 
 import { WebSocketManager } from './modules/websocket-manager.js';
 import { UIManager } from './modules/ui-manager.js';
@@ -37,7 +37,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // PUBLIC API - Called by event handlers
+    // USER ACTIONS - Simple API
     // ============================================================================
 
     async retrieveLogs() {
@@ -74,8 +74,8 @@ class SOCDashboard {
         this.uiManager.setAnalysisMode(true);
         this.uiManager.updateProgress(5, 'Starting analysis...');
 
-        // CLEAN FLOW: Start with triage active (shows spinner)
-        this.uiManager.updateAgent('triage', 'active');
+        // STEP 1: Start triage (active state with spinner)
+        this.uiManager.setAgentActive('triage');
 
         this.websocketManager.send({
             type: 'start_analysis',
@@ -90,7 +90,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // WEBSOCKET EVENT HANDLERS - CLEAN FLOW IMPLEMENTATION
+    // WEBSOCKET EVENT HANDLERS - Clean Simple Flow
     // ============================================================================
 
     onConnectionEstablished(data) {
@@ -114,36 +114,49 @@ class SOCDashboard {
         this.uiManager.updateProgress(0, 'Ready');
     }
 
-    // CLEAN FLOW: When backend completes triage processing
-    onTriageComplete(data) {
-        console.log('✅ Triage processing complete - showing results and requesting approval');
+    // STEP 2: Backend completed triage → show results + approval
+    onTriageResults(data) {
+        console.log('✅ Triage results received');
         
-        // Stop triage spinner, show results, transition to awaiting-approval
-        // The approval request will be handled separately by websocket manager
         const output = this.formatTriageOutput(data);
-        this.uiManager.updateAgent('triage', 'awaiting-approval', output);
+        
+        // Show results and approval UI
+        this.uiManager.setAgentAwaitingDecision('triage', output, (response) => {
+            this.websocketManager.sendApprovalResponse('triage', response);
+        });
+        
         this.uiManager.updateProgress(30, 'Triage complete - awaiting approval');
     }
 
-    // CLEAN FLOW: When backend completes context processing  
-    onContextComplete(data) {
-        console.log('✅ Context processing complete - showing results and requesting approval');
+    // STEP 3: Backend completed context → show results + approval
+    onContextResults(data) {
+        console.log('✅ Context results received');
         
         const output = this.formatContextOutput(data);
-        this.uiManager.updateAgent('context', 'awaiting-approval', output);
+        
+        // Show results and approval UI
+        this.uiManager.setAgentAwaitingDecision('context', output, (response) => {
+            this.websocketManager.sendApprovalResponse('context', response);
+        });
+        
         this.uiManager.updateProgress(60, 'Context complete - awaiting approval');
     }
 
-    // CLEAN FLOW: When backend completes analyst processing
-    onAnalysisComplete(data) {
-        console.log('✅ Analysis processing complete - showing results and requesting approval');
+    // STEP 4: Backend completed analyst → show results + approval
+    onAnalystResults(data) {
+        console.log('✅ Analyst results received');
         
         const output = this.formatAnalysisOutput(data);
-        this.uiManager.updateAgent('analyst', 'awaiting-approval', output);
+        
+        // Show results and approval UI
+        this.uiManager.setAgentAwaitingDecision('analyst', output, (response) => {
+            this.websocketManager.sendApprovalResponse('analyst', response);
+        });
+        
         this.uiManager.updateProgress(90, 'Analysis complete - awaiting approval');
     }
 
-    // CLEAN FLOW: When entire workflow is complete
+    // STEP 5: Entire workflow complete
     onWorkflowComplete(data) {
         console.log('✅ Entire workflow complete');
         
@@ -160,7 +173,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // OUTPUT FORMATTERS
+    // OUTPUT FORMATTERS - Same as before
     // ============================================================================
 
     formatTriageOutput(data) {

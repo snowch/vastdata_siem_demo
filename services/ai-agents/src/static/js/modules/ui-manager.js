@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/ui-manager.js - CLEAN FLOW IMPLEMENTATION
-// Handles all UI operations with proper status flow
+// services/ai-agents/src/static/js/modules/ui-manager.js - CLEAN SIMPLIFIED FLOW
+// Simple, predictable agent status flow: active → awaiting-decision → complete
 
 export class UIManager {
     constructor() {
@@ -11,6 +11,214 @@ export class UIManager {
         this.setupToastContainer();
         this.resetAllStates();
         console.log('✅ UI Manager initialized');
+    }
+
+    // ============================================================================
+    // CORE AGENT FLOW - SIMPLIFIED
+    // ============================================================================
+
+    /**
+     * Set agent to active state (shows spinner)
+     */
+    setAgentActive(agentType) {
+        console.log(`🔄 Agent ${agentType} → active`);
+        this.updateAgentStatus(agentType, 'active');
+        this.showSpinner(agentType);
+        this.hideApprovalForAgent(agentType);
+    }
+
+    /**
+     * Set agent to awaiting decision (shows results + approval UI)
+     */
+    setAgentAwaitingDecision(agentType, results, approvalCallback) {
+        console.log(`🔄 Agent ${agentType} → awaiting-decision`);
+        this.updateAgentStatus(agentType, 'awaiting-decision');
+        this.hideSpinner(agentType);
+        this.updateAgentOutput(agentType, results);
+        this.showApprovalForAgent(agentType, approvalCallback);
+    }
+
+    /**
+     * Set agent to complete (hides approval, marks complete)
+     */
+    setAgentComplete(agentType) {
+        console.log(`🔄 Agent ${agentType} → complete`);
+        this.updateAgentStatus(agentType, 'complete');
+        this.hideApprovalForAgent(agentType);
+    }
+
+    /**
+     * Set agent to pending (initial state)
+     */
+    setAgentPending(agentType, message = null) {
+        console.log(`🔄 Agent ${agentType} → pending`);
+        this.updateAgentStatus(agentType, 'pending');
+        this.hideSpinner(agentType);
+        this.hideApprovalForAgent(agentType);
+        if (message) {
+            this.updateAgentOutput(agentType, message);
+        }
+    }
+
+    // ============================================================================
+    // INTERNAL HELPERS
+    // ============================================================================
+
+    updateAgentStatus(agentType, status) {
+        const statusElement = document.getElementById(`${agentType}Status`);
+        if (statusElement) {
+            statusElement.className = `status-badge status-${status}`;
+            statusElement.textContent = this.formatStatusText(status);
+        }
+
+        const card = document.getElementById(`${agentType}Card`);
+        if (card) {
+            card.classList.remove('active', 'approval-active');
+            if (status === 'active') {
+                card.classList.add('active');
+            } else if (status === 'awaiting-decision') {
+                card.classList.add('approval-active');
+            }
+        }
+    }
+
+    formatStatusText(status) {
+        const statusMap = {
+            'pending': 'Pending',
+            'active': 'Processing...',
+            'awaiting-decision': 'Awaiting Decision', 
+            'complete': 'Complete',
+            'error': 'Error'
+        };
+        return statusMap[status] || status;
+    }
+
+    updateAgentOutput(agentType, text) {
+        const outputElement = document.getElementById(`${agentType}Output`);
+        if (outputElement) {
+            outputElement.textContent = text;
+        }
+    }
+
+    showSpinner(agentType) {
+        const spinner = document.getElementById(`${agentType}Spinner`);
+        if (spinner) {
+            spinner.style.display = 'flex';
+        }
+    }
+
+    hideSpinner(agentType) {
+        const spinner = document.getElementById(`${agentType}Spinner`);
+        if (spinner) {
+            spinner.style.display = 'none';
+        }
+    }
+
+    // ============================================================================
+    // APPROVAL WORKFLOW - SIMPLIFIED
+    // ============================================================================
+
+    showApprovalForAgent(agentType, responseCallback) {
+        // Hide any existing approval
+        this.hideCurrentApproval();
+        
+        // Create approval section
+        const approvalSection = this.createApprovalSection(agentType, responseCallback);
+        this.attachApprovalToAgent(agentType, approvalSection);
+        
+        this.currentApproval = { stage: agentType, element: approvalSection };
+        this.showStatus(`${agentType} decision required`, 'warning');
+    }
+
+    createApprovalSection(stage, responseCallback) {
+        const section = document.createElement('div');
+        section.className = 'approval-section';
+        section.id = `${stage}ApprovalSection`;
+        
+        section.innerHTML = `
+            <div class="approval-prompt">
+                <h4>${this.getStageTitle(stage)}</h4>
+                <p>Review the ${stage} results and decide how to proceed.</p>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-approve" data-action="approve">✅ Approve</button>
+                <button class="btn btn-reject" data-action="reject">❌ Reject</button>
+                <button class="btn btn-custom" data-action="custom">✏️ Custom</button>
+            </div>
+            <div class="custom-input-section" style="display:none;">
+                <textarea placeholder="Enter custom instructions..."></textarea>
+                <button class="btn btn-primary" data-action="submit-custom">Submit</button>
+                <button class="btn btn-secondary" data-action="cancel-custom">Cancel</button>
+            </div>
+        `;
+
+        this.attachApprovalHandlers(section, responseCallback);
+        return section;
+    }
+
+    getStageTitle(stage) {
+        const titles = {
+            'triage': 'Threat Investigation Approval',
+            'context': 'Context Validation', 
+            'analyst': 'Action Authorization'
+        };
+        return titles[stage] || 'Approval Required';
+    }
+
+    attachApprovalHandlers(section, responseCallback) {
+        section.addEventListener('click', (e) => {
+            const action = e.target.getAttribute('data-action');
+            if (!action) return;
+
+            switch (action) {
+                case 'approve':
+                    responseCallback('approve');
+                    this.showStatus('Approved - proceeding...', 'success');
+                    break;
+                case 'reject':
+                    responseCallback('reject');
+                    this.showStatus('Rejected - stopping workflow', 'error');
+                    break;
+                case 'custom':
+                    section.querySelector('.custom-input-section').style.display = 'block';
+                    break;
+                case 'submit-custom':
+                    const customText = section.querySelector('textarea').value.trim();
+                    if (customText) {
+                        responseCallback(`custom: ${customText}`);
+                        this.showStatus('Custom response sent', 'info');
+                    } else {
+                        this.showStatus('Please enter custom instructions', 'warning');
+                    }
+                    break;
+                case 'cancel-custom':
+                    section.querySelector('.custom-input-section').style.display = 'none';
+                    break;
+            }
+        });
+    }
+
+    attachApprovalToAgent(stage, section) {
+        const agentCard = document.getElementById(`${stage}Card`);
+        if (!agentCard) return;
+
+        const agentContent = agentCard.querySelector('.agent-content');
+        if (agentContent) {
+            agentContent.parentNode.insertBefore(section, agentContent.nextSibling);
+        }
+    }
+
+    hideCurrentApproval() {
+        if (this.currentApproval) {
+            this.currentApproval.element.remove();
+            this.currentApproval = null;
+        }
+    }
+
+    hideApprovalForAgent(agentType) {
+        if (this.currentApproval && this.currentApproval.stage === agentType) {
+            this.hideCurrentApproval();
+        }
     }
 
     // ============================================================================
@@ -78,194 +286,6 @@ export class UIManager {
     }
 
     // ============================================================================
-    // AGENT MANAGEMENT - CLEAN FLOW IMPLEMENTATION
-    // ============================================================================
-
-    updateAgent(agentType, status, outputText = null) {
-        console.log(`🔄 Agent ${agentType} → ${status}`);
-        
-        // Update status badge
-        const statusElement = document.getElementById(`${agentType}Status`);
-        if (statusElement) {
-            statusElement.className = `status-badge status-${status}`;
-            statusElement.textContent = this.formatStatusText(status);
-        }
-
-        // Update output if provided
-        if (outputText) {
-            const outputElement = document.getElementById(`${agentType}Output`);
-            if (outputElement) {
-                outputElement.textContent = outputText;
-            }
-        }
-
-        // Update card visual state
-        const card = document.getElementById(`${agentType}Card`);
-        if (card) {
-            card.classList.remove('active', 'approval-active');
-            
-            if (status === 'awaiting-approval') {
-                card.classList.add('approval-active');
-            } else if (status === 'complete') {
-                card.classList.add('active');
-            }
-        }
-
-        // CLEAN SPINNER LOGIC:
-        // active = show spinner
-        // awaiting-approval = hide spinner  
-        // complete = hide spinner
-        // pending = hide spinner
-        if (status === 'active') {
-            this.showSpinner(agentType);
-            this.hideApprovalForAgent(agentType); // Clear any existing approval
-        } else {
-            this.hideSpinner(agentType);
-        }
-    }
-
-    formatStatusText(status) {
-        const statusMap = {
-            'pending': 'Pending',
-            'active': 'Processing...',
-            'awaiting-approval': 'Awaiting Decision',
-            'complete': 'Complete',
-            'error': 'Error'
-        };
-        return statusMap[status] || status;
-    }
-
-    showSpinner(agentType) {
-        const spinner = document.getElementById(`${agentType}Spinner`);
-        if (spinner) {
-            spinner.style.display = 'flex';
-        }
-    }
-
-    hideSpinner(agentType) {
-        const spinner = document.getElementById(`${agentType}Spinner`);
-        if (spinner) {
-            spinner.style.display = 'none';
-        }
-    }
-
-    // ============================================================================
-    // APPROVAL WORKFLOW - SIMPLIFIED
-    // ============================================================================
-
-    showApprovalForAgent(agentType, prompt, responseCallback) {
-        // Hide any existing approval
-        this.hideCurrentApproval();
-        
-        // Create approval section
-        const approvalSection = this.createApprovalSection(agentType, prompt, responseCallback);
-        this.attachApprovalToAgent(agentType, approvalSection);
-        
-        // Set agent status to awaiting-approval (this will hide spinner automatically)
-        this.updateAgent(agentType, 'awaiting-approval');
-        
-        this.currentApproval = { stage: agentType, element: approvalSection };
-        this.showStatus(`${agentType} decision required`, 'warning');
-    }
-
-    createApprovalSection(stage, prompt, responseCallback) {
-        const section = document.createElement('div');
-        section.className = 'approval-section';
-        section.id = `${stage}ApprovalSection`;
-        
-        section.innerHTML = `
-            <div class="approval-prompt">
-                <h4>${this.getStageTitle(stage)}</h4>
-                <p>${prompt}</p>
-            </div>
-            <div class="button-group">
-                <button class="btn btn-approve" data-action="approve">✅ Approve</button>
-                <button class="btn btn-reject" data-action="reject">❌ Reject</button>
-                <button class="btn btn-custom" data-action="custom">✏️ Custom</button>
-            </div>
-            <div class="custom-input-section" style="display:none;">
-                <textarea placeholder="Enter custom instructions..."></textarea>
-                <button class="btn btn-primary" data-action="submit-custom">Submit</button>
-                <button class="btn btn-secondary" data-action="cancel-custom">Cancel</button>
-            </div>
-        `;
-
-        this.attachApprovalHandlers(section, responseCallback);
-        return section;
-    }
-
-    getStageTitle(stage) {
-        const titles = {
-            'triage': 'Threat Investigation Approval',
-            'context': 'Context Validation',
-            'analyst': 'Action Authorization'
-        };
-        return titles[stage] || 'Approval Required';
-    }
-
-    attachApprovalHandlers(section, responseCallback) {
-        section.addEventListener('click', (e) => {
-            const action = e.target.getAttribute('data-action');
-            if (!action) return;
-
-            switch (action) {
-                case 'approve':
-                    responseCallback('approve');
-                    this.showStatus('Approved - proceeding...', 'success');
-                    break;
-                case 'reject':
-                    responseCallback('reject');
-                    this.showStatus('Rejected - stopping workflow', 'error');
-                    break;
-                case 'custom':
-                    section.querySelector('.custom-input-section').style.display = 'block';
-                    break;
-                case 'submit-custom':
-                    const customText = section.querySelector('textarea').value.trim();
-                    if (customText) {
-                        responseCallback(`custom: ${customText}`);
-                        this.showStatus('Custom response sent', 'info');
-                    } else {
-                        this.showStatus('Please enter custom instructions', 'warning');
-                    }
-                    break;
-                case 'cancel-custom':
-                    section.querySelector('.custom-input-section').style.display = 'none';
-                    break;
-            }
-        });
-    }
-
-    attachApprovalToAgent(stage, section) {
-        const agentCard = document.getElementById(`${stage}Card`);
-        if (!agentCard) return;
-
-        const agentContent = agentCard.querySelector('.agent-content');
-        if (agentContent) {
-            agentContent.parentNode.insertBefore(section, agentContent.nextSibling);
-        }
-    }
-
-    hideCurrentApproval() {
-        if (this.currentApproval) {
-            this.currentApproval.element.remove();
-            
-            const agentCard = document.getElementById(`${this.currentApproval.stage}Card`);
-            if (agentCard) {
-                agentCard.classList.remove('approval-active');
-            }
-            
-            this.currentApproval = null;
-        }
-    }
-
-    hideApprovalForAgent(agentType) {
-        if (this.currentApproval && this.currentApproval.stage === agentType) {
-            this.hideCurrentApproval();
-        }
-    }
-
-    // ============================================================================
     // ANALYSIS MODE
     // ============================================================================
 
@@ -281,16 +301,15 @@ export class UIManager {
     }
 
     resetAgentStates() {
-        const agents = ['triage', 'context', 'analyst'];
         const defaultTexts = {
             'triage': 'Waiting for analysis to begin...',
             'context': 'Waiting for triage completion...',
             'analyst': 'Waiting for context research...'
         };
 
-        agents.forEach(agent => {
-            this.updateAgent(agent, 'pending', defaultTexts[agent]);
-        });
+        this.setAgentPending('triage', defaultTexts.triage);
+        this.setAgentPending('context', defaultTexts.context);
+        this.setAgentPending('analyst', defaultTexts.analyst);
     }
 
     // ============================================================================

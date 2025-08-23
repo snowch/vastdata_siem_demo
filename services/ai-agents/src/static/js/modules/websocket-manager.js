@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/websocket-manager.js - CLEAN FLOW IMPLEMENTATION
-// Handles WebSocket communication with simplified agent status flow
+// services/ai-agents/src/static/js/modules/websocket-manager.js - CLEAN SIMPLIFIED FLOW
+// Simple message routing that directly calls the clean UI flow
 
 export class WebSocketManager {
     constructor() {
@@ -99,7 +99,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // MESSAGE ROUTING - CLEAN FLOW IMPLEMENTATION
+    // MESSAGE ROUTING - SIMPLIFIED
     // ============================================================================
 
     routeMessage(data) {
@@ -112,7 +112,7 @@ export class WebSocketManager {
             return;
         }
 
-        // Route to appropriate dashboard handler
+        // Simple, direct routing to dashboard methods
         switch (messageType) {
             case 'connection_established':
                 this.dashboard.onConnectionEstablished(data);
@@ -123,23 +123,23 @@ export class WebSocketManager {
                 break;
                 
             case 'triage_findings':
-                // CLEAN FLOW: Triage completed its processing, show results and request approval
-                this.dashboard.onTriageComplete(data);
+                // Backend finished triage processing → show results + approval
+                this.dashboard.onTriageResults(data);
                 break;
                 
             case 'context_research':
-                // CLEAN FLOW: Context completed its processing, show results and request approval
-                this.dashboard.onContextComplete(data);
+                // Backend finished context processing → show results + approval
+                this.dashboard.onContextResults(data);
                 break;
                 
             case 'analysis_recommendations':
-                // CLEAN FLOW: Analyst completed its processing, show results and request approval
-                this.dashboard.onAnalysisComplete(data);
+                // Backend finished analyst processing → show results + approval
+                this.dashboard.onAnalystResults(data);
                 break;
                 
             case 'approval_request':
-                // CLEAN FLOW: Backend is requesting approval for a stage
-                this.handleApprovalRequest(data);
+                // This is handled automatically by the UI now
+                console.log('📝 Approval request received (UI will handle)');
                 break;
                 
             case 'workflow_progress':
@@ -170,60 +170,41 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // APPROVAL REQUEST HANDLING - SIMPLIFIED
+    // APPROVAL RESPONSE HELPER
     // ============================================================================
     
-    handleApprovalRequest(data) {
-        console.log('🔔 Approval request received:', data);
+    sendApprovalResponse(agentType, response) {
+        console.log(`📤 Sending approval response for ${agentType}: ${response}`);
         
-        const stage = this.determineStage(data);
-        const prompt = data.prompt || data.content || 'Approval required';
-        
-        // Show approval UI for this stage
-        this.dashboard.uiManager.showApprovalForAgent(stage, prompt, (response) => {
-            console.log(`📤 Sending approval response for ${stage}: ${response}`);
-            
-            const success = this.send({
-                type: 'TextMessage',
-                content: response,
-                source: 'user'
-            });
-            
-            if (success) {
-                console.log('✅ Approval response sent successfully');
-                // Hide approval UI since response was sent
-                this.dashboard.uiManager.hideApprovalForAgent(stage);
-                // Set agent to complete status
-                this.dashboard.uiManager.updateAgent(stage, 'complete');
-                // Activate next agent if applicable
-                this.activateNextAgent(stage);
-            } else {
-                console.error('❌ Failed to send approval response');
-                this.dashboard.uiManager.showStatus('Failed to send response', 'error');
-            }
+        const success = this.send({
+            type: 'TextMessage',
+            content: response,
+            source: 'user'
         });
-    }
-
-    determineStage(data) {
-        // Simple stage detection
-        if (data.stage) return data.stage;
         
-        const content = (data.content || data.prompt || '').toLowerCase();
-        if (content.includes('threat') || content.includes('investigate')) return 'triage';
-        if (content.includes('context') || content.includes('historical')) return 'context';
-        if (content.includes('recommend') || content.includes('action')) return 'analyst';
+        if (success) {
+            console.log('✅ Approval response sent successfully');
+            
+            // Complete current agent and activate next
+            this.dashboard.uiManager.setAgentComplete(agentType);
+            this.activateNextAgent(agentType);
+            
+        } else {
+            console.error('❌ Failed to send approval response');
+            this.dashboard.uiManager.showStatus('Failed to send response', 'error');
+        }
         
-        return 'triage'; // Default
+        return success;
     }
 
     activateNextAgent(currentStage) {
-        // Activate the next agent in sequence
+        // Simple sequence: triage → context → analyst → done
         const sequence = { 'triage': 'context', 'context': 'analyst', 'analyst': null };
         const nextStage = sequence[currentStage];
         
         if (nextStage) {
             console.log(`🔄 Activating next agent: ${nextStage}`);
-            this.dashboard.uiManager.updateAgent(nextStage, 'active');
+            this.dashboard.uiManager.setAgentActive(nextStage);
         } else {
             console.log('✅ No more agents to activate - workflow ending');
         }
