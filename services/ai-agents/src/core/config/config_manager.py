@@ -266,55 +266,55 @@ def get_server_config() -> ServerConfig:
     """Get server configuration"""
     return get_config().server
 
-# # ============================================================================
-# # ENVIRONMENT SETUP HELPER
-# # ============================================================================
+# ============================================================================
+# ENVIRONMENT SETUP HELPER
+# ============================================================================
 
-# def create_env_template(output_path: str = ".env.template"):
-#     """Create environment template file"""
-#     template = """# SOC Agent Analysis - Environment Configuration
+def create_env_template(output_path: str = ".env.template"):
+    """Create environment template file"""
+    template = """# SOC Agent Analysis - Environment Configuration
 
-# # Database Configuration
-# TRINO_HOST=trino
-# TRINO_PORT=8080
-# TRINO_USER=admin
-# TRINO_CATALOG=vast
-# VASTDB_FLUENTD_BUCKET=your_bucket_name
-# VASTDB_FLUENTD_SCHEMA=your_schema_name
+# Database Configuration
+TRINO_HOST=trino
+TRINO_PORT=8080
+TRINO_USER=admin
+TRINO_CATALOG=vast
+VASTDB_FLUENTD_BUCKET=your_bucket_name
+VASTDB_FLUENTD_SCHEMA=your_schema_name
 
-# # ChromaDB Configuration
-# CHROMA_HOST=chroma
-# CHROMA_PORT=8000
-# CHROMA_COLLECTION=security_events_dual
+# ChromaDB Configuration
+CHROMA_HOST=chroma
+CHROMA_PORT=8000
+CHROMA_COLLECTION=security_events_dual
 
-# # AI Model Configuration
-# AI_MODEL=gpt-4o
-# MAX_TOKENS=90000
-# MODEL_TEMPERATURE=0.7
-# MODEL_TIMEOUT=1200
+# AI Model Configuration
+AI_MODEL=gpt-4o
+MAX_TOKENS=90000
+MODEL_TEMPERATURE=0.7
+MODEL_TIMEOUT=1200
 
-# # Workflow Configuration
-# MAX_AGENTS=6
-# APPROVAL_TIMEOUT=300
-# MAX_MESSAGES=60
-# ENABLE_STRUCTURED_OUTPUT=true
+# Workflow Configuration
+MAX_AGENTS=6
+APPROVAL_TIMEOUT=300
+MAX_MESSAGES=60
+ENABLE_STRUCTURED_OUTPUT=true
 
-# # Server Configuration
-# SERVER_HOST=0.0.0.0
-# PORT=5000
-# DEBUG=false
-# CORS_ORIGINS=*
-# LOG_LEVEL=INFO
+# Server Configuration
+SERVER_HOST=0.0.0.0
+PORT=5000
+DEBUG=false
+CORS_ORIGINS=*
+LOG_LEVEL=INFO
 
-# # OpenAI API Key (required)
-# OPENAI_API_KEY=your_openai_api_key_here
-# """
+# OpenAI API Key (required)
+OPENAI_API_KEY=your_openai_api_key_here
+"""
     
-#     with open(output_path, 'w') as f:
-#         f.write(template)
+    with open(output_path, 'w') as f:
+        f.write(template)
     
-#     print(f"Environment template created at: {output_path}")
+    print(f"Environment template created at: {output_path}")
 
-# if __name__ == "__main__":
-#     # Create environment template when run directly
-#     create_env_template()
+if __name__ == "__main__":
+    # Create environment template when run directly
+    create_env_template()

@@ -2,7 +2,7 @@ import os
 import trino
 import json
 import logging
-from core.config import settings
+from core.config.config_manager import get_config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -10,24 +10,26 @@ logger = logging.getLogger(__name__)
 def get_logs():
     logs = []
     try:
+        config = get_config()
+        
         with trino.dbapi.connect(
-            host=settings.trino_host,
-            port=settings.trino_port,
-            user=settings.trino_user,
-            catalog=settings.trino_catalog,
-            schema=settings.trino_schema
+            host=config.database.host,
+            port=config.database.port,
+            user=config.database.user,
+            catalog=config.database.catalog,
+            schema=config.database.schema
         ) as connection:
             cursor = connection.cursor()
             query = f"""
                 SELECT raw_data, time_dt
-                FROM "{settings.trino_db}|{settings.trino_schema}"."fluentd_detection_finding"
+                FROM "{config.database.database}|{config.database.schema}"."fluentd_detection_finding"
                 ORDER BY time_dt DESC
                 LIMIT 20
             """
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            logger.debug(f"Rows {{len(rows)}} | Query {{query}}")
+            logger.debug(f"Rows {len(rows)} | Query {query}")
             for row in rows:
                 try:
                     json_row = json.loads(row[0])
