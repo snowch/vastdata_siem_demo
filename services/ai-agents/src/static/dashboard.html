@@ -15,7 +15,7 @@
 </head>
 <body>
     <div class="dashboard">
-        <!-- Header with connection status and controls -->
+        <!-- Header with connection status, view toggle, and controls -->
         <header class="header">
             <div class="connection-status">
                 <span class="status-indicator" id="connectionIndicator"></span>
@@ -24,9 +24,12 @@
             <button class="debug-toggle" id="debugToggle" title="Toggle debug mode">
                 🔧 Debug Mode
             </button>
+            <button class="view-mode-toggle" onclick="window.socDashboard?.toggleViewMode()" title="Toggle between analyst and executive view">
+                🔬 Analyst View
+            </button>
             
             <h1>🛡️ SOC Agent Analysis Dashboard</h1>
-            <p>Multi-agent security log analysis with comprehensive reporting</p>
+            <p>Multi-agent security log analysis with technical details for analyst decision-making</p>
             
             <div class="controls">
                 <button class="btn btn-secondary" id="retrieveBtn" title="Retrieve security logs">
@@ -73,7 +76,7 @@
                     <div class="agent-info">
                         <div class="agent-details">
                             <h3>🚨 Triage Specialist</h3>
-                            <p>Initial threat identification and prioritization</p>
+                            <p>Initial threat identification and prioritization with technical analysis</p>
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="triageStatus">Pending</div>
@@ -94,7 +97,7 @@
                     <div class="agent-info">
                         <div class="agent-details">
                             <h3>📚 Context Research Agent</h3>
-                            <p>Historical incident correlation and pattern matching</p>
+                            <p>Historical incident correlation with detailed search analysis</p>
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="contextStatus">Pending</div>
@@ -115,7 +118,7 @@
                     <div class="agent-info">
                         <div class="agent-details">
                             <h3>🎯 Senior Analyst</h3>
-                            <p>Deep analysis and actionable recommendations</p>
+                            <p>Deep analysis with comprehensive technical recommendations</p>
                         </div>
                     </div>
                     <div class="status-badge status-pending" id="analystStatus">Pending</div>

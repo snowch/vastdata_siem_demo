@@ -1,6 +1,4 @@
-// services/ai-agents/src/static/js/modules/debug-manager.js - COMPLETE FIXED FILE
-// Handles debug logging and debug mode
-
+// services/ai-agents/src/static/js/modules/debug-manager.js - ENHANCED WITH CONTEXT DEBUGGING
 export class DebugManager {
     constructor() {
         this.debugMode = false;
@@ -10,7 +8,7 @@ export class DebugManager {
 
     async initialize() {
         this.setupDebugPanel();
-        console.log('✅ Debug Manager initialized');
+        console.log('✅ Debug Manager initialized with enhanced context debugging');
     }
 
     // ============================================================================
@@ -22,8 +20,8 @@ export class DebugManager {
         this.updateDebugUI();
         
         if (this.debugMode) {
-            this.log('Debug mode enabled');
-            console.log('🔧 Debug mode ON');
+            this.log('Debug mode enabled - Context data debugging active');
+            console.log('🔧 Debug mode ON - Enhanced context logging enabled');
         } else {
             console.log('🔧 Debug mode OFF');
         }
@@ -44,10 +42,10 @@ export class DebugManager {
     }
 
     // ============================================================================
-    // LOGGING
+    // ENHANCED LOGGING WITH CONTEXT SUPPORT
     // ============================================================================
 
-    log(message, level = 'INFO') {
+    log(message, level = 'INFO', context = null) {
         if (!this.debugMode && level !== 'ERROR') return;
         
         const timestamp = new Date().toISOString();
@@ -55,7 +53,10 @@ export class DebugManager {
             timestamp,
             level,
             message,
-            formatted: `[${timestamp}] [${level}] ${message}`
+            context,
+            formatted: context ? 
+                `[${timestamp}] [${level}] ${message}\nContext: ${JSON.stringify(context, null, 2)}` :
+                `[${timestamp}] [${level}] ${message}`
         };
         
         this.logs.push(logEntry);
@@ -70,7 +71,43 @@ export class DebugManager {
         // Also log to console
         const consoleMethod = level === 'ERROR' ? 'error' : 
                              level === 'WARNING' ? 'warn' : 'log';
-        console[consoleMethod](logEntry.formatted);
+        if (context) {
+            console[consoleMethod](logEntry.formatted.split('\nContext:')[0]);
+            console[consoleMethod]('Context:', context);
+        } else {
+            console[consoleMethod](logEntry.formatted);
+        }
+    }
+
+    // Special method for context data debugging
+    logContextData(contextData, stage = 'unknown') {
+        this.log(`Context data received for ${stage} stage`, 'INFO', {
+            stage,
+            available_fields: Object.keys(contextData),
+            field_details: this.analyzeContextFields(contextData)
+        });
+    }
+
+    analyzeContextFields(data) {
+        const analysis = {};
+        for (const [key, value] of Object.entries(data)) {
+            analysis[key] = {
+                type: Array.isArray(value) ? 'array' : typeof value,
+                length: Array.isArray(value) ? value.length : 
+                       typeof value === 'string' ? value.length : 
+                       typeof value === 'object' && value !== null ? Object.keys(value).length : null,
+                hasContent: Boolean(value && (
+                    (Array.isArray(value) && value.length > 0) ||
+                    (typeof value === 'string' && value.trim().length > 0) ||
+                    (typeof value === 'object' && value !== null && Object.keys(value).length > 0) ||
+                    (typeof value !== 'object' && value !== null && value !== undefined)
+                )),
+                sample: Array.isArray(value) && value.length > 0 ? value[0] :
+                       typeof value === 'string' ? value.substring(0, 50) + (value.length > 50 ? '...' : '') :
+                       value
+            };
+        }
+        return analysis;
     }
 
     updateDebugDisplay() {
@@ -131,7 +168,7 @@ export class DebugManager {
         // Ensure debug log element exists
         const debugLog = document.getElementById('debugLog');
         if (debugLog && !debugLog.textContent.trim()) {
-            debugLog.textContent = 'Debug mode disabled. Click "Debug Mode" to enable logging.';
+            debugLog.textContent = 'Enhanced debug mode disabled. Click "Debug Mode" to enable context data logging.';
         }
     }
 
@@ -139,16 +176,16 @@ export class DebugManager {
     // CONVENIENCE METHODS
     // ============================================================================
 
-    info(message) {
-        this.log(message, 'INFO');
+    info(message, context = null) {
+        this.log(message, 'INFO', context);
     }
 
-    warn(message) {
-        this.log(message, 'WARNING');
+    warn(message, context = null) {
+        this.log(message, 'WARNING', context);
     }
 
-    error(message) {
-        this.log(message, 'ERROR');
+    error(message, context = null) {
+        this.log(message, 'ERROR', context);
     }
 
     // ============================================================================
@@ -164,7 +201,8 @@ export class DebugManager {
                 return acc;
             }, {}),
             oldestLog: this.logs[0]?.timestamp,
-            newestLog: this.logs[this.logs.length - 1]?.timestamp
+            newestLog: this.logs[this.logs.length - 1]?.timestamp,
+            contextLogs: this.logs.filter(log => log.context).length
         };
     }
 
@@ -176,5 +214,12 @@ export class DebugManager {
         }
         
         return logs.slice(-count);
+    }
+
+    // Get context-specific logs
+    getContextLogs(count = 50) {
+        return this.logs
+            .filter(log => log.context)
+            .slice(-count);
     }
 }
