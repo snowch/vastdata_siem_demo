@@ -1,4 +1,4 @@
-// services/ai-agents/src/static/js/modules/event-manager.js - CLEAN FLOW IMPLEMENTATION
+// services/ai-agents/src/static/js/modules/event-manager.js - CLEAN FLOW WITH EXPORT
 // Handles DOM events and user interactions for the clean flow
 
 export class EventManager {
@@ -26,6 +26,10 @@ export class EventManager {
 
         this.addListener('analyzeBtn', 'click', () => {
             this.dashboard.startAnalysis();
+        });
+
+        this.addListener('exportBtn', 'click', () => {
+            this.dashboard.exportResults();
         });
 
         this.addListener('clearBtn', 'click', () => {
@@ -85,6 +89,10 @@ export class EventManager {
                     case 'R':
                         e.preventDefault();
                         this.dashboard.retrieveLogs();
+                        break;
+                    case 'E':
+                        e.preventDefault();
+                        this.dashboard.exportResults();
                         break;
                 }
             }

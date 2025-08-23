@@ -1,5 +1,6 @@
-/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING */
+/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING WITH FINDINGS */
 /* Clear visual states for agent flow: pending → active → awaiting-decision → complete */
+/* Plus comprehensive findings panel styling */
 
 /* ============================================================================
    CSS VARIABLES
@@ -360,33 +361,33 @@ textarea:focus {
 }
 
 /* CLEAN FLOW: Clear status progression */
-.status-pending {
+.status-badge.status-pending {
     background: #f8f9fa;
     color: #6c757d;
     border: 1px solid #dee2e6;
 }
 
-.status-active {
+.status-badge.status-active {
     background: linear-gradient(45deg, var(--primary), #764ba2);
     color: white;
     animation: pulse 2s infinite;
     box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
 }
 
-.status-awaiting-decision {
+.status-badge.status-awaiting-decision {
     background: linear-gradient(45deg, var(--warning), #e67e22);
     color: white;
     animation: pulse 1.5s infinite;
     box-shadow: 0 0 10px rgba(243, 156, 18, 0.5);
 }
 
-.status-complete {
+.status-badge.status-complete {
     background: linear-gradient(45deg, var(--success), #56ab2f);
     color: white;
     box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
 }
 
-.status-error {
+.status-badge.status-error {
     background: linear-gradient(45deg, var(--error), #c0392b);
     color: white;
 }
@@ -491,6 +492,261 @@ textarea:focus {
 .custom-input-section textarea {
     min-height: 80px;
     margin-bottom: var(--spacing-md);
+}
+
+/* ============================================================================
+   FINDINGS PANEL - COMPREHENSIVE RESULTS DISPLAY
+   ============================================================================ */
+.findings-panel {
+    background: var(--bg-primary);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl);
+    margin-top: var(--spacing-xl);
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    animation: slideInFromBottom 0.5s ease;
+}
+
+.findings-panel h3 {
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xl);
+    text-align: center;
+    font-size: 1.5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.findings-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xl);
+}
+
+.finding-section {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: var(--transition);
+}
+
+.finding-section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.finding-section h4 {
+    color: var(--primary);
+    margin-bottom: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 1.1em;
+    border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+    padding-bottom: var(--spacing-sm);
+}
+
+.finding-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.finding-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.finding-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.finding-label {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.finding-value {
+    color: var(--text-primary);
+    font-weight: 500;
+    word-wrap: break-word;
+}
+
+.finding-value.source-ip {
+    font-family: 'Courier New', monospace;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.finding-value.confidence {
+    font-weight: 600;
+}
+
+/* Priority color coding for findings values */
+.finding-value.priority-critical { 
+    color: var(--error) !important; 
+    font-weight: 700;
+}
+.finding-value.priority-high { 
+    color: var(--warning) !important; 
+    font-weight: 700;
+}
+.finding-value.priority-medium { 
+    color: var(--info) !important; 
+    font-weight: 600;
+}
+.finding-value.priority-low { 
+    color: var(--success) !important; 
+    font-weight: 600;
+}
+
+/* Confidence color coding for findings values */
+.finding-value.confidence-high { color: var(--success) !important; }
+.finding-value.confidence-medium { color: var(--warning) !important; }
+.finding-value.confidence-low { color: var(--error) !important; }
+
+.finding-summary, .business-impact {
+    background: rgba(255, 255, 255, 0.05);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--primary);
+    margin-top: var(--spacing-md);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.business-impact {
+    background: rgba(243, 156, 18, 0.1);
+    border-left-color: var(--warning);
+    margin-bottom: var(--spacing-lg);
+}
+
+.recommendations-container {
+    margin-top: var(--spacing-md);
+}
+
+.recommendations-list {
+    margin-top: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.recommendation-item {
+    display: flex;
+    gap: var(--spacing-md);
+    background: rgba(102, 126, 234, 0.08);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--primary);
+    transition: var(--transition);
+    align-items: flex-start;
+}
+
+.recommendation-item:hover {
+    background: rgba(102, 126, 234, 0.12);
+    transform: translateX(5px);
+}
+
+.recommendation-number {
+    background: var(--primary);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.recommendation-text {
+    color: var(--text-primary);
+    line-height: 1.6;
+    flex: 1;
+}
+
+.no-recommendations {
+    background: rgba(127, 140, 141, 0.1);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    text-align: center;
+    border: 1px dashed rgba(127, 140, 141, 0.3);
+    margin-top: var(--spacing-md);
+}
+
+.analysis-metadata {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.metadata-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metadata-label {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metadata-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.metadata-value.status-complete { 
+    color: var(--success) !important; 
+    font-weight: 600;
+}
+.metadata-value.status-partial { 
+    color: var(--warning) !important; 
+    font-weight: 600;
+}
+
+/* Section-specific styling */
+.threat-section {
+    border-left: 4px solid var(--error);
+}
+
+.context-section {
+    border-left: 4px solid var(--info);
+}
+
+.recommendations-section {
+    border-left: 4px solid var(--success);
+}
+
+.summary-section {
+    border-left: 4px solid var(--primary);
 }
 
 /* ============================================================================
@@ -698,6 +954,39 @@ textarea:focus {
         min-width: 100px;
         font-size: 0.8em;
     }
+    
+    .finding-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analysis-metadata {
+        grid-template-columns: 1fr;
+    }
+    
+    .recommendation-item {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .recommendation-number {
+        align-self: flex-start;
+    }
+}
+
+@media (min-width: 768px) {
+    .findings-summary {
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .findings-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .summary-section {
+        grid-column: 1 / -1;
+    }
 }
 
 /* ============================================================================
@@ -718,9 +1007,21 @@ textarea:focus {
     }
     
     .header,
-    .agent-card {
+    .agent-card,
+    .findings-panel {
         background: white;
         box-shadow: none;
         border: 1px solid #ccc;
+    }
+    
+    .findings-panel {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    
+    .finding-section {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 20px;
     }
 }

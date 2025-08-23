@@ -1,10 +1,11 @@
-// services/ai-agents/src/static/js/main.js - CLEAN SIMPLIFIED FLOW
+// services/ai-agents/src/static/js/main.js - CLEAN SIMPLIFIED FLOW WITH FINDINGS
 // Simple dashboard with predictable agent flow: active → awaiting-decision → complete
 
 import { WebSocketManager } from './modules/websocket-manager.js';
 import { UIManager } from './modules/ui-manager.js';
 import { EventManager } from './modules/event-manager.js';
 import { DebugManager } from './modules/debug-manager.js';
+import { FindingsManager } from './modules/findings-manager.js';
 
 class SOCDashboard {
     constructor() {
@@ -12,18 +13,20 @@ class SOCDashboard {
         this.uiManager = new UIManager();
         this.eventManager = new EventManager();
         this.debugManager = new DebugManager();
+        this.findingsManager = new FindingsManager();
         
         this.analysisInProgress = false;
         this.currentSessionId = null;
     }
 
     async initialize() {
-        console.log('🚀 Initializing SOC Dashboard - Clean Flow');
+        console.log('🚀 Initializing SOC Dashboard - Clean Flow with Findings');
         
         try {
             // Initialize managers in order
             await this.uiManager.initialize();
             await this.debugManager.initialize();
+            await this.findingsManager.initialize();
             await this.eventManager.initialize(this);
             await this.websocketManager.initialize(this);
             
@@ -86,11 +89,29 @@ class SOCDashboard {
     clearResults() {
         this.analysisInProgress = false;
         this.uiManager.clearAll();
+        
+        // Clear findings
+        this.findingsManager.clearResults();
+        this.findingsManager.hidePanel();
+        
         this.uiManager.showStatus('Results cleared', 'info');
     }
 
+    exportResults() {
+        if (this.findingsManager.hasResults()) {
+            const success = this.findingsManager.exportResults('json');
+            if (success) {
+                this.uiManager.showStatus('Results exported successfully', 'success');
+            } else {
+                this.uiManager.showStatus('Export failed', 'error');
+            }
+        } else {
+            this.uiManager.showStatus('No results to export', 'warning');
+        }
+    }
+
     // ============================================================================
-    // WEBSOCKET EVENT HANDLERS - Clean Simple Flow
+    // WEBSOCKET EVENT HANDLERS - Clean Simple Flow with Findings Storage
     // ============================================================================
 
     onConnectionEstablished(data) {
@@ -118,6 +139,9 @@ class SOCDashboard {
     onTriageResults(data) {
         console.log('✅ Triage results received');
         
+        // Store results for final display
+        this.findingsManager.storeTriageResults(data.data);
+        
         const output = this.formatTriageOutput(data);
         
         // Show results and approval UI
@@ -131,6 +155,9 @@ class SOCDashboard {
     // STEP 3: Backend completed context → show results + approval
     onContextResults(data) {
         console.log('✅ Context results received');
+        
+        // Store results for final display
+        this.findingsManager.storeContextResults(data.data);
         
         const output = this.formatContextOutput(data);
         
@@ -146,6 +173,9 @@ class SOCDashboard {
     onAnalystResults(data) {
         console.log('✅ Analyst results received');
         
+        // Store results for final display
+        this.findingsManager.storeAnalystResults(data.data);
+        
         const output = this.formatAnalysisOutput(data);
         
         // Show results and approval UI
@@ -156,14 +186,22 @@ class SOCDashboard {
         this.uiManager.updateProgress(90, 'Analysis complete - awaiting approval');
     }
 
-    // STEP 5: Entire workflow complete
+    // STEP 5: Entire workflow complete → show findings panel
     onWorkflowComplete(data) {
         console.log('✅ Entire workflow complete');
         
         this.analysisInProgress = false;
         this.uiManager.setAnalysisMode(false);
         this.uiManager.updateProgress(100, 'Workflow complete');
-        this.uiManager.showStatus('Security analysis workflow complete', 'success');
+        
+        // Show consolidated findings panel
+        const success = this.findingsManager.showPanel();
+        
+        if (success) {
+            this.uiManager.showStatus('Security analysis complete - Full results displayed below', 'success');
+        } else {
+            this.uiManager.showStatus('Analysis complete - Error displaying results panel', 'warning');
+        }
     }
 
     onError(data) {
