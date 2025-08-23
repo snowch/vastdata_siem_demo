@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/websocket-manager.js - CLEAN SIMPLIFIED FLOW
-// Simple message routing that directly calls the clean UI flow
+// UPDATED: src/static/js/modules/websocket-manager.js - ADD TIMING DEBUG
+// Add debugging to identify why findings show too early
 
 export class WebSocketManager {
     constructor() {
@@ -21,7 +21,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // CONNECTION MANAGEMENT
+    // CONNECTION MANAGEMENT - Same as before
     // ============================================================================
 
     async connect() {
@@ -99,17 +99,28 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // MESSAGE ROUTING - SIMPLIFIED
+    // MESSAGE ROUTING - WITH TIMING DEBUG
     // ============================================================================
 
     routeMessage(data) {
         const messageType = data.type;
         
-        console.log(`📨 Received: ${messageType}`);
+        // ✅ ADD: Enhanced debugging for timing issues
+        console.log(`📨 Received: ${messageType}`, {
+            type: messageType,
+            session_id: data.session_id,
+            timestamp: new Date().toISOString()
+        });
         
         if (!this.dashboard) {
             console.warn('No dashboard instance to route message to');
             return;
+        }
+
+        // ✅ ADD: Special debug for workflow completion messages
+        if (messageType === 'analysis_complete' || messageType === 'workflow_complete') {
+            console.log(`🔔 CRITICAL: Workflow completion message received!`, data);
+            console.log(`🔍 Current workflow state:`, this.dashboard.workflowState);
         }
 
         // Simple, direct routing to dashboard methods
@@ -124,16 +135,19 @@ export class WebSocketManager {
                 
             case 'triage_findings':
                 // Backend finished triage processing → show results + approval
+                console.log('📋 Triage findings - should show approval UI');
                 this.dashboard.onTriageResults(data);
                 break;
                 
             case 'context_research':
                 // Backend finished context processing → show results + approval
+                console.log('📚 Context research - should show approval UI');
                 this.dashboard.onContextResults(data);
                 break;
                 
             case 'analysis_recommendations':
                 // Backend finished analyst processing → show results + approval
+                console.log('🎯 Analyst recommendations - should show approval UI (NOT findings yet!)');
                 this.dashboard.onAnalystResults(data);
                 break;
                 
@@ -152,6 +166,10 @@ export class WebSocketManager {
                 break;
                 
             case 'analysis_complete':
+            case 'workflow_complete':
+                // ✅ ADD: This should only happen AFTER final approval
+                console.log('🏁 WORKFLOW COMPLETE - This should show findings panel');
+                console.log('🔍 Approval state check:', this.dashboard.workflowState);
                 this.dashboard.onWorkflowComplete(data);
                 break;
                 
@@ -165,12 +183,16 @@ export class WebSocketManager {
                 
             default:
                 console.log(`⚠️ Unhandled message type: ${messageType}`);
+                // ✅ ADD: Debug unhandled messages that might trigger findings
+                if (messageType.includes('complete') || messageType.includes('finish')) {
+                    console.warn(`🚨 SUSPICIOUS: Unhandled completion message - might trigger findings early!`);
+                }
                 break;
         }
     }
 
     // ============================================================================
-    // APPROVAL RESPONSE HELPER
+    // APPROVAL RESPONSE HELPER - WITH DEBUG
     // ============================================================================
     
     sendApprovalResponse(agentType, response) {
@@ -184,6 +206,9 @@ export class WebSocketManager {
         
         if (success) {
             console.log('✅ Approval response sent successfully');
+            
+            // ✅ ADD: Debug the state changes
+            console.log(`🔄 Completing ${agentType} and activating next`);
             
             // Complete current agent and activate next
             this.dashboard.uiManager.setAgentComplete(agentType);
@@ -206,12 +231,13 @@ export class WebSocketManager {
             console.log(`🔄 Activating next agent: ${nextStage}`);
             this.dashboard.uiManager.setAgentActive(nextStage);
         } else {
-            console.log('✅ No more agents to activate - workflow ending');
+            console.log('✅ No more agents to activate - workflow should end soon');
+            console.log('⚠️ Findings panel should NOT show until backend sends completion message');
         }
     }
 
     // ============================================================================
-    // MESSAGE SENDING
+    // MESSAGE SENDING - Same as before
     // ============================================================================
 
     send(message) {
@@ -237,7 +263,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // UTILITIES
+    // UTILITIES - Same as before
     // ============================================================================
 
     isConnected() {

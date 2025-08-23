@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/main.js - CLEAN SIMPLIFIED FLOW WITH FINDINGS
-// Simple dashboard with predictable agent flow: active → awaiting-decision → complete
+// UPDATED: src/static/js/main.js - FIX FINDINGS TIMING
+// Only show findings panel AFTER final analyst approval
 
 import { WebSocketManager } from './modules/websocket-manager.js';
 import { UIManager } from './modules/ui-manager.js';
@@ -17,6 +17,14 @@ class SOCDashboard {
         
         this.analysisInProgress = false;
         this.currentSessionId = null;
+        
+        // ✅ FIX: Track workflow state more precisely
+        this.workflowState = {
+            triageComplete: false,
+            contextComplete: false,
+            analystComplete: false,
+            finalApprovalGiven: false
+        };
     }
 
     async initialize() {
@@ -77,6 +85,14 @@ class SOCDashboard {
         this.uiManager.setAnalysisMode(true);
         this.uiManager.updateProgress(5, 'Starting analysis...');
 
+        // ✅ FIX: Reset workflow state
+        this.workflowState = {
+            triageComplete: false,
+            contextComplete: false,
+            analystComplete: false,
+            finalApprovalGiven: false
+        };
+
         // STEP 1: Start triage (active state with spinner)
         this.uiManager.setAgentActive('triage');
 
@@ -90,9 +106,17 @@ class SOCDashboard {
         this.analysisInProgress = false;
         this.uiManager.clearAll();
         
-        // Clear findings
+        // Clear findings and reset state
         this.findingsManager.clearResults();
         this.findingsManager.hidePanel();
+        
+        // ✅ FIX: Reset workflow state
+        this.workflowState = {
+            triageComplete: false,
+            contextComplete: false,
+            analystComplete: false,
+            finalApprovalGiven: false
+        };
         
         this.uiManager.showStatus('Results cleared', 'info');
     }
@@ -111,7 +135,7 @@ class SOCDashboard {
     }
 
     // ============================================================================
-    // WEBSOCKET EVENT HANDLERS - Clean Simple Flow with Findings Storage
+    // WEBSOCKET EVENT HANDLERS - Fixed Timing
     // ============================================================================
 
     onConnectionEstablished(data) {
@@ -141,6 +165,7 @@ class SOCDashboard {
         
         // Store results for final display
         this.findingsManager.storeTriageResults(data.data);
+        this.workflowState.triageComplete = true;
         
         const output = this.formatTriageOutput(data);
         
@@ -158,6 +183,7 @@ class SOCDashboard {
         
         // Store results for final display
         this.findingsManager.storeContextResults(data.data);
+        this.workflowState.contextComplete = true;
         
         const output = this.formatContextOutput(data);
         
@@ -169,32 +195,45 @@ class SOCDashboard {
         this.uiManager.updateProgress(60, 'Context complete - awaiting approval');
     }
 
-    // STEP 4: Backend completed analyst → show results + approval
+    // STEP 4: Backend completed analyst → show results + approval (BUT NO FINDINGS YET!)
     onAnalystResults(data) {
         console.log('✅ Analyst results received');
         
         // Store results for final display
         this.findingsManager.storeAnalystResults(data.data);
+        this.workflowState.analystComplete = true;
         
         const output = this.formatAnalysisOutput(data);
         
-        // Show results and approval UI
+        // ✅ FIX: Show results and approval UI - but DON'T show findings panel yet!
         this.uiManager.setAgentAwaitingDecision('analyst', output, (response) => {
+            console.log('📝 Analyst approval response:', response);
+            this.workflowState.finalApprovalGiven = true;
             this.websocketManager.sendApprovalResponse('analyst', response);
         });
         
-        this.uiManager.updateProgress(90, 'Analysis complete - awaiting approval');
+        this.uiManager.updateProgress(90, 'Analysis complete - awaiting final approval');
+        
+        // ✅ IMPORTANT: Do NOT show findings panel here!
+        console.log('⚠️ Analyst results ready - waiting for approval before showing findings');
     }
 
-    // STEP 5: Entire workflow complete → show findings panel
+    // STEP 5: Entire workflow complete → NOW show findings panel
     onWorkflowComplete(data) {
         console.log('✅ Entire workflow complete');
+        
+        // ✅ FIX: Only show findings if all approvals were given
+        if (!this.workflowState.finalApprovalGiven) {
+            console.warn('⚠️ Workflow marked complete but final approval not given - not showing findings');
+            return;
+        }
         
         this.analysisInProgress = false;
         this.uiManager.setAnalysisMode(false);
         this.uiManager.updateProgress(100, 'Workflow complete');
         
-        // Show consolidated findings panel
+        // ✅ NOW it's safe to show consolidated findings panel
+        console.log('🎯 All approvals complete - showing findings panel');
         const success = this.findingsManager.showPanel();
         
         if (success) {
@@ -208,6 +247,14 @@ class SOCDashboard {
         this.uiManager.showStatus(data.message, 'error');
         this.analysisInProgress = false;
         this.uiManager.setAnalysisMode(false);
+        
+        // Reset state on error
+        this.workflowState = {
+            triageComplete: false,
+            contextComplete: false,
+            analystComplete: false,
+            finalApprovalGiven: false
+        };
     }
 
     // ============================================================================
@@ -250,7 +297,8 @@ ${d.brief_summary || 'Threat identified'}
 Actions:
 ${actions.map((action, i) => `${i+1}. ${action}`).join('\n') || 'No actions identified'}
 
-✅ Analysis complete. Ready for authorization.`;
+✅ Analysis complete. Ready for FINAL authorization.
+⚠️ Findings panel will appear after approval.`;
     }
 }
 
@@ -260,3 +308,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.socDashboard = dashboard; // For debugging
     await dashboard.initialize();
 });
+
+
+// ============================================================================
+// DEBUGGING: Add this to help identify the timing issue
+// ============================================================================
+
+// Add this debug info to the console
+console.log(`
+🔧 DEBUG: Findings Panel Timing Fix Applied
+- Findings will only show AFTER final analyst approval
+- Check console for: "🎯 All approvals complete - showing findings panel"
+- If findings show too early, check WebSocket message routing
+`);

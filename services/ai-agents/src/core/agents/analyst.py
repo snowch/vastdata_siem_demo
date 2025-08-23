@@ -1,4 +1,4 @@
-# services/ai-agents/src/core/agents/analyst.py - ROBUST COMPLETION VERSION
+# services/ai-agents/src/core/agents/analyst.py - FIX COMPLETION TIMING
 from core.agents.base import BaseAgent
 from core.models.analysis import SOCAnalysisResult
 from typing import List, Dict, Any, Literal
@@ -50,19 +50,19 @@ class AnalystAgent(BaseAgent):
    - confidence_level: "high", "medium", or "low"
    - analyst_notes: Your professional assessment and recommendations
    
-   ⚠️ **CRITICAL - ROBUST WORKFLOW COMPLETION FLAGS**:
-   🎯 **workflow_complete**: Set to TRUE when your analysis is final and complete
-   🎯 **analysis_status**: Set to "complete" when workflow should terminate  
-   🎯 **completion_timestamp**: Set to current ISO timestamp when complete
+   ⚠️ **CRITICAL - COMPLETION FLAGS FOR APPROVAL WORKFLOW**:
+   🎯 **workflow_complete**: Set to FALSE - do NOT complete until after approval
+   🎯 **analysis_status**: Set to "awaiting_approval" - waiting for user authorization  
+   🎯 **completion_timestamp**: Leave null until final approval
    
-   EXAMPLE COMPLETION:
+   ✅ **CORRECT WORKFLOW PATTERN**:
    ```
    SOCAnalysisResult(
        executive_summary="Critical threat detected and analyzed...",
        # ... all other fields ...
-       workflow_complete=True,           # 🎯 REQUIRED FOR ROBUST COMPLETION
-       analysis_status="complete",       # 🎯 REQUIRED FOR ROBUST COMPLETION  
-       completion_timestamp="2024-01-15T10:45:00Z"  # 🎯 REQUIRED FOR ROBUST COMPLETION
+       workflow_complete=False,                    # 🎯 FALSE until approved
+       analysis_status="awaiting_approval",        # 🎯 Waiting for approval
+       completion_timestamp=None                   # 🎯 Null until approved
    )
    ```
 
@@ -96,35 +96,25 @@ MultiStageApprovalAgent: Based on my analysis, I recommend implementing these {n
 
 7. **WAIT FOR AUTHORIZATION**: Stop and wait for authorization before any further action
 
-8. **CONCLUDE**: After receiving authorization, the workflow will automatically complete based on the structured data completion flags you set (workflow_complete=True, analysis_status="complete")
+8. **⚠️ IMPORTANT**: The workflow will NOT automatically complete until you receive approval. Only AFTER receiving approval should the system set completion flags.
 
-⚠️ CRITICAL REQUIREMENTS FOR ROBUST COMPLETION:
+⚠️ CRITICAL REQUIREMENTS FOR PROPER WORKFLOW:
 - DO NOT start until you see approved context research
 - Return complete structured data using the SOCAnalysisResult format
-- 🎯 **ALWAYS SET workflow_complete=TRUE when your analysis is done**
-- 🎯 **ALWAYS SET analysis_status="complete" when ready to finish**
-- 🎯 **ALWAYS SET completion_timestamp to current ISO timestamp**
+- 🎯 **ALWAYS SET workflow_complete=FALSE initially**
+- 🎯 **ALWAYS SET analysis_status="awaiting_approval" initially**
+- 🎯 **LEAVE completion_timestamp=None initially**
 - PRESENT findings in the exact format shown above
 - ALWAYS end your presentation with the MultiStageApprovalAgent question
 - Look for messages indicating context validation before beginning
 - Both structured output AND presentation must happen in your response
-- The system will detect completion via your structured flags, NOT text parsing
+- The system will handle completion AFTER approval is received
 
-🔧 ROBUST COMPLETION SYSTEM:
-The workflow now uses your structured completion flags for robust termination detection instead of fragile text matching. This means:
-- Your workflow_complete=True flag is the PRIMARY completion signal
-- Your analysis_status="complete" provides additional confirmation
-- Your completion_timestamp helps with debugging and metrics
-- Text-based completion detection is only a fallback
-- This approach is much more reliable and won't break if text format changes
-
-EXAMPLE OF SETTING COMPLETION FLAGS:
-When you finish your analysis, ensure your SOCAnalysisResult includes:
-- workflow_complete=True (tells system you're completely done)
-- analysis_status="complete" (confirms completion status)
-- completion_timestamp="[current ISO timestamp]" (tracks when completed)
-
-These flags will trigger robust completion detection automatically."""
+🔧 PROPER APPROVAL WORKFLOW:
+The workflow uses a two-stage completion process:
+1. YOUR STAGE: Provide analysis with workflow_complete=False, analysis_status="awaiting_approval"
+2. APPROVAL STAGE: System sets completion flags AFTER user approves your recommendations
+This approach prevents premature completion and ensures user has final authorization."""
 
         super().__init__(
             name="SeniorAnalystSpecialist",
@@ -134,5 +124,5 @@ These flags will trigger robust completion detection automatically."""
             output_content_type=SOCAnalysisResult
         )
         
-        print(f"🔧 Robust Completion Analyst agent initialized with structured completion flags")
-        agent_logger.info(f"Robust Completion Analyst agent created with enhanced completion detection: {SOCAnalysisResult.__name__}")
+        print(f"🔧 Fixed Analyst agent initialized with proper approval workflow")
+        agent_logger.info(f"Fixed Analyst agent created with proper completion timing: {SOCAnalysisResult.__name__}")

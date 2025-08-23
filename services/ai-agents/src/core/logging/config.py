@@ -38,7 +38,7 @@ def init_logging(autogen_debug_mode=False):
     # AUTOGEN LOGGERS
     # ============================================================================
 
-    autogen_debug_mode = True
+    autogen_debug_mode = False
     
     # AutoGen Trace Logger (human-readable debug messages)
     trace_logger = logging.getLogger(TRACE_LOGGER_NAME)

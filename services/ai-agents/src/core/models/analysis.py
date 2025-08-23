@@ -1,3 +1,5 @@
+# src/core/models/analysis.py - ADD AWAITING_APPROVAL STATUS
+
 from typing import List, Literal, Optional, Any
 from pydantic import BaseModel, Field
 
@@ -57,7 +59,7 @@ class ContextResearchResult(BaseModel):
     related_incidents: List[str] = Field(description="Most relevant historical incident summaries")
     analysis_timestamp: str = Field(description="When this analysis was performed")
     
-    # NEW: Include all documents and their distances/relevance scores
+    # Include all documents and their distances/relevance scores
     all_documents: List[str] = Field(description="All historical documents found during search", default_factory=list)
     all_distances: List[float] = Field(description="Relevance/distance scores for all documents (lower = more relevant)", default_factory=list)
     all_document_metadata: List[DocumentMetadata] = Field(description="Structured metadata for all documents", default_factory=list)
@@ -82,18 +84,18 @@ class SOCAnalysisResult(BaseModel):
     confidence_level: Literal["high", "medium", "low"] = Field(description="Overall confidence in analysis")
     analyst_notes: str = Field(description="Additional analyst notes and observations")
     
-    # NEW: Explicit workflow completion flags for robust detection
+    # 🔧 FIXED: Workflow completion flags with proper approval workflow
     workflow_complete: bool = Field(
         default=False, 
-        description="True when the entire SOC analysis workflow is complete and ready for final review"
+        description="True when the entire SOC analysis workflow is complete and ready for final review. Should be False until after final approval."
     )
     
     completion_timestamp: Optional[str] = Field(
         None, 
-        description="ISO timestamp when analysis was completed"
+        description="ISO timestamp when analysis was completed and approved"
     )
     
     analysis_status: Literal["in_progress", "awaiting_approval", "complete", "requires_review"] = Field(
         default="in_progress",
-        description="Current status of the analysis workflow"
+        description="Current status of the analysis workflow. Use 'awaiting_approval' when results are ready but need user authorization."
     )
