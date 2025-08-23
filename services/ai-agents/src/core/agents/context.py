@@ -17,19 +17,19 @@ def analyze_historical_incidents(
 ) -> Dict[str, Any]:
     """
     Analyze historical security incidents and return structured domain results.
-    PERFORMANCE OPTIMIZED: Reduced search scope and document processing.
+    ULTRA-FAST OPTIMIZED: Maximum speed with minimal document processing.
     """
     try:
-        agent_logger.info(f"Starting OPTIMIZED historical incident analysis for: {primary_search_query}")
+        agent_logger.info(f"Starting ULTRA-FAST historical incident analysis for: {primary_search_query}")
         
         # OPTIMIZATION 1: Reduce search queries from 3 to 1 primary search
         # Only use the main search query, skip additional context searches
         search_queries = [primary_search_query]
         
-        # OPTIMIZATION 1: Reduce results per search from 10 to 5
-        optimized_results_per_search = min(max_results_per_search, 5)
+        # OPTIMIZATION 1: Reduce results per search from 10 to 2 (ultra-fast mode)
+        optimized_results_per_search = min(max_results_per_search, 2)
         
-        agent_logger.info(f"🔧 PERFORMANCE MODE: Using {len(search_queries)} search(es) with max {optimized_results_per_search} results each")
+        agent_logger.info(f"🔧 ULTRA-FAST MODE: Using {len(search_queries)} search(es) with max {optimized_results_per_search} results each")
         
         all_documents = []
         all_distances = []
@@ -80,9 +80,9 @@ def analyze_historical_incidents(
                 agent_logger.error(f"Search failed for query '{query}': {search_error}")
                 continue
         
-        # OPTIMIZATION 2: Limit total documents processed to maximum 10
+        # OPTIMIZATION 2: Limit total documents processed to maximum 5 (ultra-fast mode)
         original_count = len(all_documents)
-        MAX_DOCUMENTS = 10
+        MAX_DOCUMENTS = 5
         
         if len(all_documents) > MAX_DOCUMENTS:
             agent_logger.info(f"🔧 PERFORMANCE LIMIT: Reducing from {original_count} to {MAX_DOCUMENTS} documents")
@@ -115,8 +115,8 @@ def analyze_historical_incidents(
             "all_document_metadata": all_metadata
         }
         
-        agent_logger.info(f"✅ OPTIMIZED Historical analysis complete: {len(all_documents)} documents analyzed (limited from {original_count})")
-        print(f"🔍 OPTIMIZED CONTEXT ANALYSIS: Processed {len(all_documents)}/{original_count} incidents")
+        agent_logger.info(f"✅ ULTRA-FAST Historical analysis complete: {len(all_documents)} documents analyzed (limited from {original_count})")
+        print(f"🔍 ULTRA-FAST CONTEXT ANALYSIS: Processed {len(all_documents)}/{original_count} incidents")
         
         return {"status": "analysis_complete", "data": domain_result}
         
@@ -251,7 +251,7 @@ class ContextAgent(BaseAgent):
         # Use the optimized analysis function
         context_tool = FunctionTool(
             analyze_historical_incidents,
-            description="Analyze historical security incidents with PERFORMANCE OPTIMIZATIONS for faster processing",
+            description="Analyze historical security incidents with ULTRA-FAST OPTIMIZATIONS for maximum speed",
             strict=True  # Strict mode is required for auto-parsing
         )
 
@@ -259,17 +259,17 @@ class ContextAgent(BaseAgent):
 
 1. **WAIT FOR HANDOFF**: Only begin when you receive approval from TriageSpecialist findings.
 
-2. **ANALYZE HISTORICAL INCIDENTS**: Use analyze_historical_incidents() to perform OPTIMIZED security context analysis:
+2. **ANALYZE HISTORICAL INCIDENTS**: Use analyze_historical_incidents() to perform ULTRA-FAST security context analysis:
    - primary_search_query: Main search term based on the threat (REQUIRED)
-   - max_results_per_search: Number of results per search (system will optimize this automatically) (REQUIRED)
+   - max_results_per_search: Number of results per search (system will optimize this to 2 for ultra-fast mode) (REQUIRED)
    - threat_type: Specific threat type. Pass an empty string "" if not identified. (REQUIRED)
    - source_ip: Source IP. Pass an empty string "" if not available. (REQUIRED)
 
-3. **PERFORMANCE OPTIMIZED ANALYSIS**: The function now uses optimizations for faster processing:
-   - Reduced search scope for faster results
-   - Limited document processing to prevent slowdowns
-   - Focused pattern analysis for efficiency
-   - Maintains quality while improving speed
+3. **ULTRA-FAST OPTIMIZED ANALYSIS**: The function now uses aggressive optimizations for maximum speed:
+   - Single search query only (fastest possible)
+   - Maximum 2 results per search (ultra-limited scope)
+   - Hard limit of 5 documents total for processing (lightning fast)
+   - Maintains core security insights while maximizing speed
 
 4. **COMPREHENSIVE ANALYSIS**: Despite optimizations, still provides:
    - Security pattern identification from top relevant incidents
@@ -292,7 +292,7 @@ class ContextAgent(BaseAgent):
 
 7. **MANDATORY APPROVAL REQUEST**: After completing analysis, you MUST present findings AND request validation:
    - First, summarize your findings professionally
-   - Mention the performance optimizations if the analysis was limited
+   - Mention the ultra-fast optimizations if the analysis was limited
    - Then, you MUST end with this EXACT phrase: "MultiStageApprovalAgent: Based on my analysis of {X} historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
    - Replace {X} with the actual number of incidents analyzed
    - This is MANDATORY - the workflow depends on this exact request format
@@ -305,12 +305,12 @@ CRITICAL REQUIREMENTS:
 - Provide clear, actionable intelligence based on optimized historical incident patterns
 - ALWAYS request approval with the exact phrase format shown above
 - Wait for explicit approval before concluding
-- Note any performance optimizations in your summary if document count was limited
+- Note any ultra-fast optimizations in your summary if document count was limited
 
 Example completion format:
-"I analyzed 8 historical security incidents (optimized from 15 found for performance) and identified patterns of credential attacks with lateral movement. Key findings include multiple attack vectors and cross-platform targeting. Based on similar incidents, I recommend implementing multi-factor authentication and network segmentation.
+"I analyzed 3 historical security incidents (ultra-fast mode, processed top 3 most relevant) and identified patterns of credential attacks with lateral movement. Key findings include multiple attack vectors and cross-platform targeting. Based on similar incidents, I recommend implementing multi-factor authentication and network segmentation.
 
-MultiStageApprovalAgent: Based on my analysis of 8 historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
+MultiStageApprovalAgent: Based on my analysis of 3 historical incidents, are these insights relevant for the current threat analysis? Should we proceed with deep security analysis using this context?"
 """
 
         super().__init__(
@@ -321,4 +321,4 @@ MultiStageApprovalAgent: Based on my analysis of 8 historical incidents, are the
             output_content_type=ContextResearchResult
         )
         
-        agent_logger.info("ContextAgent initialized with PERFORMANCE OPTIMIZATIONS - faster context research")
+        agent_logger.info("ContextAgent initialized with ULTRA-FAST OPTIMIZATIONS - maximum speed context research")
