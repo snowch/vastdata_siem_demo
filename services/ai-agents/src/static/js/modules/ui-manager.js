@@ -1,20 +1,31 @@
-// services/ai-agents/src/static/js/modules/ui-manager.js - CLEAN SIMPLIFIED FLOW
-// Simple, predictable agent status flow: active → awaiting-decision → complete
+// services/ai-agents/src/static/js/modules/ui-manager.js - STRATEGIC FIX
+// Fix: Preserve agent results when completing, don't revert to waiting messages
 
 export class UIManager {
     constructor() {
         this.toastContainer = null;
         this.currentApproval = null;
+        // STRATEGIC FIX: Track agent outputs to preserve them
+        this.agentOutputs = {
+            triage: null,
+            context: null,
+            analyst: null
+        };
+        this.agentStates = {
+            triage: 'pending',
+            context: 'pending', 
+            analyst: 'pending'
+        };
     }
 
     async initialize() {
         this.setupToastContainer();
         this.resetAllStates();
-        console.log('✅ UI Manager initialized');
+        console.log('✅ UI Manager initialized with strategic result preservation');
     }
 
     // ============================================================================
-    // CORE AGENT FLOW - SIMPLIFIED
+    // CORE AGENT FLOW - STRATEGIC FIX TO PRESERVE RESULTS
     // ============================================================================
 
     /**
@@ -22,9 +33,11 @@ export class UIManager {
      */
     setAgentActive(agentType) {
         console.log(`🔄 Agent ${agentType} → active`);
+        this.agentStates[agentType] = 'active';
         this.updateAgentStatus(agentType, 'active');
         this.showSpinner(agentType);
         this.hideApprovalForAgent(agentType);
+        // Don't clear output - preserve any existing results
     }
 
     /**
@@ -32,36 +45,55 @@ export class UIManager {
      */
     setAgentAwaitingDecision(agentType, results, approvalCallback) {
         console.log(`🔄 Agent ${agentType} → awaiting-decision`);
+        this.agentStates[agentType] = 'awaiting-decision';
         this.updateAgentStatus(agentType, 'awaiting-decision');
         this.hideSpinner(agentType);
+        
+        // STRATEGIC FIX: Store and update output - this is the key insight
+        this.agentOutputs[agentType] = results;
         this.updateAgentOutput(agentType, results);
+        
         this.showApprovalForAgent(agentType, approvalCallback);
     }
 
     /**
-     * Set agent to complete (hides approval, marks complete)
+     * Set agent to complete (hides approval, PRESERVES results)
      */
     setAgentComplete(agentType) {
-        console.log(`🔄 Agent ${agentType} → complete`);
+        console.log(`🔄 Agent ${agentType} → complete (preserving results)`);
+        this.agentStates[agentType] = 'complete';
         this.updateAgentStatus(agentType, 'complete');
         this.hideApprovalForAgent(agentType);
+        
+        // STRATEGIC FIX: The core issue was here - preserve the output text!
+        if (this.agentOutputs[agentType]) {
+            // Ensure the results remain displayed after completion
+            this.updateAgentOutput(agentType, this.agentOutputs[agentType]);
+            console.log(`✅ Preserved ${agentType} results in output display`);
+        } else {
+            console.warn(`⚠️ No stored output for ${agentType} to preserve`);
+        }
     }
 
     /**
-     * Set agent to pending (initial state)
+     * Set agent to pending (initial state only)
      */
     setAgentPending(agentType, message = null) {
         console.log(`🔄 Agent ${agentType} → pending`);
+        this.agentStates[agentType] = 'pending';
         this.updateAgentStatus(agentType, 'pending');
         this.hideSpinner(agentType);
         this.hideApprovalForAgent(agentType);
+        
+        // STRATEGIC FIX: Only set waiting message if explicitly provided or no results exist
         if (message) {
+            this.agentOutputs[agentType] = message;
             this.updateAgentOutput(agentType, message);
         }
     }
 
     // ============================================================================
-    // INTERNAL HELPERS
+    // INTERNAL HELPERS - Enhanced with state tracking
     // ============================================================================
 
     updateAgentStatus(agentType, status) {
@@ -97,6 +129,9 @@ export class UIManager {
         const outputElement = document.getElementById(`${agentType}Output`);
         if (outputElement) {
             outputElement.textContent = text;
+            console.log(`📝 Updated ${agentType} output (${text.length} chars)`);
+        } else {
+            console.error(`❌ Output element not found: ${agentType}Output`);
         }
     }
 
@@ -115,7 +150,7 @@ export class UIManager {
     }
 
     // ============================================================================
-    // APPROVAL WORKFLOW - SIMPLIFIED
+    // APPROVAL WORKFLOW
     // ============================================================================
 
     showApprovalForAgent(agentType, responseCallback) {
@@ -286,7 +321,7 @@ export class UIManager {
     }
 
     // ============================================================================
-    // ANALYSIS MODE
+    // ANALYSIS MODE - STRATEGIC FIX FOR STATE MANAGEMENT
     // ============================================================================
 
     setAnalysisMode(active) {
@@ -296,24 +331,45 @@ export class UIManager {
         }
 
         if (active) {
-            this.resetAgentStates();
+            // STRATEGIC FIX: Only reset agents that haven't started processing
+            this.smartResetAgentStates();
         }
     }
 
-    resetAgentStates() {
+    smartResetAgentStates() {
+        console.log('🎯 Smart reset - preserving completed agent results');
+        
+        // Default messages for agents that haven't started
         const defaultTexts = {
             'triage': 'Waiting for analysis to begin...',
             'context': 'Waiting for triage completion...',
             'analyst': 'Waiting for context research...'
         };
 
-        this.setAgentPending('triage', defaultTexts.triage);
-        this.setAgentPending('context', defaultTexts.context);
-        this.setAgentPending('analyst', defaultTexts.analyst);
+        // Only reset agents that are still pending or haven't been processed
+        Object.keys(this.agentStates).forEach(agentType => {
+            const currentState = this.agentStates[agentType];
+            
+            if (currentState === 'complete' && this.agentOutputs[agentType]) {
+                // Keep completed agents with their results
+                console.log(`✅ Preserving completed ${agentType} results`);
+                this.setAgentComplete(agentType); // This will preserve outputs
+            } else {
+                // Reset pending/unprocessed agents
+                console.log(`🔄 Resetting ${agentType} to pending`);
+                this.setAgentPending(agentType, defaultTexts[agentType]);
+            }
+        });
+    }
+
+    resetAgentStates() {
+        // STRATEGIC FIX: This is now smarter - called from smartResetAgentStates
+        console.log('🔄 Resetting agent states with smart preservation');
+        this.smartResetAgentStates();
     }
 
     // ============================================================================
-    // UTILITIES
+    // UTILITIES - Enhanced with preservation logic
     // ============================================================================
 
     clearAll() {
@@ -321,14 +377,39 @@ export class UIManager {
         if (logInput) logInput.value = '';
 
         this.updateLogCounter(0);
+        
+        // STRATEGIC FIX: Full clear - reset stored outputs and states
+        this.agentOutputs = {
+            triage: null,
+            context: null,
+            analyst: null
+        };
+        this.agentStates = {
+            triage: 'pending',
+            context: 'pending',
+            analyst: 'pending'
+        };
+        
         this.resetAgentStates();
         this.hideCurrentApproval();
         this.updateProgress(0, 'Ready');
+        
+        console.log('🧹 Full clear completed - all states and outputs reset');
     }
 
     resetAllStates() {
         this.setConnectionStatus('disconnected');
-        this.clearAll();
+        
+        // Set initial waiting messages only
+        const initialTexts = {
+            'triage': 'Waiting for analysis to begin...',
+            'context': 'Waiting for triage completion...',
+            'analyst': 'Waiting for context research...'
+        };
+        
+        Object.keys(initialTexts).forEach(agentType => {
+            this.setAgentPending(agentType, initialTexts[agentType]);
+        });
     }
 
     setupToastContainer() {
@@ -348,5 +429,24 @@ export class UIManager {
         toast.addEventListener('click', () => toast.remove());
         
         return toast;
+    }
+
+    // ============================================================================
+    // DEBUG HELPERS - For monitoring state preservation
+    // ============================================================================
+
+    getAgentStates() {
+        return {
+            states: { ...this.agentStates },
+            outputs: Object.keys(this.agentOutputs).reduce((acc, key) => {
+                acc[key] = this.agentOutputs[key] ? 'has_content' : 'no_content';
+                return acc;
+            }, {}),
+            currentApproval: this.currentApproval?.stage || 'none'
+        };
+    }
+
+    logStateDebug() {
+        console.log('🔍 UI State Debug:', this.getAgentStates());
     }
 }
