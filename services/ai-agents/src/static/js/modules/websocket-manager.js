@@ -1,5 +1,5 @@
-// UPDATED: src/static/js/modules/websocket-manager.js - ADD TIMING DEBUG
-// Add debugging to identify why findings show too early
+// FIXED: src/static/js/modules/websocket-manager.js - PRESERVE AGENT RESULTS
+// Fixed: Agent results are properly preserved when moving to next stage
 
 export class WebSocketManager {
     constructor() {
@@ -105,7 +105,6 @@ export class WebSocketManager {
     routeMessage(data) {
         const messageType = data.type;
         
-        // ✅ ADD: Enhanced debugging for timing issues
         console.log(`📨 Received: ${messageType}`, {
             type: messageType,
             session_id: data.session_id,
@@ -117,7 +116,7 @@ export class WebSocketManager {
             return;
         }
 
-        // ✅ ADD: Special debug for workflow completion messages
+        // Special debug for workflow completion messages
         if (messageType === 'analysis_complete' || messageType === 'workflow_complete') {
             console.log(`🔔 CRITICAL: Workflow completion message received!`, data);
             console.log(`🔍 Current workflow state:`, this.dashboard.workflowState);
@@ -134,26 +133,27 @@ export class WebSocketManager {
                 break;
                 
             case 'triage_findings':
-                // Backend finished triage processing → show results + approval
                 console.log('📋 Triage findings - should show approval UI');
                 this.dashboard.onTriageResults(data);
                 break;
                 
             case 'context_research':
-                // Backend finished context processing → show results + approval
                 console.log('📚 Context research - should show approval UI');
                 this.dashboard.onContextResults(data);
                 break;
                 
             case 'analysis_recommendations':
-                // Backend finished analyst processing → show results + approval
                 console.log('🎯 Analyst recommendations - should show approval UI (NOT findings yet!)');
                 this.dashboard.onAnalystResults(data);
                 break;
                 
             case 'approval_request':
-                // This is handled automatically by the UI now
                 console.log('📝 Approval request received (UI will handle)');
+                break;
+                
+            case 'agent_status_update':
+                // 🔧 FIX: Handle backend agent status updates
+                this.handleAgentStatusUpdate(data);
                 break;
                 
             case 'workflow_progress':
@@ -167,7 +167,6 @@ export class WebSocketManager {
                 
             case 'analysis_complete':
             case 'workflow_complete':
-                // ✅ ADD: This should only happen AFTER final approval
                 console.log('🏁 WORKFLOW COMPLETE - This should show findings panel');
                 console.log('🔍 Approval state check:', this.dashboard.workflowState);
                 this.dashboard.onWorkflowComplete(data);
@@ -183,7 +182,6 @@ export class WebSocketManager {
                 
             default:
                 console.log(`⚠️ Unhandled message type: ${messageType}`);
-                // ✅ ADD: Debug unhandled messages that might trigger findings
                 if (messageType.includes('complete') || messageType.includes('finish')) {
                     console.warn(`🚨 SUSPICIOUS: Unhandled completion message - might trigger findings early!`);
                 }
@@ -192,7 +190,7 @@ export class WebSocketManager {
     }
 
     // ============================================================================
-    // APPROVAL RESPONSE HELPER - WITH DEBUG
+    // APPROVAL RESPONSE HELPER - 🔧 FIXED: Don't overwrite results
     // ============================================================================
     
     sendApprovalResponse(agentType, response) {
@@ -206,13 +204,15 @@ export class WebSocketManager {
         
         if (success) {
             console.log('✅ Approval response sent successfully');
-            
-            // ✅ ADD: Debug the state changes
             console.log(`🔄 Completing ${agentType} and activating next`);
             
-            // Complete current agent and activate next
+            // 🔧 FIX: Just complete the agent, don't activate next here
+            // The backend will handle the flow and send the next agent's results
             this.dashboard.uiManager.setAgentComplete(agentType);
-            this.activateNextAgent(agentType);
+            
+            // 🔧 REMOVED: Don't call activateNextAgent here as it can interfere
+            // Let the backend control the flow through normal message routing
+            console.log(`✅ ${agentType} marked as complete - waiting for backend to continue workflow`);
             
         } else {
             console.error('❌ Failed to send approval response');
@@ -222,17 +222,49 @@ export class WebSocketManager {
         return success;
     }
 
-    activateNextAgent(currentStage) {
-        // Simple sequence: triage → context → analyst → done
-        const sequence = { 'triage': 'context', 'context': 'analyst', 'analyst': null };
-        const nextStage = sequence[currentStage];
+    // 🔧 REMOVED: activateNextAgent method - let backend control flow
+    // This was causing the UI to reset agent outputs prematurely
+
+    // ============================================================================
+    // AGENT STATUS UPDATE HANDLER - NEW
+    // ============================================================================
+    
+    handleAgentStatusUpdate(data) {
+        const { agent, status } = data;
+        console.log(`📊 Backend agent status update: ${agent} → ${status}`);
+        console.log(`🔍 Full agent status data:`, data);
         
-        if (nextStage) {
-            console.log(`🔄 Activating next agent: ${nextStage}`);
-            this.dashboard.uiManager.setAgentActive(nextStage);
-        } else {
-            console.log('✅ No more agents to activate - workflow should end soon');
-            console.log('⚠️ Findings panel should NOT show until backend sends completion message');
+        // Map backend agent names to frontend names
+        const agentMapping = {
+            'triage': 'triage',
+            'context': 'context', 
+            'analyst': 'analyst',
+            'TriageSpecialist': 'triage',
+            'ContextAgent': 'context',
+            'SeniorAnalystSpecialist': 'analyst'
+        };
+        
+        const frontendAgent = agentMapping[agent] || agent;
+        
+        // 🔧 FIX: Smart logic - don't reactivate completed agents
+        if (status === 'active' && this.dashboard) {
+            // Check if this agent already has results and is complete
+            const currentState = this.dashboard.uiManager.agentStates[frontendAgent];
+            const hasResults = this.dashboard.uiManager.agentOutputs[frontendAgent] && 
+                             this.dashboard.uiManager.agentOutputs[frontendAgent].length > 100; // Has substantial results
+            
+            if (currentState === 'complete' && hasResults) {
+                console.log(`🚫 Ignoring activation of completed agent ${frontendAgent} - results already preserved`);
+                return; // Don't reactivate completed agents with results
+            }
+            
+            // Backend is telling us to activate this agent
+            console.log(`🔄 Backend activating agent: ${agent} → ${frontendAgent}`);
+            this.dashboard.uiManager.setAgentActive(frontendAgent);
+        } else if (status === 'complete' && this.dashboard) {
+            // Backend is telling us this agent completed
+            console.log(`✅ Backend completed agent: ${agent} → ${frontendAgent}`);
+            // Note: Don't override if we already marked it complete with results
         }
     }
 

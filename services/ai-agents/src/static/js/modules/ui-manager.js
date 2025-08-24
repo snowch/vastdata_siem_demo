@@ -1,11 +1,11 @@
-// services/ai-agents/src/static/js/modules/ui-manager.js - STRATEGIC FIX
-// Fix: Preserve agent results when completing, don't revert to waiting messages
+// FIXED: src/static/js/modules/ui-manager.js - ADD storeAgentOutput METHOD
+// Fix: Added method to properly store agent outputs before completion
 
 export class UIManager {
     constructor() {
         this.toastContainer = null;
         this.currentApproval = null;
-        // STRATEGIC FIX: Track agent outputs to preserve them
+        // Track agent outputs to preserve them
         this.agentOutputs = {
             triage: null,
             context: null,
@@ -16,16 +16,111 @@ export class UIManager {
             context: 'pending', 
             analyst: 'pending'
         };
+        
+        // Auto-approval state tracking
+        this.autoApprovalIndicators = new Map();
     }
 
     async initialize() {
         this.setupToastContainer();
         this.resetAllStates();
-        console.log('✅ UI Manager initialized with strategic result preservation');
+        console.log('✅ UI Manager initialized with auto-approve support');
     }
 
     // ============================================================================
-    // CORE AGENT FLOW - STRATEGIC FIX TO PRESERVE RESULTS
+    // 🔧 NEW: EXPLICIT OUTPUT STORAGE METHOD
+    // ============================================================================
+
+    /**
+     * Store agent output explicitly (for auto-approve workflow)
+     */
+    storeAgentOutput(agentType, output) {
+        this.agentOutputs[agentType] = output;
+        this.updateAgentOutput(agentType, output);
+        console.log(`💾 Stored ${agentType} output (${output.length} chars) for preservation`);
+    }
+
+    // ============================================================================
+    // AUTO-APPROVE UI SUPPORT
+    // ============================================================================
+
+    /**
+     * Show visual indicator that auto-approval is in progress
+     */
+    showAutoApprovalIndicator(stage, delayMs) {
+        // Create countdown indicator
+        const indicator = this.createAutoApprovalIndicator(stage, delayMs);
+        this.attachAutoApprovalIndicator(stage, indicator);
+        this.autoApprovalIndicators.set(stage, indicator);
+        
+        // Start countdown
+        this.startAutoApprovalCountdown(stage, delayMs);
+    }
+
+    createAutoApprovalIndicator(stage, delayMs) {
+        const indicator = document.createElement('div');
+        indicator.className = 'auto-approval-indicator';
+        indicator.id = `${stage}AutoApprovalIndicator`;
+        
+        const seconds = Math.ceil(delayMs / 1000);
+        indicator.innerHTML = `
+            <div class="auto-approval-content">
+                <div class="auto-approval-icon">🤖</div>
+                <div class="auto-approval-text">
+                    <strong>Auto-Approval Active</strong>
+                    <br>Approving in <span class="countdown">${seconds}</span> seconds...
+                </div>
+                <div class="auto-approval-progress">
+                    <div class="progress-bar-auto" style="animation-duration: ${delayMs}ms;"></div>
+                </div>
+            </div>
+        `;
+        
+        return indicator;
+    }
+
+    attachAutoApprovalIndicator(stage, indicator) {
+        const agentCard = document.getElementById(`${stage}Card`);
+        if (!agentCard) return;
+
+        const agentContent = agentCard.querySelector('.agent-content');
+        if (agentContent) {
+            agentContent.parentNode.insertBefore(indicator, agentContent.nextSibling);
+        }
+    }
+
+    startAutoApprovalCountdown(stage, delayMs) {
+        const indicator = this.autoApprovalIndicators.get(stage);
+        if (!indicator) return;
+
+        const countdownElement = indicator.querySelector('.countdown');
+        const totalSeconds = Math.ceil(delayMs / 1000);
+        
+        let remainingSeconds = totalSeconds;
+        
+        const countdownInterval = setInterval(() => {
+            remainingSeconds--;
+            if (countdownElement) {
+                countdownElement.textContent = remainingSeconds;
+            }
+            
+            if (remainingSeconds <= 0) {
+                clearInterval(countdownInterval);
+                this.hideAutoApprovalIndicator(stage);
+            }
+        }, 1000);
+    }
+
+    hideAutoApprovalIndicator(stage) {
+        const indicator = this.autoApprovalIndicators.get(stage);
+        if (indicator) {
+            indicator.remove();
+            this.autoApprovalIndicators.delete(stage);
+        }
+    }
+
+    // ============================================================================
+    // CORE AGENT FLOW - Enhanced with auto-approve awareness
     // ============================================================================
 
     /**
@@ -37,7 +132,7 @@ export class UIManager {
         this.updateAgentStatus(agentType, 'active');
         this.showSpinner(agentType);
         this.hideApprovalForAgent(agentType);
-        // Don't clear output - preserve any existing results
+        this.hideAutoApprovalIndicator(agentType);
     }
 
     /**
@@ -49,7 +144,7 @@ export class UIManager {
         this.updateAgentStatus(agentType, 'awaiting-decision');
         this.hideSpinner(agentType);
         
-        // STRATEGIC FIX: Store and update output - this is the key insight
+        // Store and update output
         this.agentOutputs[agentType] = results;
         this.updateAgentOutput(agentType, results);
         
@@ -57,21 +152,25 @@ export class UIManager {
     }
 
     /**
-     * Set agent to complete (hides approval, PRESERVES results)
+     * 🔧 FIXED: Set agent to complete (hides approval, PRESERVES results)
      */
     setAgentComplete(agentType) {
         console.log(`🔄 Agent ${agentType} → complete (preserving results)`);
         this.agentStates[agentType] = 'complete';
         this.updateAgentStatus(agentType, 'complete');
-        this.hideApprovalForAgent(agentType);
         
-        // STRATEGIC FIX: The core issue was here - preserve the output text!
+        // 🔧 FIX: Hide spinner when completing
+        this.hideSpinner(agentType);
+        this.hideApprovalForAgent(agentType);
+        this.hideAutoApprovalIndicator(agentType);
+        
+        // 🔧 CRITICAL FIX: The preserved output should already be stored
         if (this.agentOutputs[agentType]) {
-            // Ensure the results remain displayed after completion
+            // Results were already stored, just ensure they're displayed
             this.updateAgentOutput(agentType, this.agentOutputs[agentType]);
-            console.log(`✅ Preserved ${agentType} results in output display`);
+            console.log(`✅ Preserved ${agentType} results: ${this.agentOutputs[agentType].length} chars`);
         } else {
-            console.warn(`⚠️ No stored output for ${agentType} to preserve`);
+            console.warn(`⚠️ No stored output for ${agentType} to preserve!`);
         }
     }
 
@@ -84,16 +183,29 @@ export class UIManager {
         this.updateAgentStatus(agentType, 'pending');
         this.hideSpinner(agentType);
         this.hideApprovalForAgent(agentType);
+        this.hideAutoApprovalIndicator(agentType);
         
-        // STRATEGIC FIX: Only set waiting message if explicitly provided or no results exist
         if (message) {
             this.agentOutputs[agentType] = message;
             this.updateAgentOutput(agentType, message);
         }
     }
 
+    /**
+     * Update agent output text
+     */
+    updateAgentOutput(agentType, text) {
+        const outputElement = document.getElementById(`${agentType}Output`);
+        if (outputElement) {
+            outputElement.textContent = text;
+            console.log(`📝 Updated ${agentType} output display (${text.length} chars)`);
+        } else {
+            console.error(`❌ Output element not found: ${agentType}Output`);
+        }
+    }
+
     // ============================================================================
-    // INTERNAL HELPERS - Enhanced with state tracking
+    // INTERNAL HELPERS
     // ============================================================================
 
     updateAgentStatus(agentType, status) {
@@ -105,7 +217,7 @@ export class UIManager {
 
         const card = document.getElementById(`${agentType}Card`);
         if (card) {
-            card.classList.remove('active', 'approval-active');
+            card.classList.remove('active', 'approval-active', 'auto-approval-active');
             if (status === 'active') {
                 card.classList.add('active');
             } else if (status === 'awaiting-decision') {
@@ -125,20 +237,12 @@ export class UIManager {
         return statusMap[status] || status;
     }
 
-    updateAgentOutput(agentType, text) {
-        const outputElement = document.getElementById(`${agentType}Output`);
-        if (outputElement) {
-            outputElement.textContent = text;
-            console.log(`📝 Updated ${agentType} output (${text.length} chars)`);
-        } else {
-            console.error(`❌ Output element not found: ${agentType}Output`);
-        }
-    }
-
     showSpinner(agentType) {
         const spinner = document.getElementById(`${agentType}Spinner`);
         if (spinner) {
             spinner.style.display = 'flex';
+            spinner.classList.add('show'); // Backup CSS class
+            console.log(`🔄 Showing spinner for ${agentType}`);
         }
     }
 
@@ -146,6 +250,8 @@ export class UIManager {
         const spinner = document.getElementById(`${agentType}Spinner`);
         if (spinner) {
             spinner.style.display = 'none';
+            spinner.classList.remove('show'); // Remove backup CSS class
+            console.log(`✅ Hidden spinner for ${agentType}`);
         }
     }
 
@@ -269,7 +375,7 @@ export class UIManager {
     }
 
     showWelcome() {
-        this.showStatus('🚀 SOC Dashboard Ready', 'success');
+        this.showStatus('🚀 SOC Dashboard Ready - Auto-approve available!', 'success');
     }
 
     showError(message) {
@@ -321,7 +427,7 @@ export class UIManager {
     }
 
     // ============================================================================
-    // ANALYSIS MODE - STRATEGIC FIX FOR STATE MANAGEMENT
+    // ANALYSIS MODE
     // ============================================================================
 
     setAnalysisMode(active) {
@@ -331,7 +437,6 @@ export class UIManager {
         }
 
         if (active) {
-            // STRATEGIC FIX: Only reset agents that haven't started processing
             this.smartResetAgentStates();
         }
     }
@@ -339,23 +444,19 @@ export class UIManager {
     smartResetAgentStates() {
         console.log('🎯 Smart reset - preserving completed agent results');
         
-        // Default messages for agents that haven't started
         const defaultTexts = {
             'triage': 'Waiting for analysis to begin...',
             'context': 'Waiting for triage completion...',
             'analyst': 'Waiting for context research...'
         };
 
-        // Only reset agents that are still pending or haven't been processed
         Object.keys(this.agentStates).forEach(agentType => {
             const currentState = this.agentStates[agentType];
             
             if (currentState === 'complete' && this.agentOutputs[agentType]) {
-                // Keep completed agents with their results
                 console.log(`✅ Preserving completed ${agentType} results`);
-                this.setAgentComplete(agentType); // This will preserve outputs
+                this.setAgentComplete(agentType);
             } else {
-                // Reset pending/unprocessed agents
                 console.log(`🔄 Resetting ${agentType} to pending`);
                 this.setAgentPending(agentType, defaultTexts[agentType]);
             }
@@ -363,13 +464,12 @@ export class UIManager {
     }
 
     resetAgentStates() {
-        // STRATEGIC FIX: This is now smarter - called from smartResetAgentStates
         console.log('🔄 Resetting agent states with smart preservation');
         this.smartResetAgentStates();
     }
 
     // ============================================================================
-    // UTILITIES - Enhanced with preservation logic
+    // UTILITIES
     // ============================================================================
 
     clearAll() {
@@ -378,7 +478,7 @@ export class UIManager {
 
         this.updateLogCounter(0);
         
-        // STRATEGIC FIX: Full clear - reset stored outputs and states
+        // Full clear - reset stored outputs and states
         this.agentOutputs = {
             triage: null,
             context: null,
@@ -390,6 +490,12 @@ export class UIManager {
             analyst: 'pending'
         };
         
+        // Clear all auto-approval indicators
+        for (const [stage, indicator] of this.autoApprovalIndicators) {
+            indicator.remove();
+        }
+        this.autoApprovalIndicators.clear();
+        
         this.resetAgentStates();
         this.hideCurrentApproval();
         this.updateProgress(0, 'Ready');
@@ -400,7 +506,6 @@ export class UIManager {
     resetAllStates() {
         this.setConnectionStatus('disconnected');
         
-        // Set initial waiting messages only
         const initialTexts = {
             'triage': 'Waiting for analysis to begin...',
             'context': 'Waiting for triage completion...',
@@ -432,21 +537,95 @@ export class UIManager {
     }
 
     // ============================================================================
-    // DEBUG HELPERS - For monitoring state preservation
+    // DEBUG HELPERS
     // ============================================================================
 
     getAgentStates() {
         return {
             states: { ...this.agentStates },
             outputs: Object.keys(this.agentOutputs).reduce((acc, key) => {
-                acc[key] = this.agentOutputs[key] ? 'has_content' : 'no_content';
+                acc[key] = this.agentOutputs[key] ? 
+                    `has_content (${this.agentOutputs[key].length} chars)` : 'no_content';
                 return acc;
             }, {}),
-            currentApproval: this.currentApproval?.stage || 'none'
+            currentApproval: this.currentApproval?.stage || 'none',
+            autoApprovalIndicators: Array.from(this.autoApprovalIndicators.keys())
         };
     }
 
     logStateDebug() {
         console.log('🔍 UI State Debug:', this.getAgentStates());
     }
+}
+
+// Add CSS for auto-approval indicator (inline styles for this feature)
+const autoApprovalCSS = `
+.auto-approval-indicator {
+    background: linear-gradient(45deg, #27ae60, #2ecc71);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-md);
+    color: white;
+    animation: pulse 2s infinite;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2);
+}
+
+.auto-approval-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+    text-align: left;
+}
+
+.auto-approval-icon {
+    font-size: 2em;
+    opacity: 0.9;
+}
+
+.auto-approval-text {
+    flex: 1;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.auto-approval-text strong {
+    font-size: 1.1em;
+}
+
+.countdown {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #fff;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.auto-approval-progress {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: var(--spacing-sm);
+}
+
+.progress-bar-auto {
+    height: 100%;
+    width: 0%;
+    background: white;
+    border-radius: 2px;
+    animation: auto-progress linear;
+}
+
+@keyframes auto-progress {
+    from { width: 0%; }
+    to { width: 100%; }
+}
+`;
+
+// Add styles to document head
+if (typeof document !== 'undefined') {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = autoApprovalCSS;
+    document.head.appendChild(styleElement);
 }

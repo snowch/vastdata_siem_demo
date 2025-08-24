@@ -1,5 +1,5 @@
-// services/ai-agents/src/static/js/modules/event-manager.js - CLEAN FLOW WITH EXPORT
-// Handles DOM events and user interactions for the clean flow
+// UPDATED: services/ai-agents/src/static/js/modules/event-manager.js - ADD AUTO-APPROVE SUPPORT
+// Enhanced with auto-approve toggle event handling
 
 export class EventManager {
     constructor() {
@@ -11,11 +11,11 @@ export class EventManager {
         this.dashboard = dashboard;
         this.setupEventListeners();
         this.setupKeyboardShortcuts();
-        console.log('✅ Event Manager initialized');
+        console.log('✅ Event Manager initialized with auto-approve support');
     }
 
     // ============================================================================
-    // EVENT SETUP
+    // EVENT SETUP - Enhanced with auto-approve
     // ============================================================================
 
     setupEventListeners() {
@@ -39,6 +39,11 @@ export class EventManager {
         // Debug toggle
         this.addListener('debugToggle', 'click', () => {
             this.dashboard.debugManager.toggle();
+        });
+
+        // NEW: Auto-approve toggle
+        this.addListener('autoApproveToggle', 'click', () => {
+            this.dashboard.toggleAutoApprove();
         });
 
         // Log input changes
@@ -94,6 +99,12 @@ export class EventManager {
                         e.preventDefault();
                         this.dashboard.exportResults();
                         break;
+                    // NEW: Auto-approve toggle shortcut
+                    case 'M':
+                        e.preventDefault();
+                        this.dashboard.toggleAutoApprove();
+                        this.showKeyboardFeedback('autoApproveToggle');
+                        break;
                 }
             }
 
@@ -116,11 +127,22 @@ export class EventManager {
                         break;
                 }
             }
+
+            // NEW: Quick auto-approve toggle when no approval UI visible
+            if (!this.dashboard.uiManager.currentApproval) {
+                switch (e.key) {
+                    case 'F1':
+                        e.preventDefault();
+                        this.dashboard.toggleAutoApprove();
+                        this.showKeyboardFeedback('autoApproveToggle');
+                        break;
+                }
+            }
         });
     }
 
     // ============================================================================
-    // HELPER METHODS
+    // HELPER METHODS - Enhanced with auto-approve support
     // ============================================================================
 
     addListener(elementOrId, event, handler) {
@@ -150,6 +172,18 @@ export class EventManager {
         }
     }
 
+    showKeyboardFeedback(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.style.transform = 'scale(0.95)';
+            element.style.opacity = '0.8';
+            setTimeout(() => {
+                element.style.transform = '';
+                element.style.opacity = '';
+            }, 150);
+        }
+    }
+
     showWebSocketStats() {
         const stats = this.dashboard.websocketManager.getStats();
         const message = `WebSocket Stats:
@@ -162,6 +196,45 @@ Reconnect Attempts: ${stats.reconnectAttempts}`;
         console.log(message);
         this.dashboard.debugManager.info('WebSocket stats displayed in console');
         this.dashboard.uiManager.showStatus('Stats logged to console', 'info');
+    }
+
+    // ============================================================================
+    // NEW: Auto-approve specific helpers
+    // ============================================================================
+
+    getAutoApproveShortcutHelp() {
+        return `Auto-Approve Keyboard Shortcuts:
+• Ctrl+Shift+M - Toggle auto-approve mode
+• F1 - Quick toggle auto-approve (when no approval dialog)
+
+When auto-approve is ON:
+• All workflow stages approve automatically after 2-second delay
+• Visual countdown indicators show approval progress
+• Workflow can run unattended to completion
+
+When auto-approve is OFF:
+• Manual approval required at each stage
+• Standard approval buttons (1=Approve, 2=Reject, 3=Custom)
+• Workflow pauses until user decision`;
+    }
+
+    showAutoApproveHelp() {
+        const helpText = this.getAutoApproveShortcutHelp();
+        console.log(helpText);
+        this.dashboard.uiManager.showStatus('Auto-approve help logged to console', 'info');
+    }
+
+    // ============================================================================
+    // ENHANCED DEBUG SUPPORT
+    // ============================================================================
+
+    getEventStats() {
+        return {
+            totalListeners: this.listeners.length,
+            autoApproveEnabled: this.dashboard.autoApproveMode,
+            currentApprovalVisible: !!this.dashboard.uiManager.currentApproval,
+            analysisInProgress: this.dashboard.analysisInProgress
+        };
     }
 
     // ============================================================================

@@ -1,7 +1,7 @@
-/* services/ai-agents/src/static/css/main.css - CLEAN FLOW STYLING WITH REDUCED VERTICAL SPACING */
+/* services/ai-agents/src/static/css/main.css - COMPLETE WITH ALL FIXES */
 /* Clear visual states for agent flow: pending → active → awaiting-decision → complete */
 /* Plus comprehensive findings panel styling and enhanced technical displays */
-/* UPDATED: Reduced vertical spacing throughout for more compact layout */
+/* UPDATED: Auto-approve support + Fixed spinner behavior + No bad CSS selectors */
 
 /* ============================================================================
    CSS VARIABLES - REDUCED SPACING VALUES
@@ -157,7 +157,7 @@ body {
 }
 
 /* ============================================================================
-   VIEW MODE TOGGLE - NEW
+   VIEW MODE TOGGLE
    ============================================================================ */
 .view-mode-toggle {
     position: absolute;
@@ -178,6 +178,36 @@ body {
 .view-mode-toggle:hover {
     opacity: 1;
     transform: scale(1.05);
+}
+
+/* ============================================================================
+   AUTO-APPROVE TOGGLE - FIXED
+   ============================================================================ */
+.auto-approve-toggle {
+    position: absolute;
+    top: 110px;
+    right: var(--spacing-xl);
+    background: linear-gradient(45deg, #34495e, #2c3e50);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    cursor: pointer;
+    transition: var(--transition);
+    opacity: 0.8;
+    z-index: 10;
+}
+
+.auto-approve-toggle:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.auto-approve-toggle.auto-mode {
+    background: linear-gradient(45deg, #27ae60, #2ecc71) !important;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.4);
+    animation: pulse 2s infinite;
 }
 
 /* ============================================================================
@@ -344,6 +374,12 @@ textarea:focus {
     box-shadow: 0 0 20px rgba(243, 156, 18, 0.3);
 }
 
+/* Auto-approval active state */
+.agent-card.auto-approval-active {
+    border: 2px solid #27ae60;
+    box-shadow: 0 0 20px rgba(39, 174, 96, 0.3);
+}
+
 .agent-header {
     display: flex;
     align-items: center;
@@ -465,10 +501,10 @@ textarea:focus {
 }
 
 /* ============================================================================
-   LOADING SPINNER - CLEAN FLOW VISIBILITY
+   LOADING SPINNER - FIXED BEHAVIOR
    ============================================================================ */
 .loading-spinner {
-    display: none; /* Hidden by default */
+    display: none !important; /* Force hide by default */
     justify-content: center;
     align-items: center;
     height: 100px;
@@ -482,8 +518,12 @@ textarea:focus {
     width: 120px;
 }
 
-/* Show spinner only when explicitly displayed */
-.loading-spinner[style*="flex"] {
+/* Force show spinner when needed - multiple reliable methods */
+.loading-spinner.show {
+    display: flex !important;
+}
+
+.loading-spinner[style*="display: flex"] {
     display: flex !important;
 }
 
@@ -494,6 +534,71 @@ textarea:focus {
     border-top: 4px solid var(--primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
+}
+
+/* ============================================================================
+   AUTO-APPROVAL INDICATOR - FIXED
+   ============================================================================ */
+.auto-approval-indicator {
+    background: linear-gradient(45deg, #27ae60, #2ecc71);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-md);
+    color: white;
+    animation: pulse 2s infinite;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2);
+}
+
+.auto-approval-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+    text-align: left;
+}
+
+.auto-approval-icon {
+    font-size: 2em;
+    opacity: 0.9;
+}
+
+.auto-approval-text {
+    flex: 1;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.auto-approval-text strong {
+    font-size: 1.1em;
+}
+
+.countdown {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #fff;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.auto-approval-progress {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: var(--spacing-sm);
+}
+
+.progress-bar-auto {
+    height: 100%;
+    width: 0%;
+    background: white;
+    border-radius: 2px;
+    animation: auto-progress linear;
+}
+
+@keyframes auto-progress {
+    from { width: 0%; }
+    to { width: 100%; }
 }
 
 /* ============================================================================
@@ -961,7 +1066,7 @@ textarea:focus {
 }
 
 /* ============================================================================
-   RESPONSIVE DESIGN - REDUCED SPACING
+   RESPONSIVE DESIGN - REDUCED SPACING + AUTO-APPROVE SUPPORT
    ============================================================================ */
 @media (max-width: 768px) {
     .dashboard {
@@ -997,6 +1102,14 @@ textarea:focus {
         top: 0;
         right: 0;
         margin-bottom: var(--spacing-md); /* Reduced from --spacing-lg */
+        width: 100%;
+    }
+    
+    .auto-approve-toggle {
+        position: relative;
+        top: 0;
+        right: 0;
+        margin-bottom: var(--spacing-md);
         width: 100%;
     }
     
@@ -1054,6 +1167,26 @@ textarea:focus {
         max-height: 300px;
         padding: var(--spacing-sm); /* Reduced from --spacing-md */
     }
+    
+    .auto-approval-content {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--spacing-md);
+    }
+    
+    .auto-approval-icon {
+        font-size: 1.5em;
+    }
+    
+    .loading-spinner {
+        width: 100px;
+        height: 80px;
+    }
+    
+    .spinner {
+        width: 30px;
+        height: 30px;
+    }
 }
 
 @media (min-width: 768px) {
@@ -1073,15 +1206,61 @@ textarea:focus {
 }
 
 /* ============================================================================
-   PRINT STYLES
+   ACCESSIBILITY FEATURES - SAFE FOR ALL BROWSERS
+   ============================================================================ */
+
+/* Accessibility Enhancement for Auto-Approval */
+.auto-approval-indicator:focus-within {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+
+/* High contrast support using class instead of problematic media queries */
+.high-contrast .auto-approve-toggle.auto-mode {
+    background: #00ff00 !important;
+    color: #000000 !important;
+}
+
+.high-contrast .auto-approval-indicator {
+    background: #00ff00 !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+}
+
+.high-contrast .loading-spinner {
+    background: #000000;
+    border: 2px solid #ffffff;
+}
+
+.high-contrast .spinner {
+    border-color: #ffffff;
+    border-top-color: #000000;
+}
+
+/* Reduced motion support using class instead of problematic media queries */
+.reduce-motion .auto-approve-toggle.auto-mode,
+.reduce-motion .auto-approval-indicator {
+    animation: none !important;
+}
+
+.reduce-motion .progress-bar-auto {
+    animation: none !important;
+    transition: width 2s linear;
+}
+
+/* ============================================================================
+   PRINT STYLES - CLEAN FOR PRINTING
    ============================================================================ */
 @media print {
     .debug-panel,
     .debug-toggle,
     .view-mode-toggle,
+    .auto-approve-toggle,
+    .auto-approval-indicator,
     .controls,
     .approval-section,
-    #toast-container {
+    #toast-container,
+    .loading-spinner {
         display: none !important;
     }
     
