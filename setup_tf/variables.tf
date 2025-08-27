@@ -1,4 +1,4 @@
-# variables.tf
+# variables.tf - v2.0 complete
 
 variable "vast_host" {
   type        = string
@@ -34,7 +34,31 @@ variable "user_name" {
 
 variable "user_context" {
   type        = string
-  description = "The User Context."
+  description = "The User Context (local, ad, nis, or ldap)."
+  validation {
+    condition     = contains(["local", "ad", "nis", "ldap"], var.user_context)
+    error_message = "User context must be one of: local, ad, nis, ldap."
+  }
+}
+
+# Variables referenced in terraform.tfvars to avoid warnings
+variable "enable_user_fallback" {
+  type        = bool
+  description = "Enable fallback to local user if external user lookup fails."
+  default     = true
+}
+
+variable "create_local_user_if_ad_missing" {
+  type        = bool
+  description = "Create a local user if the external user is not found."
+  default     = true
+}
+
+variable "local_user_password" {
+  type        = string
+  description = "Password for local user. Set to null to auto-generate."
+  default     = null
+  sensitive   = true
 }
 
 variable "database_view_name" {

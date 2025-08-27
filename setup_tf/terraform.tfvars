@@ -11,7 +11,13 @@ vip_pool_end_ip      = "172.200.203.212"
 vip_pool_subnet_cidr = "16"
 
 user_name     = "chris.snow"
-user_context  = "ad"           #  "ad", "nis" or "ldap", or "local"
+
+# OPTION 1: Use local user directly (bypasses AD completely)
+user_context  = "local"  # "local", "ad", "nis", or "ldap"
+
+# OPTION 2: Try AD first (uncomment to use AD instead of local)
+# user_context  = "ad"
+
 
 enable_user_fallback = true    # Enable fallback to local user
 create_local_user_if_ad_missing = true

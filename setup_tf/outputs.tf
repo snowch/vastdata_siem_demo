@@ -1,39 +1,34 @@
-# outputs.tf
-
-# output "vast_host" {
-#   description = "The VAST VMS host."
-#   value       = var.vast_host
-# }
-# 
-# output "vast_port" {
-#   description = "The VAST VMS port."
-#   value       = var.vast_port
-# }
-# 
-# output "vast_user" {
-#   description = "The VAST VMS username."
-#   value       = var.vast_user
-#   sensitive   = true
-# }
-# 
-# output "vast_password" {
-#   description = "The VAST VMS password."
-#   value       = var.vast_password
-#   sensitive   = true
-# }
+# outputs.tf - v2.0 with dynamic user support
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
-  value       = vastdata_nonlocal_user_key.demo_key.access_key
+  value       = local.access_key
 }
 
 output "s3_secret_key" {
   description = "The S3 secret key for the demo user."
-  value       = vastdata_nonlocal_user_key.demo_key.secret_key
+  value       = local.secret_key
   sensitive   = true
 }
 
 output "connection_details_file" {
   description = "Path to the file containing connection details."
   value       = local_file.connection_details.filename
+}
+
+output "user_type" {
+  description = "The type of user being used."
+  value       = var.user_context
+}
+
+output "username" {
+  description = "The actual username being used."
+  value       = local.username
+}
+
+output "user_authentication_method" {
+  description = "Shows whether external or local user was successfully configured."
+  value = local.using_external_user ? "external" : (
+    local.using_local_user ? "local" : "none"
+  )
 }
