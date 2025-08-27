@@ -1,4 +1,4 @@
-# vip.tf - v2.0 syntax
+# vip.tf - v2.0 syntax corrected
 
 data "vastdata_vip_pool" "main" {
   name = "main"
@@ -9,9 +9,6 @@ resource "vastdata_vip_pool" "pool1" {
   role        = "PROTOCOLS"
   subnet_cidr = var.vip_pool_subnet_cidr
   
-  # v2.0 uses block syntax instead of array
-  ip_ranges {
-    start_ip = var.vip_pool_start_ip
-    end_ip   = var.vip_pool_end_ip
-  }
+  # Try as a list of lists - each range is a list of [start, end]
+  ip_ranges = [[var.vip_pool_start_ip, var.vip_pool_end_ip]]
 }

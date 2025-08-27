@@ -18,7 +18,6 @@ user_context  = "local"  # "local", "ad", "nis", or "ldap"
 # OPTION 2: Try AD first (uncomment to use AD instead of local)
 # user_context  = "ad"
 
-
 enable_user_fallback = true    # Enable fallback to local user
 create_local_user_if_ad_missing = true
 local_user_password = null     # null = auto-generate password

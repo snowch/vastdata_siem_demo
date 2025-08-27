@@ -1,4 +1,4 @@
-# variables.tf - v2.0 complete
+# variables.tf - Current provider version with local user support
 
 variable "vast_host" {
   type        = string

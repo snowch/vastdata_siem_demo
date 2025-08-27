@@ -1,4 +1,4 @@
-# outputs.tf - v2.0 with dynamic user support
+# outputs.tf - v2.0 with user creation support
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
@@ -27,8 +27,10 @@ output "username" {
 }
 
 output "user_authentication_method" {
-  description = "Shows whether external or local user was successfully configured."
+  description = "Shows whether external, existing local, or newly created local user was used."
   value = local.using_external_user ? "external" : (
-    local.using_local_user ? "local" : "none"
+    var.user_context == "local" ? (
+      length(vastdata_user.create_local_user) > 0 ? "local_created" : "local_existing"
+    ) : "none"
   )
 }
