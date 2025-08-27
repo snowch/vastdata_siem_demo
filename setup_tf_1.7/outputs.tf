@@ -24,12 +24,12 @@
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
-  value       = vastdata_nonlocal_user_key.demo_key.access_key
+  value       = vastdata_non_local_user_key.demo_key.access_key
 }
 
 output "s3_secret_key" {
   description = "The S3 secret key for the demo user."
-  value       = vastdata_nonlocal_user_key.demo_key.secret_key
+  value       = vastdata_non_local_user_key.demo_key.secret_key
   sensitive   = true
 }
 
