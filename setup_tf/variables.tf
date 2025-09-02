@@ -75,20 +75,7 @@ variable "kafka_view_path" {
 
 variable "vip_pool_name" {
   type        = string
-  description = "The name for the vip pool."
+  description = "The name for the new Kafka VIP pool."
 }
 
-variable "vip_pool_start_ip" {
-  type        = string
-  description = "The start IP for the vip pool."
-}
-
-variable "vip_pool_end_ip" {
-  type        = string
-  description = "The end IP for the vip pool."
-}
-
-variable "vip_pool_subnet_cidr" {
-  type        = string
-  description = "The subnet cidr for the vip pool."
-}
+# Note: VIP pool IP ranges and subnet CIDR auto-discovered from main pool!

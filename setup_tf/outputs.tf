@@ -81,11 +81,70 @@ output "uid_discovery_info" {
   } : null
 }
 
+output "vip_discovery_info" {
+  description = "Information about HTTP-based VIP pool discovery and creation."
+  value = {
+    # Main pool info (for database endpoints)
+    main_pool_found       = length(local.vip_pools_json) > 0 ? true : false
+    main_pool_name        = try(local.main_vip_pool.name, "not_found")
+    main_pool_id          = try(local.main_vip_pool.id, "not_found")
+    main_pool_subnet_cidr = local.main_pool_subnet_cidr
+    main_pool_usage       = "Database and S3 endpoints"
+    
+    # Kafka pool info (newly created)
+    kafka_pool_name       = var.vip_pool_name
+    kafka_pool_id         = vastdata_vip_pool.kafka_pool.id
+    kafka_pool_range      = local.kafka_range_available
+    kafka_pool_subnet_cidr = local.main_pool_subnet_cidr
+    kafka_pool_usage      = "Dedicated Kafka services"
+    
+    # Discovery details
+    total_existing_pools  = length(local.vip_pools_json)
+    database_ip_1         = local.database_ip_1
+    database_ip_2         = local.database_ip_2
+    consecutive_ips_valid = local.consecutive_ips_valid
+    kafka_range_candidates = local.kafka_range_candidates
+  }
+}
+
+output "database_endpoints" {
+  description = "The discovered database endpoints from main VIP pool."
+  value = {
+    primary_endpoint = "https://${local.database_ip_1}"
+    backup_endpoint  = "https://${local.database_ip_2}"
+    source_pool      = "main VIP pool (discovered)"
+  }
+}
+
+output "kafka_vip_pool_info" {
+  description = "Information about the created Kafka VIP pool."
+  value = {
+    name         = vastdata_vip_pool.kafka_pool.name
+    id           = vastdata_vip_pool.kafka_pool.id
+    role         = vastdata_vip_pool.kafka_pool.role
+    subnet_cidr  = vastdata_vip_pool.kafka_pool.subnet_cidr
+    ip_ranges    = vastdata_vip_pool.kafka_pool.ip_ranges
+    usage        = "Dedicated for Kafka services only"
+  }
+}
+
 output "api_debug_info" {
-  description = "Debug information about the VastData API call (for troubleshooting)."
-  value = var.user_context == "local" ? {
-    api_url         = data.http.existing_users[0].url
-    response_status = data.http.existing_users[0].status_code
-    users_found     = length(local.existing_users_json)
-  } : null
+  description = "Debug information about the VastData API calls (for troubleshooting)."
+  value = {
+    # UID discovery API info
+    uid_api_url         = var.user_context == "local" ? data.http.existing_users[0].url : null
+    uid_response_status = var.user_context == "local" ? data.http.existing_users[0].status_code : null
+    users_found         = var.user_context == "local" ? length(local.existing_users_json) : null
+    
+    # VIP pool discovery API info  
+    vip_api_url         = data.http.vip_pools.url
+    vip_response_status = data.http.vip_pools.status_code
+    vip_pools_found     = length(local.vip_pools_json)
+    main_vip_pool_id    = try(local.main_vip_pool.id, "not_found")
+    
+    # Kafka pool creation info
+    kafka_pool_created  = vastdata_vip_pool.kafka_pool.id
+    kafka_pool_name     = vastdata_vip_pool.kafka_pool.name
+    all_existing_ranges = local.all_existing_ranges
+  }
 }
