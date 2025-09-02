@@ -13,7 +13,7 @@ resource "local_file" "connection_details" {
     # TOTAL_EXISTING_UIDS: ${var.user_context == "local" ? length(local.existing_uids) : "N/A"}
     # VIP_POOL_DISCOVERY: HTTP API
     # MAIN_VIP_POOL: ${try(local.main_vip_pool.name, "not_found")} (for database/S3)
-    # KAFKA_VIP_POOL: ${var.vip_pool_name} (dedicated for Kafka)
+    # KAFKA_VIP_POOL: ${var.kafka_vip_pool_name} (dedicated for Kafka)
     # MAIN_VIP_SUBNET_CIDR: ${local.main_pool_subnet_cidr}
     # DATABASE_IPS: ${local.database_ip_1}, ${local.database_ip_2}
     # MAIN_VIP_RANGE: ${local.first_range_start} - ${local.first_range_end}

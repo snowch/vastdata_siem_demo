@@ -7,25 +7,8 @@ vast_password = "123456"
 
 tenant_name   = "default"      # only the default tenant is supported
 
-vip_pool_name        = "csnow_vip"
-vip_pool_start_ip    = "172.200.203.211"
-vip_pool_end_ip      = "172.200.203.212"
-vip_pool_subnet_cidr = "16"
-
 user_name     = "chris.snow"
-
-# Option 1: Use local user directly
 user_context  = "local"        # "local", "ad", "nis", or "ldap"
-
-# Option 2: Try AD first, fallback to local if AD fails
-# user_context  = "ad"           # Try AD first
-# enable_user_fallback = true    # Enable fallback to local user
-# create_local_user_if_ad_missing = true  # Create local user if AD fails
-
-# Local user settings
-enable_user_fallback = true              # Enable fallback to local user
-create_local_user_if_ad_missing = true   # Create local user if non-local fails
-local_user_password = null               # null = auto-generate password
 
 database_view_path = "/csnow-db"
 database_view_name = "csnow-db"
@@ -33,5 +16,7 @@ database_view_name = "csnow-db"
 s3_view_path = "/csnow-s3"
 s3_view_name = "csnow-s3"
 
+# name of vip pool to create
+kafka_vip_pool_name = "csnow_vip"
 kafka_view_path = "/csnow-kafka"
 kafka_view_name = "csnow-kafka"

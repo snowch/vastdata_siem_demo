@@ -124,7 +124,7 @@ data "vastdata_vip_pool" "main" {
 
 # Create new VIP pool for Kafka with auto-discovered settings
 resource "vastdata_vip_pool" "kafka_pool" {
-  name        = var.vip_pool_name
+  name        = var.kafka_vip_pool_name
   role        = "PROTOCOLS"
   subnet_cidr = local.main_pool_subnet_cidr     # Auto-discovered from main pool
   ip_ranges   = [local.kafka_range_available]   # Auto-discovered available range

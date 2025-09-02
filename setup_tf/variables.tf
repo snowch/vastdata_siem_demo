@@ -73,7 +73,7 @@ variable "kafka_view_path" {
   description = "The path for the kafka view."
 }
 
-variable "vip_pool_name" {
+variable "kafka_vip_pool_name" {
   type        = string
   description = "The name for the new Kafka VIP pool."
 }

@@ -92,7 +92,7 @@ output "vip_discovery_info" {
     main_pool_usage       = "Database and S3 endpoints"
     
     # Kafka pool info (newly created)
-    kafka_pool_name       = var.vip_pool_name
+    kafka_pool_name       = var.kafka_vip_pool_name
     kafka_pool_id         = vastdata_vip_pool.kafka_pool.id
     kafka_pool_range      = local.kafka_range_available
     kafka_pool_subnet_cidr = local.main_pool_subnet_cidr
