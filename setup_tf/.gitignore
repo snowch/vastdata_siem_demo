@@ -4,3 +4,4 @@ terraform.tfvars
 terraform.tfstate
 terraform.tfstate.backup
 connection_details.txt
+terraform.tfvars
