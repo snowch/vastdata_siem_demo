@@ -1,4 +1,4 @@
-# outputs.tf - v2.0 with user creation support
+# outputs.tf - v2.1 with debugging information
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
@@ -26,11 +26,28 @@ output "username" {
   value       = local.username
 }
 
-output "user_authentication_method" {
-  description = "Shows whether external, existing local, or newly created local user was used."
-  value = local.using_external_user ? "external" : (
-    var.user_context == "local" ? (
-      length(vastdata_user.create_local_user) > 0 ? "local_created" : "local_existing"
-    ) : "none"
-  )
+output "user_id" {
+  description = "The user ID being used."
+  value       = local.user_id
+}
+
+output "tenant_id" {
+  description = "The tenant ID being used."
+  value       = data.vastdata_tenant.the_tenant.id
+}
+
+# Debug outputs to verify user creation
+output "debug_created_user_name" {
+  description = "Name of the created local user (if any)."
+  value       = length(vastdata_user.create_local_user) > 0 ? vastdata_user.create_local_user[0].name : "none"
+}
+
+output "debug_created_user_id" {
+  description = "ID of the created local user (if any)."
+  value       = length(vastdata_user.create_local_user) > 0 ? vastdata_user.create_local_user[0].id : "none"
+}
+
+output "debug_using_local_user" {
+  description = "Are we using local user?"
+  value       = local.using_local_user
 }
