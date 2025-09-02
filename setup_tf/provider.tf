@@ -1,4 +1,4 @@
-# provider.tf - VastData Provider v2.0
+# provider.tf - VastData Provider v3.0 with HTTP provider
 
 terraform {
   required_providers {
@@ -9,6 +9,14 @@ terraform {
     local = {
       source  = "hashicorp/local"
       version = "~> 2.5"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.4"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
     }
   }
 }
@@ -23,4 +31,12 @@ provider "vastdata" {
 
 provider "local" {
   # This provider is used to write connection details to a local file.
+}
+
+provider "http" {
+  # This provider is used for HTTP API calls to VastData for UID discovery.
+}
+
+provider "null" {
+  # This provider is used for validation and lifecycle management.
 }

@@ -1,4 +1,4 @@
-# variables.tf - Current provider version with local user support
+# variables.tf - v3.0 Clean HTTP approach (no external dependencies)
 
 variable "vast_host" {
   type        = string
@@ -41,25 +41,7 @@ variable "user_context" {
   }
 }
 
-# Variables referenced in terraform.tfvars to avoid warnings
-variable "enable_user_fallback" {
-  type        = bool
-  description = "Enable fallback to local user if external user lookup fails."
-  default     = true
-}
-
-variable "create_local_user_if_ad_missing" {
-  type        = bool
-  description = "Create a local user if the external user is not found."
-  default     = true
-}
-
-variable "local_user_password" {
-  type        = string
-  description = "Password for local user. Set to null to auto-generate."
-  default     = null
-  sensitive   = true
-}
+# Note: No UID variables needed - automatically discovered via HTTP API!
 
 variable "database_view_name" {
   type        = string
