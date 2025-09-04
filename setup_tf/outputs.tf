@@ -1,4 +1,4 @@
-# outputs.tf - v3.0 with HTTP-based UID discovery information
+# outputs.tf - v5.0 with clean dynamic VIP pool discovery information
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
@@ -98,12 +98,14 @@ output "vip_discovery_info" {
     kafka_pool_subnet_cidr = local.main_pool_subnet_cidr
     kafka_pool_usage      = "Dedicated Kafka services"
     
-    # Discovery details
+    # Dynamic discovery details
     total_existing_pools  = length(local.vip_pools_json)
     database_ip_1         = local.database_ip_1
     database_ip_2         = local.database_ip_2
     consecutive_ips_valid = local.consecutive_ips_valid
-    kafka_range_candidates = local.kafka_range_candidates
+    candidates_scanned    = length(local.scan_candidates)
+    first_available_block = local.first_available_block
+    selected_range_method = local.kafka_range_discovered != null ? "auto_discovered" : "manual_override"
   }
 }
 
@@ -146,5 +148,9 @@ output "api_debug_info" {
     kafka_pool_created  = vastdata_vip_pool.kafka_pool.id
     kafka_pool_name     = vastdata_vip_pool.kafka_pool.name
     all_existing_ranges = local.all_existing_ranges
+    network_base        = local.network_base
+    scan_range         = "${local.network_base}.50 - ${local.network_base}.239"
+    used_ip_numbers    = sort(tolist(local.used_ip_numbers))
+    total_used_ip_numbers = length(local.used_ip_numbers)
   }
 }

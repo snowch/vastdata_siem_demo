@@ -1,4 +1,4 @@
-# vip.tf - v6.0 Main pool for database, auto-discovered new pool for Kafka
+# vip.tf - v10.0 Clean dynamic discovery with real conflict detection
 
 # Get VIP pools via HTTP API
 data "http" "vip_pools" {
@@ -55,34 +55,69 @@ locals {
   end_ip_last_octet = tonumber(local.end_ip_octets[3])
   consecutive_ips_valid = (local.start_ip_last_octet + 1) <= local.end_ip_last_octet
   
-  # Collect all existing IP ranges from all VIP pools to avoid conflicts
+  # REAL CONFLICT DETECTION: 
+  # Use the main pool's network (we know it's valid) and scan for conflicts
+  network_base = local.start_ip_base  # Reliable - taken from working main pool
+  
+  # Collect ALL used IP addresses from ALL existing VIP pools
+  # Handle different possible ip_ranges formats from the API
   all_existing_ranges = flatten([
-    for pool in local.vip_pools_json : pool.ip_ranges
+    for pool in local.vip_pools_json : 
+    try(pool.ip_ranges, []) if can(pool.ip_ranges)
   ])
   
-  # Find available IP range for new Kafka VIP pool
-  # Use same subnet as main pool but different IP range
+  # Debug: Let's see what the ip_ranges structure actually looks like
+  # by using the first range from main pool as reference
+  main_pool_range_sample = try(local.main_vip_pool.ip_ranges[0], null)
   
-  # Calculate a new IP range that doesn't conflict with existing ones
-  # Strategy: Look for available range in same subnet
+  # Parse IP ranges more defensively - handle different possible formats
+  used_ip_numbers = toset(flatten([
+    for range_item in local.all_existing_ranges : 
+    # Handle case where range_item might be an array [start_ip, end_ip]
+    try([
+      for i in range(
+        tonumber(split(".", try(range_item[0], range_item.start_ip))[3]), 
+        tonumber(split(".", try(range_item[1], range_item.end_ip))[3]) + 1
+      ) : i
+    ], 
+    # Fallback: try object properties if array indexing fails
+    try([
+      for i in range(
+        tonumber(split(".", range_item.start_ip)[3]), 
+        tonumber(split(".", range_item.end_ip)[3]) + 1
+      ) : i
+    ], []))  # Empty array if both attempts fail
+  ]))
   
-  # Parse main pool subnet to understand the network
-  main_subnet_octets = split(".", local.start_ip_base)
-  base_network = "${local.main_subnet_octets[0]}.${local.main_subnet_octets[1]}.${local.main_subnet_octets[2]}"
-  
-  # Find next available range - try different starting points
-  kafka_range_candidates = [
-    ["${local.base_network}.220", "${local.base_network}.222"],  # Try .220-.222
-    ["${local.base_network}.230", "${local.base_network}.232"],  # Try .230-.232  
-    ["${local.base_network}.240", "${local.base_network}.242"],  # Try .240-.242
-    ["${local.base_network}.250", "${local.base_network}.252"],  # Try .250-.252
+  # Find first available 3-consecutive-IP block
+  # Scan reasonable range (avoiding very low/high numbers)
+  scan_candidates = [
+    for start_octet in range(50, 240) : {
+      start_ip = start_octet
+      end_ip   = start_octet + 2  # 3 IPs total
+      is_available = !contains(local.used_ip_numbers, start_octet) && !contains(local.used_ip_numbers, start_octet + 1) && !contains(local.used_ip_numbers, start_octet + 2)
+    }
   ]
   
-  # Check which candidate doesn't conflict with existing ranges
-  kafka_range_available = [
-    for candidate in local.kafka_range_candidates :
-    candidate if !contains([for range in local.all_existing_ranges : range], candidate)
-  ][0]  # Take first available
+  # Get the first available block
+  first_available_block = [
+    for candidate in local.scan_candidates :
+    candidate if candidate.is_available
+  ][0]
+  
+  # Build the Kafka IP range
+  kafka_range_discovered = local.first_available_block != null ? [
+    "${local.network_base}.${local.first_available_block.start_ip}",
+    "${local.network_base}.${local.first_available_block.end_ip}"
+  ] : null
+  
+  # Use discovered range or manual override
+  kafka_range_available = local.kafka_range_discovered != null ? local.kafka_range_discovered : (
+    var.kafka_vip_pool_range_start != null && var.kafka_vip_pool_range_end != null ? [
+      var.kafka_vip_pool_range_start,
+      var.kafka_vip_pool_range_end
+    ] : null
+  )
 }
 
 # Validation for database IPs
@@ -100,18 +135,24 @@ resource "null_resource" "validate_vip_ips" {
   }
 }
 
-# Validation for Kafka pool range
+# Validation for Kafka pool range discovery
 resource "null_resource" "validate_kafka_range" {
   lifecycle {
     precondition {
-      condition = local.kafka_range_available != null
+      condition = local.kafka_range_available != null && length(local.kafka_range_available) == 2
       error_message = <<-EOT
         Unable to find available IP range for Kafka VIP pool.
         
-        Tried candidates: ${jsonencode(local.kafka_range_candidates)}
-        Existing ranges: ${jsonencode(local.all_existing_ranges)}
+        Network base: ${local.network_base} (from main VIP pool)
+        Total IP numbers in use: ${length(local.used_ip_numbers)}
+        Used IP numbers: ${jsonencode(sort(tolist(local.used_ip_numbers)))}
+        Available blocks found: ${local.kafka_range_discovered != null ? 1 : 0}
         
-        Consider manually specifying a different IP range or expanding available ranges.
+        All 3-IP consecutive blocks in range .50-.239 appear to be in use.
+        
+        Solution: Set manual override in terraform.tfvars:
+        kafka_vip_pool_range_start = "10.143.11.220"
+        kafka_vip_pool_range_end   = "10.143.11.222"
       EOT
     }
   }
@@ -122,12 +163,12 @@ data "vastdata_vip_pool" "main" {
   name = "main"
 }
 
-# Create new VIP pool for Kafka with auto-discovered settings
+# Create new VIP pool for Kafka with dynamically discovered settings
 resource "vastdata_vip_pool" "kafka_pool" {
   name        = var.kafka_vip_pool_name
   role        = "PROTOCOLS"
-  subnet_cidr = local.main_pool_subnet_cidr     # Auto-discovered from main pool
-  ip_ranges   = [local.kafka_range_available]   # Auto-discovered available range
+  subnet_cidr = local.main_pool_subnet_cidr     # Use same subnet as main pool
+  ip_ranges   = [local.kafka_range_available]   # Dynamically discovered available range
   
   depends_on = [
     null_resource.validate_vip_ips,

@@ -18,5 +18,10 @@ s3_view_name = "csnow-s3"
 
 # name of vip pool to create
 kafka_vip_pool_name = "csnow_vip"
+
+# Manual override options (only used if auto-discovery fails):
+# kafka_vip_pool_range_start = "10.143.11.220"
+# kafka_vip_pool_range_end   = "10.143.11.222"
+
 kafka_view_path = "/csnow-kafka"
 kafka_view_name = "csnow-kafka"

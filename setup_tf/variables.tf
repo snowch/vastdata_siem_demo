@@ -1,4 +1,4 @@
-# variables.tf - v3.0 Clean HTTP approach (no external dependencies)
+# variables.tf - v4.0 with dynamic Kafka VIP pool range configuration
 
 variable "vast_host" {
   type        = string
@@ -41,8 +41,7 @@ variable "user_context" {
   }
 }
 
-# Note: No UID variables needed - automatically discovered via HTTP API!
-
+# Database and S3 view configuration
 variable "database_view_name" {
   type        = string
   description = "The name of the database (bucket)."
@@ -63,6 +62,7 @@ variable "s3_view_path" {
   description = "The path for the s3 view."
 }
 
+# Kafka configuration
 variable "kafka_view_name" {
   type        = string
   description = "The name of the kafka bucket."
@@ -78,4 +78,23 @@ variable "kafka_vip_pool_name" {
   description = "The name for the new Kafka VIP pool."
 }
 
-# Note: VIP pool IP ranges and subnet CIDR auto-discovered from main pool!
+# Manual override options for Kafka VIP pool range (only used if auto-discovery fails)
+variable "kafka_vip_pool_range_start" {
+  type        = string
+  description = "Manual override: Start IP for Kafka VIP pool (only used if auto-discovery fails)."
+  default     = null
+  validation {
+    condition = var.kafka_vip_pool_range_start == null || can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", var.kafka_vip_pool_range_start))
+    error_message = "kafka_vip_pool_range_start must be a valid IP address or null."
+  }
+}
+
+variable "kafka_vip_pool_range_end" {
+  type        = string
+  description = "Manual override: End IP for Kafka VIP pool (only used if auto-discovery fails)."
+  default     = null
+  validation {
+    condition = var.kafka_vip_pool_range_end == null || can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", var.kafka_vip_pool_range_end))
+    error_message = "kafka_vip_pool_range_end must be a valid IP address or null."
+  }
+}
