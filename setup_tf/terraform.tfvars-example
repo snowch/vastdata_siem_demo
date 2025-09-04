@@ -25,3 +25,8 @@ kafka_vip_pool_name = "csnow_vip"
 
 kafka_view_path = "/csnow-kafka"
 kafka_view_name = "csnow-kafka"
+
+kafka_zeek_topic = "siem_zeek_live_logs"
+kafka_event_log_topic = "siem_fluentd_events"
+kafka_topic_partitions = 3
+kafka_topic_replication_factor = 1

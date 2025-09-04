@@ -1,10 +1,14 @@
-# provider.tf - VastData Provider v3.0 with HTTP provider
+# provider.tf - VastData Provider v4.0 with Kafka provider
 
 terraform {
   required_providers {
     vastdata = {
       source  = "vast-data/vastdata"
       version = ">= 2.0.0"
+    }
+    kafka = {
+      source  = "Mongey/kafka"
+      version = ">= 0.7.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -27,6 +31,12 @@ provider "vastdata" {
   username        = var.vast_user
   password        = var.vast_password
   skip_ssl_verify = true
+}
+
+provider "kafka" {
+  bootstrap_servers = ["${local.kafka_broker_ip}:9092"]
+  tls_enabled = false  # Set to true if using TLS
+  skip_tls_verify = true  # Only for development/testing
 }
 
 provider "local" {

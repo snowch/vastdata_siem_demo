@@ -1,4 +1,4 @@
-# vip.tf - v10.0 Clean dynamic discovery with real conflict detection
+# vip.tf - v11.0 Clean dynamic discovery with Kafka broker IP
 
 # Get VIP pools via HTTP API
 data "http" "vip_pools" {
@@ -118,6 +118,9 @@ locals {
       var.kafka_vip_pool_range_end
     ] : null
   )
+  
+  # Extract the first IP from the Kafka VIP pool range for the broker
+  kafka_broker_ip = local.kafka_range_available != null ? local.kafka_range_available[0] : null
 }
 
 # Validation for database IPs
@@ -154,6 +157,11 @@ resource "null_resource" "validate_kafka_range" {
         kafka_vip_pool_range_start = "10.143.11.220"
         kafka_vip_pool_range_end   = "10.143.11.222"
       EOT
+    }
+    
+    precondition {
+      condition = local.kafka_broker_ip != null
+      error_message = "Kafka broker IP could not be determined from VIP pool range."
     }
   }
 }

@@ -1,4 +1,4 @@
-# outputs.tf - v5.0 with clean dynamic VIP pool discovery information
+# outputs.tf - v6.0 with Kafka broker and topics information
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
@@ -97,6 +97,7 @@ output "vip_discovery_info" {
     kafka_pool_range      = local.kafka_range_available
     kafka_pool_subnet_cidr = local.main_pool_subnet_cidr
     kafka_pool_usage      = "Dedicated Kafka services"
+    kafka_broker_ip       = local.kafka_broker_ip
     
     # Dynamic discovery details
     total_existing_pools  = length(local.vip_pools_json)
@@ -127,6 +128,27 @@ output "kafka_vip_pool_info" {
     subnet_cidr  = vastdata_vip_pool.kafka_pool.subnet_cidr
     ip_ranges    = vastdata_vip_pool.kafka_pool.ip_ranges
     usage        = "Dedicated for Kafka services only"
+    broker_ip    = local.kafka_broker_ip
+    broker_url   = "${local.kafka_broker_ip}:9092"
+  }
+}
+
+output "kafka_topics_info" {
+  description = "Information about created Kafka topics."
+  value = {
+    zeek_topic = {
+      name               = kafka_topic.zeek_topic.name
+      partitions         = kafka_topic.zeek_topic.partitions
+      replication_factor = kafka_topic.zeek_topic.replication_factor
+      config             = kafka_topic.zeek_topic.config
+    }
+    event_log_topic = {
+      name               = kafka_topic.event_log_topic.name
+      partitions         = kafka_topic.event_log_topic.partitions
+      replication_factor = kafka_topic.event_log_topic.replication_factor
+      config             = kafka_topic.event_log_topic.config
+    }
+    broker_connection = "${local.kafka_broker_ip}:9092"
   }
 }
 
@@ -147,6 +169,7 @@ output "api_debug_info" {
     # Kafka pool creation info
     kafka_pool_created  = vastdata_vip_pool.kafka_pool.id
     kafka_pool_name     = vastdata_vip_pool.kafka_pool.name
+    kafka_broker_ip     = local.kafka_broker_ip
     all_existing_ranges = local.all_existing_ranges
     network_base        = local.network_base
     scan_range         = "${local.network_base}.50 - ${local.network_base}.239"

@@ -11,6 +11,9 @@ TERRAFORM_IMAGE="hashicorp/terraform:1.13.0-rc1"
 # Run 'terraform' using the official Docker image
 echo "Running terraform apply inside a Docker container..."
 sudo docker run --rm -it \
+  --network host \
+  --privileged \
+  --add-host host.docker.internal:host-gateway \
   -v "$(pwd):/app" \
   -w "/app" \
   "$TERRAFORM_IMAGE" "$@" 

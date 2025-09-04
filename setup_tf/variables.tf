@@ -1,4 +1,4 @@
-# variables.tf - v4.0 with dynamic Kafka VIP pool range configuration
+# variables.tf - v5.0 with Kafka topics configuration
 
 variable "vast_host" {
   type        = string
@@ -76,6 +76,31 @@ variable "kafka_view_path" {
 variable "kafka_vip_pool_name" {
   type        = string
   description = "The name for the new Kafka VIP pool."
+}
+
+# Kafka topics configuration
+variable "kafka_zeek_topic" {
+  type        = string
+  description = "The name of the Kafka topic for Zeek SIEM logs."
+  default     = "siem_zeek_live_logs"
+}
+
+variable "kafka_event_log_topic" {
+  type        = string
+  description = "The name of the Kafka topic for Fluentd event logs."
+  default     = "siem_fluentd_events"
+}
+
+variable "kafka_topic_partitions" {
+  type        = number
+  description = "Number of partitions for Kafka topics."
+  default     = 3
+}
+
+variable "kafka_topic_replication_factor" {
+  type        = number
+  description = "Replication factor for Kafka topics."
+  default     = 1
 }
 
 # Manual override options for Kafka VIP pool range (only used if auto-discovery fails)
