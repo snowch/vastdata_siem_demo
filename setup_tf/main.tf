@@ -6,6 +6,60 @@ data "vastdata_tenant" "the_tenant" {
 
 resource "local_file" "connection_details" {
   content = <<-EOT
+    OPENAI_API_KEY=_SET_THIS_
+
+    # Vast Data DB Credentials
+    VASTDB_ACCESS_KEY=${local.access_key}
+    VASTDB_SECRET_KEY=${local.secret_key}
+    VASTDB_ENDPOINT=https://${local.database_ip_1}
+    VASTDB_DATA_ENDPOINTS=https://${local.database_ip_1}
+    
+    VASTDB_ZEEK_BUCKET=${var.database_view_name}
+    VASTDB_FLUENTD_BUCKET=${var.database_view_name}
+
+    VASTDB_ZEEK_SCHEMA=siem
+    VASTDB_ZEEK_TABLE_PREFIX="zeek_"
+
+    VASTDB_FLUENTD_SCHEMA=siem
+    VASTDB_FLUENTD_TABLE_PREFIX="fluentd_"
+
+    # KAFKA Configuration
+    KAFKA_BROKER=${local.kafka_broker_ip}:9092
+    KAFKA_ZEEK_TOPIC=${var.kafka_zeek_topic}
+    KAFKA_EVENT_LOG_TOPIC=${var.kafka_event_log_topic}
+
+    # Network Interface in docker container to Monitor with Zeek
+    MONITOR_INTERFACE=eth0
+
+    # Jupyter Configuration
+    JUPYTER_PASSWORD=123456
+
+    # ChromaDB Configuration
+    CHROMA_HOST=chroma
+    CHROMA_PORT=8000
+    CHROMA_COLLECTION=security_events_dual
+
+    # AI Model Configuration
+    AI_MODEL=gpt-4o-mini
+    MAX_TOKENS=90000
+    MODEL_TEMPERATURE=0.7
+    MODEL_TIMEOUT=1200
+
+    # Workflow Configuration
+    MAX_AGENTS=6
+    APPROVAL_TIMEOUT=300
+    MAX_MESSAGES=60
+    ENABLE_STRUCTURED_OUTPUT=true
+
+    # Server Configuration
+    SERVER_HOST=0.0.0.0
+    PORT=5000
+    DEBUG=false
+    CORS_ORIGINS=*
+    LOG_LEVEL=INFO
+
+    # Terraform metadata:
+    #
     # USER: ${local.username}
     # USER_TYPE: ${var.user_context}
     # DISCOVERED_UID: ${var.user_context == "local" ? local.discovered_uid : "N/A"}
@@ -21,14 +75,7 @@ resource "local_file" "connection_details" {
     # KAFKA_BROKER_IP: ${local.kafka_broker_ip}
     # KAFKA_TOPICS: ${var.kafka_zeek_topic}, ${var.kafka_event_log_topic}
     # TOPIC_CREATION_METHOD: Manual script provided
-    ACCESS_KEY=${local.access_key}
-    SECRET_KEY=${local.secret_key}
-    DATABASE_ENDPOINT=https://${local.database_ip_1}
-    DATABASE_ENDPOINT_BACKUP=https://${local.database_ip_2}
-    DATABASE_NAME=${var.database_view_name}
-    KAFKA_BROKER=${local.kafka_broker_ip}:9092
-    KAFKA_ZEEK_TOPIC=${var.kafka_zeek_topic}
-    KAFKA_EVENT_LOG_TOPIC=${var.kafka_event_log_topic}
+
   EOT
   filename = "${path.cwd}/connection_details.txt"
   
