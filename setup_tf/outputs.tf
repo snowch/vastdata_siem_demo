@@ -1,4 +1,4 @@
-# outputs.tf - v6.0 with Kafka broker and topics information
+# outputs.tf - v7.0 with Docker-based Kafka topic management
 
 output "s3_access_key" {
   description = "The S3 access key for the demo user."
@@ -134,21 +134,23 @@ output "kafka_vip_pool_info" {
 }
 
 output "kafka_topics_info" {
-  description = "Information about created Kafka topics."
+  description = "Information about Docker-created Kafka topics."
   value = {
+    creation_method = "Docker kafka-tools"
     zeek_topic = {
-      name               = kafka_topic.zeek_topic.name
-      partitions         = kafka_topic.zeek_topic.partitions
-      replication_factor = kafka_topic.zeek_topic.replication_factor
-      config             = kafka_topic.zeek_topic.config
+      name               = var.kafka_zeek_topic
+      partitions         = var.kafka_topic_partitions
+      replication_factor = var.kafka_topic_replication_factor
+      managed_by         = "Docker provisioner"
     }
     event_log_topic = {
-      name               = kafka_topic.event_log_topic.name
-      partitions         = kafka_topic.event_log_topic.partitions
-      replication_factor = kafka_topic.event_log_topic.replication_factor
-      config             = kafka_topic.event_log_topic.config
+      name               = var.kafka_event_log_topic
+      partitions         = var.kafka_topic_partitions
+      replication_factor = var.kafka_topic_replication_factor
+      managed_by         = "Docker provisioner"
     }
     broker_connection = "${local.kafka_broker_ip}:9092"
+    verification_command = "docker run --rm --network host jforge/kafka-tools kafka-topics.sh --bootstrap-server ${local.kafka_broker_ip}:9092 --list"
   }
 }
 
@@ -166,14 +168,15 @@ output "api_debug_info" {
     vip_pools_found     = length(local.vip_pools_json)
     main_vip_pool_id    = try(local.main_vip_pool.id, "not_found")
     
-    # Kafka pool creation info
-    kafka_pool_created  = vastdata_vip_pool.kafka_pool.id
-    kafka_pool_name     = vastdata_vip_pool.kafka_pool.name
-    kafka_broker_ip     = local.kafka_broker_ip
-    all_existing_ranges = local.all_existing_ranges
-    network_base        = local.network_base
-    scan_range         = "${local.network_base}.50 - ${local.network_base}.239"
-    used_ip_numbers    = sort(tolist(local.used_ip_numbers))
+    # Kafka topic creation info
+    topic_creation_method = "Docker kafka-tools"
+    kafka_pool_created    = vastdata_vip_pool.kafka_pool.id
+    kafka_pool_name       = vastdata_vip_pool.kafka_pool.name
+    kafka_broker_ip       = local.kafka_broker_ip
+    all_existing_ranges   = local.all_existing_ranges
+    network_base          = local.network_base
+    scan_range           = "${local.network_base}.50 - ${local.network_base}.239"
+    used_ip_numbers      = sort(tolist(local.used_ip_numbers))
     total_used_ip_numbers = length(local.used_ip_numbers)
   }
 }

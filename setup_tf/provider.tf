@@ -1,14 +1,10 @@
-# provider.tf - VastData Provider v4.0 with Kafka provider
+# provider.tf - VastData Provider v5.0 without Kafka provider (using Docker instead)
 
 terraform {
   required_providers {
     vastdata = {
       source  = "vast-data/vastdata"
       version = ">= 2.0.0"
-    }
-    kafka = {
-      source  = "Mongey/kafka"
-      version = ">= 0.7.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -33,12 +29,6 @@ provider "vastdata" {
   skip_ssl_verify = true
 }
 
-provider "kafka" {
-  bootstrap_servers = ["${local.kafka_broker_ip}:9092"]
-  tls_enabled = false  # Set to true if using TLS
-  skip_tls_verify = true  # Only for development/testing
-}
-
 provider "local" {
   # This provider is used to write connection details to a local file.
 }
@@ -48,5 +38,5 @@ provider "http" {
 }
 
 provider "null" {
-  # This provider is used for validation and lifecycle management.
+  # This provider is used for validation, lifecycle management, and Docker commands.
 }

@@ -1,4 +1,4 @@
-# main.tf - v5.0 with Kafka broker and topics information
+# main.tf - v6.0 with Docker-based Kafka topic creation
 
 data "vastdata_tenant" "the_tenant" {
   name = var.tenant_name
@@ -20,6 +20,7 @@ resource "local_file" "connection_details" {
     # KAFKA_VIP_RANGE: ${local.kafka_range_available[0]} - ${local.kafka_range_available[1]}
     # KAFKA_BROKER_IP: ${local.kafka_broker_ip}
     # KAFKA_TOPICS: ${var.kafka_zeek_topic}, ${var.kafka_event_log_topic}
+    # TOPIC_CREATION_METHOD: Manual script provided
     ACCESS_KEY=${local.access_key}
     SECRET_KEY=${local.secret_key}
     DATABASE_ENDPOINT=https://${local.database_ip_1}
@@ -38,7 +39,5 @@ resource "local_file" "connection_details" {
     null_resource.validate_vip_ips,
     null_resource.validate_kafka_range,
     vastdata_vip_pool.kafka_pool,
-    kafka_topic.zeek_topic,
-    kafka_topic.event_log_topic
   ]
 }
