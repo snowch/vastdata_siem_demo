@@ -25,7 +25,7 @@ graph TD
         AS[Superset]
         B[Jupyter + Spark]
         AI[AI Agent UI]
-        SP[Splunk]
+        SP[Splunk<br/>via DB Connect]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
