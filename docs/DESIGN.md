@@ -25,12 +25,13 @@ graph TD
         AS[Superset]
         B[Jupyter + Spark]
         AI[AI Agent UI]
+        SP[Splunk]
 
         S -- Simulate Log Files --> F
         S -- Simulated Network Traffic --> Z
         AS -- Queries --> T
         AI -- Queries --> T
-
+        SP -- Queries --> T
 
         subgraph "Docker Host (UIs)"
             SW[Simulator Web UI - 8080]
